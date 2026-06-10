@@ -556,35 +556,106 @@ function PageHeader({
         </div>
       </div>
       <div className="flex flex-col items-end gap-2">
-        <button
-          onClick={onCalculate}
-          disabled={calculating}
-          className={`inline-flex items-center gap-2 px-6 py-3 rounded-md font-semibold shadow-md transition-all ${
-            stale
-              ? "bg-brand text-brand-foreground ring-4 ring-brand/25 animate-pulse"
-              : "bg-brand text-brand-foreground hover:shadow-lg hover:-translate-y-0.5"
-          } disabled:opacity-70`}
-        >
-          {calculating ? (
-            <>
-              <RefreshCw className="size-4 animate-spin" /> Calculating…
-            </>
-          ) : calculated ? (
-            <>
-              <RefreshCw className="size-4" /> {stale ? "Recalculate" : "Recalculate"}
-            </>
-          ) : (
-            <>
-              <CalcIcon className="size-4" /> Calculate
-            </>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button
+            onClick={onLoadSample}
+            title="Populate inputs with example data"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+          >
+            <Sparkles className="size-4 text-brand" /> Load sample
+          </button>
+          <button
+            onClick={onReset}
+            title="Clear all inputs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+          >
+            <RotateCcw className="size-4" /> Reset
+          </button>
+          {calculated && (
+            <button
+              onClick={onPrint}
+              title="Print or save as PDF"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+            >
+              <Printer className="size-4" /> Print
+            </button>
           )}
-        </button>
+          <button
+            onClick={onCalculate}
+            disabled={calculating}
+            className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-md font-semibold shadow-md transition-all ${
+              stale
+                ? "bg-brand text-brand-foreground ring-4 ring-brand/25 animate-pulse"
+                : "bg-brand text-brand-foreground hover:shadow-lg hover:-translate-y-0.5"
+            } disabled:opacity-70`}
+          >
+            {calculating ? (
+              <>
+                <RefreshCw className="size-4 animate-spin" /> Calculating…
+              </>
+            ) : calculated ? (
+              <>
+                <RefreshCw className="size-4" /> Recalculate
+              </>
+            ) : (
+              <>
+                <CalcIcon className="size-4" /> Calculate
+              </>
+            )}
+          </button>
+        </div>
         {stale && (
           <div className="text-xs text-brand font-medium flex items-center gap-1.5">
             <AlertTriangle className="size-3.5" /> Inputs changed — click Recalculate
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Workflow step strip ---------------- */
+
+function StepStrip({ calculated }: { calculated: boolean }) {
+  const steps = [
+    { n: 1, label: "Baseline", desc: "Enter current actuals" },
+    { n: 2, label: "Rebate Rates", desc: "Set % per layer" },
+    { n: 3, label: "Scenarios", desc: "Configure what-ifs" },
+    { n: 4, label: "Results", desc: "Review GP impact" },
+  ];
+  const activeStep = calculated ? 4 : 3;
+  return (
+    <div className="bg-card border border-border rounded-xl p-3 flex items-stretch overflow-x-auto shadow-sm">
+      {steps.map((s, i) => {
+        const done = s.n < activeStep || (calculated && s.n === 4);
+        const active = s.n === activeStep && !calculated;
+        return (
+          <div key={s.n} className="flex items-center min-w-0 flex-1">
+            <div className={`flex items-center gap-3 px-3 py-1 flex-1 min-w-0 rounded-md ${active ? "bg-brand-soft" : ""}`}>
+              <div
+                className={`size-8 shrink-0 rounded-full grid place-items-center text-xs font-bold ${
+                  done
+                    ? "bg-success-soft text-[oklch(0.4_0.14_155)] border border-success/30"
+                    : active
+                    ? "bg-brand text-brand-foreground shadow"
+                    : "bg-muted text-muted-foreground border border-border"
+                }`}
+              >
+                {done ? <CheckCircle2 className="size-4" /> : s.n}
+              </div>
+              <div className="min-w-0 leading-tight">
+                <div className={`text-sm font-semibold truncate ${active ? "text-brand" : done ? "text-foreground" : "text-muted-foreground"}`}>
+                  {s.label}
+                </div>
+                <div className="text-[11px] text-muted-foreground truncate">{s.desc}</div>
+              </div>
+            </div>
+            {i < steps.length - 1 && (
+              <div className={`hidden md:block h-px w-6 mx-1 shrink-0 ${done ? "bg-success/40" : "bg-border"}`} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
