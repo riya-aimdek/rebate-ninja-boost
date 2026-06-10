@@ -892,11 +892,18 @@ function PageHeader({
       <div className="flex flex-col items-end gap-2">
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <button
-            onClick={onLoadSample}
-            title="Populate inputs with example data"
+            onClick={onUpload}
+            title="Import baseline & scenarios from an Excel file"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-brand/40 bg-brand-soft text-sm font-semibold text-brand hover:bg-brand/15 transition"
+          >
+            <Upload className="size-4" /> Upload Excel
+          </button>
+          <button
+            onClick={onTemplate}
+            title="Download a sample Excel template you can fill in"
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
           >
-            <Sparkles className="size-4 text-brand" /> Load sample
+            <FileSpreadsheet className="size-4 text-brand" /> Template
           </button>
           <button
             onClick={onReset}
