@@ -973,29 +973,45 @@ function PageHeader({
 
 /* ---------------- Workflow step strip ---------------- */
 
-function StepStrip({ calculated }: { calculated: boolean }) {
+function StepStrip({
+  currentStep,
+  calculated,
+  onStepClick,
+}: {
+  currentStep: 1 | 2 | 3 | 4;
+  calculated: boolean;
+  onStepClick: (n: 1 | 2 | 3 | 4) => void;
+}) {
   const steps = [
-    { n: 1, label: "Baseline", desc: "Enter current actuals" },
-    { n: 2, label: "Rebate Rates", desc: "Set % per layer" },
-    { n: 3, label: "Scenarios", desc: "Configure what-ifs" },
-    { n: 4, label: "Results", desc: "Review GP impact" },
+    { n: 1 as const, label: "Baseline", desc: "Enter current actuals" },
+    { n: 2 as const, label: "Rebate Rates", desc: "Set % per layer" },
+    { n: 3 as const, label: "Scenarios", desc: "Configure what-ifs" },
+    { n: 4 as const, label: "Results", desc: calculated ? "Review GP impact" : "Run Calculate to unlock" },
   ];
-  const activeStep = calculated ? 4 : 3;
   return (
-    <div className="bg-card border border-border rounded-xl p-3 flex items-stretch overflow-x-auto shadow-sm">
+    <div className="sticky top-14 z-30 bg-card/95 backdrop-blur border border-border rounded-xl p-3 flex items-stretch overflow-x-auto shadow-sm">
       {steps.map((s, i) => {
-        const done = s.n < activeStep || (calculated && s.n === 4);
-        const active = s.n === activeStep && !calculated;
+        const active = s.n === currentStep;
+        const done = s.n < currentStep || (calculated && s.n === 4 && currentStep === 4);
+        const locked = s.n === 4 && !calculated;
         return (
           <div key={s.n} className="flex items-center min-w-0 flex-1">
-            <div className={`flex items-center gap-3 px-3 py-1 flex-1 min-w-0 rounded-md ${active ? "bg-brand-soft" : ""}`}>
+            <button
+              type="button"
+              onClick={() => onStepClick(s.n)}
+              disabled={locked}
+              className={`group flex items-center gap-3 px-3 py-1.5 flex-1 min-w-0 rounded-md text-left transition ${
+                active ? "bg-brand-soft ring-1 ring-brand/30" : "hover:bg-muted"
+              } ${locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+              aria-current={active ? "step" : undefined}
+            >
               <div
-                className={`size-8 shrink-0 rounded-full grid place-items-center text-xs font-bold ${
+                className={`size-8 shrink-0 rounded-full grid place-items-center text-xs font-bold transition ${
                   done
                     ? "bg-success-soft text-[oklch(0.4_0.14_155)] border border-success/30"
                     : active
                     ? "bg-brand text-brand-foreground shadow"
-                    : "bg-muted text-muted-foreground border border-border"
+                    : "bg-muted text-muted-foreground border border-border group-hover:border-brand/40"
                 }`}
               >
                 {done ? <CheckCircle2 className="size-4" /> : s.n}
@@ -1006,9 +1022,9 @@ function StepStrip({ calculated }: { calculated: boolean }) {
                 </div>
                 <div className="text-[11px] text-muted-foreground truncate">{s.desc}</div>
               </div>
-            </div>
+            </button>
             {i < steps.length - 1 && (
-              <div className={`hidden md:block h-px w-6 mx-1 shrink-0 ${done ? "bg-success/40" : "bg-border"}`} />
+              <div className={`hidden md:block h-px w-6 mx-1 shrink-0 ${s.n < currentStep ? "bg-success/40" : "bg-border"}`} />
             )}
           </div>
         );
@@ -1016,6 +1032,7 @@ function StepStrip({ calculated }: { calculated: boolean }) {
     </div>
   );
 }
+
 
 /* ---------------- Calculate CTA (pre-calc state) ---------------- */
 
