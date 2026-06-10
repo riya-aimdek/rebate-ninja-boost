@@ -580,7 +580,13 @@ function RebateModeling() {
 
           {/* Sticky-to-viewport-bottom summary bar; lives inside main so it only spans content width and stops sticking once the user reaches the page bottom. */}
           {calculated && (
-            <div className="sticky bottom-0 -mx-6 px-6 pb-3 pt-3 z-30">
+            <div
+              className={`sticky bottom-0 -mx-6 px-6 pb-3 pt-3 z-30 transition-all duration-300 ${
+                resultsVisible
+                  ? "opacity-0 translate-y-4 pointer-events-none"
+                  : "opacity-100 translate-y-0"
+              }`}
+            >
               <BottomKPIBar
                 totals={totals}
                 stale={stale}
