@@ -451,6 +451,31 @@ function RebateModeling() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Keyboard shortcut: Cmd/Ctrl + Enter triggers Calculate from anywhere on the page
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (!calculating) handleCalculate();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calculating]);
+
+  // Track whether the results section is visible — drives the floating jump pill
+  const [resultsVisible, setResultsVisible] = useState(false);
+  useEffect(() => {
+    if (!calculated || !resultsRef.current) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setResultsVisible(entry.isIntersecting),
+      { rootMargin: "-20% 0px -20% 0px", threshold: 0 }
+    );
+    io.observe(resultsRef.current);
+    return () => io.disconnect();
+  }, [calculated]);
+
   const bestScenarioIdx = useMemo(() => {
     if (!totals.length) return 0;
     let best = 0;
