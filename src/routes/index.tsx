@@ -1099,18 +1099,3 @@ function TotalSummary({
   );
 }
 
-/* ---------------- Empty state ---------------- */
-
-function EmptyState() {
-  return (
-    <div className="bg-card border border-dashed border-border rounded-xl py-16 px-6 text-center">
-      <div className="size-12 mx-auto rounded-lg bg-brand-soft text-brand grid place-items-center mb-3">
-        <ClipboardList className="size-6" />
-      </div>
-      <h3 className="font-semibold text-lg">Ready to Calculate</h3>
-      <p className="text-sm text-muted-foreground mt-1">
-        Configure the rebate parameters and growth scenarios above, then click <span className="font-semibold text-foreground">Calculate</span>.
-      </p>
-    </div>
-  );
-}
