@@ -997,6 +997,7 @@ function CalculateCTA({
         </button>
         <div className="mt-4 text-xs text-muted-foreground">
           Results will appear here with EW, SOC, NBU breakdowns and a total summary.
+          <span className="hidden sm:inline"> · Tip: press <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono text-[10px]">⌘ / Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono text-[10px]">Enter</kbd> to calculate.</span>
         </div>
       </div>
     </div>
