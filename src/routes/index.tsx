@@ -577,24 +577,27 @@ function RebateModeling() {
           <footer className="pt-4 pb-2 text-center text-xs text-muted-foreground">
             Rebate Ninja · Built by <span className="font-semibold text-foreground">AIMDek Technologies</span>
           </footer>
+
+          {/* Sticky-to-viewport-bottom summary bar; lives inside main so it only spans content width and stops sticking once the user reaches the page bottom. */}
+          {calculated && (
+            <div className="sticky bottom-0 -mx-6 px-6 pb-3 pt-3 z-30">
+              <BottomKPIBar
+                totals={totals}
+                stale={stale}
+                account={account}
+                bestIdx={bestScenarioIdx}
+                bestGrowth={bestScenarioIdx > 0 ? scenarios[bestScenarioIdx - 1]?.growth ?? 0 : 0}
+                onJumpToResults={() =>
+                  resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                onRecalculate={handleCalculate}
+                calculating={calculating}
+              />
+            </div>
+          )}
         </main>
       </div>
 
-      {/* Bottom-fixed results summary bar */}
-      {calculated && (
-        <BottomKPIBar
-          totals={totals}
-          stale={stale}
-          account={account}
-          bestIdx={bestScenarioIdx}
-          bestGrowth={bestScenarioIdx > 0 ? scenarios[bestScenarioIdx - 1]?.growth ?? 0 : 0}
-          onJumpToResults={() =>
-            resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-          }
-          onRecalculate={handleCalculate}
-          calculating={calculating}
-        />
-      )}
 
 
       {toast && (
