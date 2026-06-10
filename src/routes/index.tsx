@@ -841,7 +841,8 @@ function PageHeader({
   calculated: boolean;
   stale: boolean;
   onReset: () => void;
-  onLoadSample: () => void;
+  onUpload: () => void;
+  onTemplate: () => void;
   onPrint: () => void;
   onExport: () => void;
   onSave: () => void;
