@@ -508,9 +508,7 @@ function RebateModeling() {
             setAccount={setAccount}
           />
 
-          <StepStrip currentStep={currentStep} calculated={calculated} onStepClick={goToStep} />
-
-          <div ref={baselineRef} data-step="1" className="grid grid-cols-1 xl:grid-cols-2 gap-6 scroll-mt-32">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <BaselineInputs
               ewTurnover={ewTurnover} setEwTurnover={(n) => { setEwTurnover(n); markStale(); }}
               ewCost={ewCost} setEwCost={(n) => { setEwCost(n); markStale(); }}
@@ -519,26 +517,23 @@ function RebateModeling() {
               nbuTurnover={nbuTurnover} setNbuTurnover={(n) => { setNbuTurnover(n); markStale(); }}
               nbuCost={nbuCost} setNbuCost={(n) => { setNbuCost(n); markStale(); }}
             />
-            <div ref={ratesRef} data-step="2" className="scroll-mt-32">
-              <GlobalConfig
-                fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
-                targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
-                nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
-                socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
-              />
-            </div>
-          </div>
-
-          <div ref={scenariosRef} data-step="3" className="scroll-mt-32">
-            <GrowthConfig
-              actual={actual}
-              setActual={(s) => { setActual(s); markStale(); }}
-              scenarios={scenarios}
-              updateScenario={updateScenario}
-              addScenario={addScenario}
-              removeScenario={removeScenario}
+            <GlobalConfig
+              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
+              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
+              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
+              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
             />
           </div>
+
+          <GrowthConfig
+            actual={actual}
+            setActual={(s) => { setActual(s); markStale(); }}
+            scenarios={scenarios}
+            updateScenario={updateScenario}
+            addScenario={addScenario}
+            removeScenario={removeScenario}
+          />
+
 
           {/* Calculate hint / CTA card — only when results not yet shown */}
           {!calculated && (
