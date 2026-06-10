@@ -802,12 +802,14 @@ function ResultsHeader({
   totals,
   onRecalculate,
   calculating,
+  onPrint,
 }: {
   stale: boolean;
   bestIdx: number;
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   onRecalculate: () => void;
   calculating: boolean;
+  onPrint: () => void;
 }) {
   const scenarioName = bestIdx === 0 ? "Actual 2026" : `Scenario ${bestIdx}`;
   const best = totals[bestIdx];
@@ -833,15 +835,23 @@ function ResultsHeader({
             )}
           </div>
         </div>
-        {stale && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={onRecalculate}
-            disabled={calculating}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-brand text-brand-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-70"
+            onClick={onPrint}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium hover:bg-muted transition"
           >
-            <RefreshCw className={`size-4 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+            <Printer className="size-4" /> Print / Export
           </button>
-        )}
+          {stale && (
+            <button
+              onClick={onRecalculate}
+              disabled={calculating}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-brand text-brand-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-70"
+            >
+              <RefreshCw className={`size-4 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
