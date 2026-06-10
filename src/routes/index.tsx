@@ -494,7 +494,7 @@ function RebateModeling() {
 
         {/* (Bottom-fixed KPI bar rendered at end of layout) */}
 
-        <main className="flex-1 px-6 py-6 space-y-6">
+        <main className={`flex-1 px-6 py-6 space-y-6 ${calculated ? "pb-28" : ""}`}>
           <input
             ref={fileInputRef}
             type="file"
