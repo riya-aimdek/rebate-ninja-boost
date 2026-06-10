@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as XLSX from "xlsx";
 import {
   ArrowDown,
@@ -492,20 +492,9 @@ function RebateModeling() {
       <div className="flex-1 min-w-0 flex flex-col">
         <TopBar search={search} onSearch={setSearch} account={account} />
 
-        {/* Sticky KPI bar — appears after calculation */}
-        {calculated && (
-          <StickyKPIBar
-            totals={totals}
-            stale={stale}
-            onRecalculate={handleCalculate}
-            calculating={calculating}
-            onJumpToResults={() =>
-              resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-            }
-          />
-        )}
+        {/* (Bottom-fixed KPI bar rendered at end of layout) */}
 
-        <main className="flex-1 px-6 py-6 space-y-6">
+        <main className={`flex-1 px-6 py-6 space-y-6 ${calculated ? "pb-28" : ""}`}>
           <input
             ref={fileInputRef}
             type="file"
@@ -591,17 +580,22 @@ function RebateModeling() {
         </main>
       </div>
 
-      {/* Floating "View results" pill — only when results exist and section is off-screen */}
-      {calculated && !resultsVisible && (
-        <button
-          onClick={() =>
+      {/* Bottom-fixed results summary bar */}
+      {calculated && (
+        <BottomKPIBar
+          totals={totals}
+          stale={stale}
+          account={account}
+          bestIdx={bestScenarioIdx}
+          bestGrowth={bestScenarioIdx > 0 ? scenarios[bestScenarioIdx - 1]?.growth ?? 0 : 0}
+          onJumpToResults={() =>
             resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
           }
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand text-brand-foreground font-semibold shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition animate-in fade-in slide-in-from-bottom-4 duration-300"
-        >
-          <ArrowDown className="size-4" /> View results
-        </button>
+          onRecalculate={handleCalculate}
+          calculating={calculating}
+        />
       )}
+
 
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
@@ -1006,62 +1000,117 @@ function CalculateCTA({
 
 /* ---------------- Sticky KPI bar ---------------- */
 
-function StickyKPIBar({
+function BottomKPIBar({
   totals,
   stale,
+  account,
+  bestIdx,
+  bestGrowth,
+  onJumpToResults,
   onRecalculate,
   calculating,
-  onJumpToResults,
 }: {
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   stale: boolean;
+  account: string;
+  bestIdx: number;
+  bestGrowth: number;
+  onJumpToResults: () => void;
   onRecalculate: () => void;
   calculating: boolean;
-  onJumpToResults: () => void;
 }) {
   const actual = totals[0];
-  const best = totals.slice(1).reduce((a, b) => (b.gp > a.gp ? b : a), totals[1] ?? actual);
+  const best = totals[bestIdx] ?? actual;
   const uplift = best.gp - actual.gp;
-  const upliftPct = actual.gp ? (uplift / actual.gp) * 100 : 0;
+  const growthLabel = bestIdx === 0 ? "Actual baseline" : `${bestGrowth}% Growth`;
 
   return (
-    <div className={`sticky top-[57px] z-[5] border-b ${stale ? "border-brand/40 bg-brand-soft/60" : "border-border bg-card"} backdrop-blur px-6 py-2.5 flex flex-wrap items-center gap-4`}>
-      <div className="flex items-center gap-2">
-        <div className={`size-2 rounded-full ${stale ? "bg-brand animate-pulse" : "bg-success"}`} />
-        <span className="text-xs font-semibold uppercase tracking-wider">
-          {stale ? "Results outdated" : "Results ready"}
-        </span>
-      </div>
-      <div className="hidden md:flex items-center gap-5 text-sm">
-        <KPI label="Actual GP" value={fmtGBP(actual.gp)} sub={fmtPct(actual.gpPct)} />
-        <KPI label="Best Scenario GP" value={fmtGBP(best.gp)} sub={fmtPct(best.gpPct)} accent="success" />
-        <KPI
-          label="Uplift"
-          value={`${uplift >= 0 ? "+" : ""}${fmtGBP(uplift)}`}
-          sub={`${upliftPct >= 0 ? "+" : ""}${upliftPct.toFixed(1)}%`}
-          accent={uplift >= 0 ? "success" : "destructive"}
-        />
-      </div>
-      <div className="ml-auto flex items-center gap-2">
-        <button
-          onClick={onJumpToResults}
-          className="text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted transition inline-flex items-center gap-1.5"
-        >
-          <ArrowDown className="size-3.5" /> View results
-        </button>
-        {stale && (
+    <div
+      className={`fixed bottom-0 left-0 right-0 z-30 border-t backdrop-blur shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.15)] ${
+        stale ? "border-brand/40 bg-brand-soft/90" : "border-border bg-card/95"
+      }`}
+    >
+      <div className="px-6 py-3 flex flex-wrap items-center gap-x-8 gap-y-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`size-2.5 rounded-full ${stale ? "bg-brand animate-pulse" : "bg-success"}`} />
+          <div className="leading-tight">
+            <div className="font-bold text-sm">{account}</div>
+            <div className="text-[11px] text-muted-foreground">
+              {stale ? "Inputs changed — recalculate" : `Results ready · ${growthLabel}`}
+            </div>
+          </div>
+        </div>
+
+        <div className="hidden md:flex items-center gap-x-7">
+          <BKpi label="Total Rebate" value={fmtGBP(best.rebate)} accent="brand" />
+          <BKpi
+            label="Net GP (£)"
+            value={fmtGBP(best.gp)}
+            accent="success"
+            chip={
+              uplift !== 0 ? (
+                <span
+                  className={`inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded ${
+                    uplift > 0
+                      ? "bg-success-soft text-[oklch(0.4_0.14_155)]"
+                      : "bg-destructive/10 text-destructive"
+                  }`}
+                >
+                  {uplift > 0 ? "▲" : "▼"} {uplift > 0 ? "+" : ""}
+                  {fmtGBP(uplift)}
+                </span>
+              ) : null
+            }
+          />
+          <BKpi label="GP %" value={fmtPct(best.gpPct)} accent="success" />
+        </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          {stale && (
+            <button
+              onClick={onRecalculate}
+              disabled={calculating}
+              className="text-xs font-semibold px-3 py-2 rounded-md border border-brand/30 text-brand hover:bg-brand-soft transition inline-flex items-center gap-1.5 disabled:opacity-70"
+            >
+              <RefreshCw className={`size-3.5 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+            </button>
+          )}
           <button
-            onClick={onRecalculate}
-            disabled={calculating}
-            className="text-xs font-semibold px-3 py-1.5 rounded-md bg-brand text-brand-foreground hover:opacity-90 transition inline-flex items-center gap-1.5 disabled:opacity-70"
+            onClick={onJumpToResults}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-brand-foreground font-semibold shadow hover:shadow-md hover:opacity-95 transition"
           >
-            <RefreshCw className={`size-3.5 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+            View full results <ArrowDown className="size-4" />
           </button>
-        )}
+        </div>
       </div>
     </div>
   );
 }
+
+function BKpi({
+  label,
+  value,
+  accent,
+  chip,
+}: {
+  label: string;
+  value: string;
+  accent?: "brand" | "success";
+  chip?: ReactNode;
+}) {
+  const color =
+    accent === "brand" ? "text-brand" : accent === "success" ? "text-[oklch(0.4_0.14_155)]" : "text-foreground";
+  return (
+    <div className="leading-tight">
+      <div className="text-[11px] text-muted-foreground font-medium">{label}</div>
+      <div className="flex items-center gap-2">
+        <div className={`font-bold tabular-nums text-base ${color}`}>{value}</div>
+        {chip}
+      </div>
+    </div>
+  );
+}
+
 
 function KPI({
   label,
@@ -1167,8 +1216,8 @@ function Card({
   hint?: string;
   step?: number;
   tooltip?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
@@ -1249,7 +1298,7 @@ function NumInput({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
