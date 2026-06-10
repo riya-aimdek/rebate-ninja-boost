@@ -13,6 +13,8 @@ import {
   Sparkles,
   Printer,
   HelpCircle,
+  Download,
+  Save,
 } from "lucide-react";
 import {
   Bell,
