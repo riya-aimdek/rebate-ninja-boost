@@ -1029,8 +1029,8 @@ function BottomKPIBar({
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-30 border-t backdrop-blur shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.15)] ${
-        stale ? "border-brand/40 bg-brand-soft/90" : "border-border bg-card/95"
+      className={`rounded-xl border backdrop-blur shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.15)] ${
+        stale ? "border-brand/40 bg-brand-soft/95" : "border-border bg-card/95"
       }`}
     >
       <div className="px-6 py-3 flex flex-wrap items-center gap-x-8 gap-y-2">
