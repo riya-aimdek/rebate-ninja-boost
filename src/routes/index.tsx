@@ -458,41 +458,7 @@ function RebateModeling() {
     return best;
   }, [totals]);
 
-  // ---- Stepper navigation ----
-  const baselineRef = useRef<HTMLDivElement>(null);
-  const ratesRef = useRef<HTMLDivElement>(null);
-  const scenariosRef = useRef<HTMLDivElement>(null);
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
-  const goToStep = (n: 1 | 2 | 3 | 4) => {
-    const map = { 1: baselineRef, 2: ratesRef, 3: scenariosRef, 4: resultsRef } as const;
-    setCurrentStep(n);
-    map[n].current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const targets: { n: 1 | 2 | 3 | 4; el: HTMLElement | null }[] = [
-      { n: 1, el: baselineRef.current },
-      { n: 2, el: ratesRef.current },
-      { n: 3, el: scenariosRef.current },
-      { n: 4, el: resultsRef.current },
-    ];
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const top = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (top) {
-          const found = targets.find((t) => t.el === top.target);
-          if (found) setCurrentStep(found.n);
-        }
-      },
-      { rootMargin: "-30% 0px -55% 0px", threshold: [0, 0.25, 0.5, 1] },
-    );
-    targets.forEach((t) => t.el && obs.observe(t.el));
-    return () => obs.disconnect();
-  }, [calculated]);
 
 
   return (
