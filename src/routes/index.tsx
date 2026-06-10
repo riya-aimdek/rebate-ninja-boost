@@ -575,7 +575,7 @@ function RebateModeling() {
           </div>
 
           <footer className="pt-4 pb-2 text-center text-xs text-muted-foreground">
-            Rebate Ninja · Built by <span className="font-semibold text-foreground">AIMDek Technologies</span>
+            Rebate Modeling Calculator
           </footer>
 
           {/* Sticky-to-viewport-bottom summary bar; lives inside main so it only spans content width and stops sticking once the user reaches the page bottom. */}
@@ -766,7 +766,7 @@ function Sidebar({ active, onSelect }: { active: string; onSelect: (label: strin
         })}
       </nav>
       <div className="px-4 py-3 border-t border-sidebar-border text-[11px] text-sidebar-foreground/60">
-        Built by <span className="font-semibold text-sidebar-foreground">AIMDek</span>
+        Rebate Modeling Calculator
       </div>
     </aside>
   );
