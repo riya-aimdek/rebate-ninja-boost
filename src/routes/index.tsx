@@ -13,8 +13,6 @@ import {
   Sparkles,
   Printer,
   HelpCircle,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import {
   Bell,
