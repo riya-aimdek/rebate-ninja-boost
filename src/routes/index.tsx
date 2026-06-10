@@ -923,11 +923,15 @@ function GrowthConfig({
   setActual,
   scenarios,
   updateScenario,
+  addScenario,
+  removeScenario,
 }: {
   actual: Scenario;
   setActual: (s: Scenario) => void;
   scenarios: Scenario[];
   updateScenario: (i: number, patch: Partial<Scenario>) => void;
+  addScenario: () => void;
+  removeScenario: (i: number) => void;
 }) {
   const rows: {
     label: string;
@@ -936,10 +940,11 @@ function GrowthConfig({
     prefix?: string;
     actualDisplay?: string;
     editableActual?: boolean;
+    hint?: string;
   }[] = [
-    { label: "Growth %", field: "growth", suffix: "%", actualDisplay: "0% (Actual)" },
-    { label: "National Growth Rebate %", field: "nationalGrowthRebate", suffix: "%", editableActual: true },
-    { label: "Target Turnover", field: "targetTurnover", prefix: "£", editableActual: true },
+    { label: "Growth %", field: "growth", suffix: "%", actualDisplay: "0% (Actual)", hint: "Projected turnover growth vs baseline" },
+    { label: "National Growth Rebate %", field: "nationalGrowthRebate", suffix: "%", editableActual: true, hint: "Applied only if turnover ≥ Target Turnover" },
+    { label: "Target Turnover", field: "targetTurnover", prefix: "£", editableActual: true, hint: "Qualifying threshold for National Growth Rebate" },
     { label: "Branch Growth Rebate %", field: "branchGrowthRebate", suffix: "%", editableActual: true },
     { label: "Settlement Discount (£)", field: "settlement", prefix: "£", editableActual: true },
     { label: "MVHR Rebate (£)", field: "mvhr", prefix: "£", editableActual: true },
@@ -948,7 +953,17 @@ function GrowthConfig({
   return (
     <Card
       title="Growth Scenario Configuration"
-      hint="Set growth %, national growth rebate %, qualifying target, branch growth %, settlement and MVHR per scenario"
+      step={3}
+      hint="Compare side-by-side what-if scenarios"
+      tooltip="Each column is a what-if scenario. Set growth %, qualifying target, and rebate parameters per scenario, then click Calculate."
+      action={
+        <button
+          onClick={addScenario}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-soft text-brand text-xs font-semibold hover:bg-brand hover:text-brand-foreground transition border border-brand/30"
+        >
+          <Plus className="size-3.5" /> Add scenario
+        </button>
+      }
     >
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -956,27 +971,34 @@ function GrowthConfig({
             <tr className="text-left border-b border-border">
               <th className="py-3 pr-4 font-semibold w-56">Parameter</th>
               <th className="py-3 px-3 font-semibold text-center bg-muted/40 rounded-t-md">Actual</th>
-              {scenarios.map((s) => (
-                <th key={s.name} className="py-3 px-3 font-semibold text-brand text-center">
-                  {s.name}
+              {scenarios.map((s, i) => (
+                <th key={s.name} className="py-3 px-3 font-semibold text-brand text-center min-w-[140px]">
+                  <div className="flex items-center justify-center gap-1.5 group/sc">
+                    <span>{s.name}</span>
+                    {scenarios.length > 1 && (
+                      <button
+                        onClick={() => removeScenario(i)}
+                        title={`Remove ${s.name}`}
+                        className="opacity-0 group-hover/sc:opacity-100 transition text-muted-foreground hover:text-destructive p-0.5 rounded"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.label} className="border-b border-border/60 last:border-0">
-                <td className="py-2.5 pr-4 font-medium">
-                  {r.label.includes("Target Turnover") ? (
-                    <>
-                      Target Turnover{" "}
-                      <span className="text-xs text-muted-foreground font-normal">(qualifying threshold)</span>
-                    </>
-                  ) : (
-                    r.label
-                  )}
+              <tr key={r.label} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
+                <td className="py-2.5 pr-4 font-medium align-top">
+                  <div className="leading-tight">
+                    <div>{r.label.replace(" (£)", "")}</div>
+                    {r.hint && <div className="text-[11px] text-muted-foreground font-normal mt-0.5">{r.hint}</div>}
+                  </div>
                 </td>
-                <td className="py-2.5 px-3 text-center bg-muted/30">
+                <td className="py-2.5 px-3 text-center bg-muted/30 align-top">
                   {r.actualDisplay ? (
                     <span className="text-muted-foreground italic text-sm">{r.actualDisplay}</span>
                   ) : r.editableActual ? (
@@ -989,7 +1011,7 @@ function GrowthConfig({
                   ) : null}
                 </td>
                 {scenarios.map((s, i) => (
-                  <td key={s.name} className="py-2.5 px-3">
+                  <td key={s.name} className="py-2.5 px-3 align-top">
                     <NumInput
                       value={s[r.field] as number}
                       onChange={(n) => updateScenario(i, { [r.field]: n } as Partial<Scenario>)}
