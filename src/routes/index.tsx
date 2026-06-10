@@ -1420,13 +1420,14 @@ function GrowthConfig({
               <th className="py-3 px-3 font-semibold text-center bg-muted/40 rounded-t-md">Actual</th>
               {scenarios.map((s, i) => (
                 <th key={s.name} className="py-3 px-3 font-semibold text-brand text-center min-w-[140px]">
-                  <div className="flex items-center justify-center gap-1.5 group/sc">
+                  <div className="flex items-center justify-center gap-1.5">
                     <span>{s.name}</span>
                     {scenarios.length > 1 && (
                       <button
                         onClick={() => removeScenario(i)}
                         title={`Remove ${s.name}`}
-                        className="opacity-0 group-hover/sc:opacity-100 transition text-muted-foreground hover:text-destructive p-0.5 rounded"
+                        aria-label={`Remove ${s.name}`}
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 p-1 rounded transition"
                       >
                         <Trash2 className="size-3.5" />
                       </button>
