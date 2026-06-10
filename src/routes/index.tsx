@@ -591,8 +591,18 @@ function RebateModeling() {
         </main>
       </div>
 
+      {/* Floating "View results" pill — only when results exist and section is off-screen */}
+      {calculated && !resultsVisible && (
+        <button
+          onClick={() =>
+            resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand text-brand-foreground font-semibold shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition animate-in fade-in slide-in-from-bottom-4 duration-300"
+        >
+          <ArrowDown className="size-4" /> View results
+        </button>
+      )}
 
-      {/* Toast */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
           <div className="bg-card border border-success/30 shadow-lg rounded-lg px-4 py-3 flex items-center gap-3 max-w-sm">
