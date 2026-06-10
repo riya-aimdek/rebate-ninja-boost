@@ -927,11 +927,13 @@ function ResultsTable({
   scenarios,
   result,
   layer,
+  bestIdx,
 }: {
   label: string;
   scenarios: Scenario[];
   result: { cols: ColResult[] };
   layer: "ew" | "linear";
+  bestIdx: number;
 }) {
   const colHeader = (s: Scenario, i: number) =>
     i === 0 ? "Actual 2026" : `${s.growth}% Growth`;
