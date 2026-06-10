@@ -675,9 +675,9 @@ function ResultsTable({
                     </tr>,
                     <Row key={k} label={k} values={result.cols.map((c) => fmtGBP(c.lines[k]))} />,
                   ]
-                : [(
-                <Row key={k} label={k} values={result.cols.map((c) => fmtGBP(c.lines[k] ?? 0))} />
-              )
+                : [
+                    <Row key={k} label={k} values={result.cols.map((c) => fmtGBP(c.lines[k] ?? 0))} />,
+                  ]
             )}
             <Row
               label="Total Rebate"
