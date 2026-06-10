@@ -1,5 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDown,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import {
   Bell,
   Calculator as CalcIcon,
@@ -86,10 +94,22 @@ function RebateModeling() {
     { name: "Scenario 3", growth: 30, nationalGrowthRebate: 4.5, targetTurnover: 1400000, branchGrowthRebate: 3, settlement: 38815, mvhr: 0 },
   ]);
 
-  const [calculated, setCalculated] = useState(true);
+  // UX state
+  const [calculated, setCalculated] = useState(false);
+  const [stale, setStale] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [calculating, setCalculating] = useState(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
-  const updateScenario = (i: number, patch: Partial<Scenario>) =>
+  const updateScenario = (i: number, patch: Partial<Scenario>) => {
     setScenarios((s) => s.map((sc, idx) => (idx === i ? { ...sc, ...patch } : sc)));
+    if (calculated) setStale(true);
+  };
+
+  // Wrap baseline setters to flag stale
+  const markStale = () => {
+    if (calculated) setStale(true);
+  };
 
   /* ---- Calculation ---- */
   const ewResults = useMemo(
@@ -115,54 +135,129 @@ function RebateModeling() {
     });
   }, [ewResults, socResults, nbuResults, actual, scenarios]);
 
+  const handleCalculate = () => {
+    setCalculating(true);
+    // Brief simulated processing so the user perceives action
+    setTimeout(() => {
+      setCalculated(true);
+      setStale(false);
+      setCalculating(false);
+      setToast("Calculation complete — scroll down to view results");
+      // Scroll results into view smoothly
+      requestAnimationFrame(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }, 450);
+  };
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const bestScenarioIdx = useMemo(() => {
+    if (!totals.length) return 0;
+    let best = 0;
+    for (let i = 1; i < totals.length; i++) if (totals[i].gp > totals[best].gp) best = i;
+    return best;
+  }, [totals]);
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar />
       <div className="flex-1 min-w-0 flex flex-col">
         <TopBar />
+
+        {/* Sticky KPI bar — appears after calculation */}
+        {calculated && (
+          <StickyKPIBar
+            totals={totals}
+            stale={stale}
+            onRecalculate={handleCalculate}
+            calculating={calculating}
+            onJumpToResults={() =>
+              resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          />
+        )}
+
         <main className="flex-1 px-6 py-6 space-y-6">
-          <PageHeader onCalculate={() => setCalculated(true)} />
+          <PageHeader
+            onCalculate={handleCalculate}
+            calculating={calculating}
+            calculated={calculated}
+            stale={stale}
+          />
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <GlobalConfig
-              fixedEW={fixedEW} setFixedEW={setFixedEW}
-              targetEW={targetEW} setTargetEW={setTargetEW}
-              nbuRebate={nbuRebate} setNbuRebate={setNbuRebate}
-              socRebate={socRebate} setSocRebate={setSocRebate}
+              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
+              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
+              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
+              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
             />
             <BaselineInputs
-              ewTurnover={ewTurnover} setEwTurnover={setEwTurnover}
-              ewCost={ewCost} setEwCost={setEwCost}
-              socTurnover={socTurnover} setSocTurnover={setSocTurnover}
-              socCost={socCost} setSocCost={setSocCost}
-              nbuTurnover={nbuTurnover} setNbuTurnover={setNbuTurnover}
-              nbuCost={nbuCost} setNbuCost={setNbuCost}
+              ewTurnover={ewTurnover} setEwTurnover={(n) => { setEwTurnover(n); markStale(); }}
+              ewCost={ewCost} setEwCost={(n) => { setEwCost(n); markStale(); }}
+              socTurnover={socTurnover} setSocTurnover={(n) => { setSocTurnover(n); markStale(); }}
+              socCost={socCost} setSocCost={(n) => { setSocCost(n); markStale(); }}
+              nbuTurnover={nbuTurnover} setNbuTurnover={(n) => { setNbuTurnover(n); markStale(); }}
+              nbuCost={nbuCost} setNbuCost={(n) => { setNbuCost(n); markStale(); }}
             />
           </div>
 
           <GrowthConfig
             actual={actual}
-            setActual={setActual}
+            setActual={(s) => { setActual(s); markStale(); }}
             scenarios={scenarios}
             updateScenario={updateScenario}
           />
 
-          {calculated ? (
-            <div className="space-y-6">
-              <ResultsTable label="EW" scenarios={[actual, ...scenarios]} result={ewResults} layer="ew" />
-              <ResultsTable label="SOC" scenarios={[actual, ...scenarios]} result={socResults} layer="linear" />
-              <ResultsTable label="NBU" scenarios={[actual, ...scenarios]} result={nbuResults} layer="linear" />
-              <TotalSummary scenarios={[actual, ...scenarios]} totals={totals} />
-            </div>
-          ) : (
-            <EmptyState />
+          {/* Calculate hint / CTA card — only when results not yet shown */}
+          {!calculated && (
+            <CalculateCTA onCalculate={handleCalculate} calculating={calculating} />
           )}
+
+          <div ref={resultsRef} className="scroll-mt-24">
+            {calculated && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <ResultsHeader
+                  stale={stale}
+                  bestIdx={bestScenarioIdx}
+                  totals={totals}
+                  onRecalculate={handleCalculate}
+                  calculating={calculating}
+                />
+                <ResultsTable label="EW" scenarios={[actual, ...scenarios]} result={ewResults} layer="ew" bestIdx={bestScenarioIdx} />
+                <ResultsTable label="SOC" scenarios={[actual, ...scenarios]} result={socResults} layer="linear" bestIdx={bestScenarioIdx} />
+                <ResultsTable label="NBU" scenarios={[actual, ...scenarios]} result={nbuResults} layer="linear" bestIdx={bestScenarioIdx} />
+                <TotalSummary scenarios={[actual, ...scenarios]} totals={totals} bestIdx={bestScenarioIdx} />
+              </div>
+            )}
+          </div>
 
           <footer className="pt-4 pb-2 text-center text-xs text-muted-foreground">
             Rebate Ninja · Built by <span className="font-semibold text-foreground">AIMDek Technologies</span>
           </footer>
         </main>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="bg-card border border-success/30 shadow-lg rounded-lg px-4 py-3 flex items-center gap-3 max-w-sm">
+            <div className="size-8 rounded-full bg-success-soft grid place-items-center text-[oklch(0.4_0.14_155)]">
+              <CheckCircle2 className="size-4" />
+            </div>
+            <div className="flex-1 text-sm font-medium">{toast}</div>
+            <button onClick={() => setToast(null)} className="text-muted-foreground hover:text-foreground p-1">
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -342,7 +437,17 @@ function TopBar() {
 
 /* ---------------- Page header ---------------- */
 
-function PageHeader({ onCalculate }: { onCalculate: () => void }) {
+function PageHeader({
+  onCalculate,
+  calculating,
+  calculated,
+  stale,
+}: {
+  onCalculate: () => void;
+  calculating: boolean;
+  calculated: boolean;
+  stale: boolean;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -372,12 +477,223 @@ function PageHeader({ onCalculate }: { onCalculate: () => void }) {
           </div>
         </div>
       </div>
-      <button
-        onClick={onCalculate}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-brand-foreground font-semibold shadow-sm hover:opacity-90 transition"
-      >
-        <CalcIcon className="size-4" /> Calculate
-      </button>
+      <div className="flex flex-col items-end gap-2">
+        <button
+          onClick={onCalculate}
+          disabled={calculating}
+          className={`inline-flex items-center gap-2 px-6 py-3 rounded-md font-semibold shadow-md transition-all ${
+            stale
+              ? "bg-brand text-brand-foreground ring-4 ring-brand/25 animate-pulse"
+              : "bg-brand text-brand-foreground hover:shadow-lg hover:-translate-y-0.5"
+          } disabled:opacity-70`}
+        >
+          {calculating ? (
+            <>
+              <RefreshCw className="size-4 animate-spin" /> Calculating…
+            </>
+          ) : calculated ? (
+            <>
+              <RefreshCw className="size-4" /> {stale ? "Recalculate" : "Recalculate"}
+            </>
+          ) : (
+            <>
+              <CalcIcon className="size-4" /> Calculate
+            </>
+          )}
+        </button>
+        {stale && (
+          <div className="text-xs text-brand font-medium flex items-center gap-1.5">
+            <AlertTriangle className="size-3.5" /> Inputs changed — click Recalculate
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Calculate CTA (pre-calc state) ---------------- */
+
+function CalculateCTA({
+  onCalculate,
+  calculating,
+}: {
+  onCalculate: () => void;
+  calculating: boolean;
+}) {
+  return (
+    <div className="relative overflow-hidden bg-gradient-to-br from-brand-soft via-card to-brand-soft border-2 border-dashed border-brand/40 rounded-2xl px-6 py-10 text-center">
+      <div className="absolute inset-0 opacity-30 pointer-events-none" aria-hidden>
+        <div className="absolute -top-12 -right-12 size-48 rounded-full bg-brand/20 blur-3xl" />
+        <div className="absolute -bottom-12 -left-12 size-48 rounded-full bg-amber-300/20 blur-3xl" />
+      </div>
+      <div className="relative">
+        <div className="size-14 mx-auto rounded-full bg-brand text-brand-foreground grid place-items-center mb-4 shadow-lg">
+          <CalcIcon className="size-7" />
+        </div>
+        <h3 className="text-xl font-bold">Ready to run your scenarios?</h3>
+        <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+          We've prepared the inputs above. Click <span className="font-semibold text-foreground">Calculate</span> to
+          see projected turnover, rebate breakdown, and Gross Profit impact for each scenario.
+        </p>
+        <button
+          onClick={onCalculate}
+          disabled={calculating}
+          className="mt-5 inline-flex items-center gap-2 px-7 py-3 rounded-md bg-brand text-brand-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition disabled:opacity-70"
+        >
+          {calculating ? (
+            <>
+              <RefreshCw className="size-4 animate-spin" /> Calculating…
+            </>
+          ) : (
+            <>
+              <CalcIcon className="size-4" /> Calculate Now
+              <ArrowDown className="size-4 ml-1" />
+            </>
+          )}
+        </button>
+        <div className="mt-4 text-xs text-muted-foreground">
+          Results will appear here with EW, SOC, NBU breakdowns and a total summary.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Sticky KPI bar ---------------- */
+
+function StickyKPIBar({
+  totals,
+  stale,
+  onRecalculate,
+  calculating,
+  onJumpToResults,
+}: {
+  totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  stale: boolean;
+  onRecalculate: () => void;
+  calculating: boolean;
+  onJumpToResults: () => void;
+}) {
+  const actual = totals[0];
+  const best = totals.slice(1).reduce((a, b) => (b.gp > a.gp ? b : a), totals[1] ?? actual);
+  const uplift = best.gp - actual.gp;
+  const upliftPct = actual.gp ? (uplift / actual.gp) * 100 : 0;
+
+  return (
+    <div className={`sticky top-[57px] z-[5] border-b ${stale ? "border-brand/40 bg-brand-soft/60" : "border-border bg-card"} backdrop-blur px-6 py-2.5 flex flex-wrap items-center gap-4`}>
+      <div className="flex items-center gap-2">
+        <div className={`size-2 rounded-full ${stale ? "bg-brand animate-pulse" : "bg-success"}`} />
+        <span className="text-xs font-semibold uppercase tracking-wider">
+          {stale ? "Results outdated" : "Results ready"}
+        </span>
+      </div>
+      <div className="hidden md:flex items-center gap-5 text-sm">
+        <KPI label="Actual GP" value={fmtGBP(actual.gp)} sub={fmtPct(actual.gpPct)} />
+        <KPI label="Best Scenario GP" value={fmtGBP(best.gp)} sub={fmtPct(best.gpPct)} accent="success" />
+        <KPI
+          label="Uplift"
+          value={`${uplift >= 0 ? "+" : ""}${fmtGBP(uplift)}`}
+          sub={`${upliftPct >= 0 ? "+" : ""}${upliftPct.toFixed(1)}%`}
+          accent={uplift >= 0 ? "success" : "destructive"}
+        />
+      </div>
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={onJumpToResults}
+          className="text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted transition inline-flex items-center gap-1.5"
+        >
+          <ArrowDown className="size-3.5" /> View results
+        </button>
+        {stale && (
+          <button
+            onClick={onRecalculate}
+            disabled={calculating}
+            className="text-xs font-semibold px-3 py-1.5 rounded-md bg-brand text-brand-foreground hover:opacity-90 transition inline-flex items-center gap-1.5 disabled:opacity-70"
+          >
+            <RefreshCw className={`size-3.5 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KPI({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: "success" | "destructive";
+}) {
+  const color =
+    accent === "success"
+      ? "text-[oklch(0.4_0.14_155)]"
+      : accent === "destructive"
+      ? "text-destructive"
+      : "text-foreground";
+  return (
+    <div className="leading-tight">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
+      <div className={`font-bold tabular-nums ${color}`}>
+        {value} {sub && <span className="text-xs font-medium opacity-70 ml-1">{sub}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Results section header ---------------- */
+
+function ResultsHeader({
+  stale,
+  bestIdx,
+  totals,
+  onRecalculate,
+  calculating,
+}: {
+  stale: boolean;
+  bestIdx: number;
+  totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  onRecalculate: () => void;
+  calculating: boolean;
+}) {
+  const scenarioName = bestIdx === 0 ? "Actual 2026" : `Scenario ${bestIdx}`;
+  const best = totals[bestIdx];
+  const actual = totals[0];
+  const uplift = best.gp - actual.gp;
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="size-10 rounded-lg bg-success-soft text-[oklch(0.4_0.14_155)] grid place-items-center shrink-0">
+            <CheckCircle2 className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold">Calculation Results</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Showing projected turnover, cost, rebate breakdown, and Gross Profit for each scenario.
+            </p>
+            {bestIdx > 0 && (
+              <div className="mt-2 inline-flex items-center gap-2 text-xs bg-success-soft text-[oklch(0.4_0.14_155)] px-2.5 py-1 rounded-full font-medium">
+                <TrendingUp className="size-3.5" />
+                Best scenario: <span className="font-bold">{scenarioName}</span> · +{fmtGBP(uplift)} GP vs Actual
+              </div>
+            )}
+          </div>
+        </div>
+        {stale && (
+          <button
+            onClick={onRecalculate}
+            disabled={calculating}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-brand text-brand-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-70"
+          >
+            <RefreshCw className={`size-4 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -611,11 +927,13 @@ function ResultsTable({
   scenarios,
   result,
   layer,
+  bestIdx,
 }: {
   label: string;
   scenarios: Scenario[];
   result: { cols: ColResult[] };
   layer: "ew" | "linear";
+  bestIdx: number;
 }) {
   const colHeader = (s: Scenario, i: number) =>
     i === 0 ? "Actual 2026" : `${s.growth}% Growth`;
@@ -645,8 +963,18 @@ function ResultsTable({
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
               {scenarios.map((s, i) => (
-                <th key={s.name} className="text-right py-3 px-5 font-semibold whitespace-nowrap">
+                <th
+                  key={s.name}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${
+                    i === bestIdx && bestIdx > 0 ? "bg-success-soft/60 text-[oklch(0.4_0.14_155)]" : ""
+                  }`}
+                >
                   {colHeader(s, i)}
+                  {i === bestIdx && bestIdx > 0 && (
+                    <span className="ml-2 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider bg-[oklch(0.4_0.14_155)] text-white px-1.5 py-0.5 rounded-full font-bold">
+                      <TrendingUp className="size-2.5" /> Best
+                    </span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -725,9 +1053,11 @@ function Row({
 function TotalSummary({
   scenarios,
   totals,
+  bestIdx,
 }: {
   scenarios: Scenario[];
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  bestIdx: number;
 }) {
   return (
     <section className="bg-card border-2 border-brand/30 rounded-xl overflow-hidden shadow-md">
@@ -740,8 +1070,18 @@ function TotalSummary({
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
               {scenarios.map((s, i) => (
-                <th key={s.name} className="text-right py-3 px-5 font-semibold whitespace-nowrap">
+                <th
+                  key={s.name}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${
+                    i === bestIdx && bestIdx > 0 ? "bg-success-soft/60 text-[oklch(0.4_0.14_155)]" : ""
+                  }`}
+                >
                   {i === 0 ? "Actual 2026" : `${s.growth}% Growth`}
+                  {i === bestIdx && bestIdx > 0 && (
+                    <span className="ml-2 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider bg-[oklch(0.4_0.14_155)] text-white px-1.5 py-0.5 rounded-full font-bold">
+                      <TrendingUp className="size-2.5" /> Best
+                    </span>
+                  )}
                 </th>
               ))}
             </tr>
@@ -759,18 +1099,3 @@ function TotalSummary({
   );
 }
 
-/* ---------------- Empty state ---------------- */
-
-function EmptyState() {
-  return (
-    <div className="bg-card border border-dashed border-border rounded-xl py-16 px-6 text-center">
-      <div className="size-12 mx-auto rounded-lg bg-brand-soft text-brand grid place-items-center mb-3">
-        <ClipboardList className="size-6" />
-      </div>
-      <h3 className="font-semibold text-lg">Ready to Calculate</h3>
-      <p className="text-sm text-muted-foreground mt-1">
-        Configure the rebate parameters and growth scenarios above, then click <span className="font-semibold text-foreground">Calculate</span>.
-      </p>
-    </div>
-  );
-}
