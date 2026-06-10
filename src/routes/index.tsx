@@ -451,6 +451,31 @@ function RebateModeling() {
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Keyboard shortcut: Cmd/Ctrl + Enter triggers Calculate from anywhere on the page
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (!calculating) handleCalculate();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calculating]);
+
+  // Track whether the results section is visible — drives the floating jump pill
+  const [resultsVisible, setResultsVisible] = useState(false);
+  useEffect(() => {
+    if (!calculated || !resultsRef.current) return;
+    const io = new IntersectionObserver(
+      ([entry]) => setResultsVisible(entry.isIntersecting),
+      { rootMargin: "-20% 0px -20% 0px", threshold: 0 }
+    );
+    io.observe(resultsRef.current);
+    return () => io.disconnect();
+  }, [calculated]);
+
   const bestScenarioIdx = useMemo(() => {
     if (!totals.length) return 0;
     let best = 0;
@@ -566,8 +591,18 @@ function RebateModeling() {
         </main>
       </div>
 
+      {/* Floating "View results" pill — only when results exist and section is off-screen */}
+      {calculated && !resultsVisible && (
+        <button
+          onClick={() =>
+            resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+          }
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand text-brand-foreground font-semibold shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition animate-in fade-in slide-in-from-bottom-4 duration-300"
+        >
+          <ArrowDown className="size-4" /> View results
+        </button>
+      )}
 
-      {/* Toast */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
           <div className="bg-card border border-success/30 shadow-lg rounded-lg px-4 py-3 flex items-center gap-3 max-w-sm">
@@ -962,6 +997,7 @@ function CalculateCTA({
         </button>
         <div className="mt-4 text-xs text-muted-foreground">
           Results will appear here with EW, SOC, NBU breakdowns and a total summary.
+          <span className="hidden sm:inline"> · Tip: press <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono text-[10px]">⌘ / Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted font-mono text-[10px]">Enter</kbd> to calculate.</span>
         </div>
       </div>
     </div>
