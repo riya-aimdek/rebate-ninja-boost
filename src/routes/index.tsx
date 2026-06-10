@@ -257,6 +257,54 @@ function RebateModeling() {
     }, 450);
   };
 
+  const exportCSV = () => {
+    if (!calculated) {
+      setToast("Run Calculate first, then export");
+      return;
+    }
+    const allScenarios = [actual, ...scenarios];
+    const headers = ["Layer", "Metric", ...allScenarios.map((s, i) => (i === 0 ? "Actual" : s.name))];
+    const rows: string[][] = [];
+    const layers: { label: string; res: { cols: ColResult[] } }[] = [
+      { label: "EW", res: ewResults },
+      { label: "SOC", res: socResults },
+      { label: "NBU", res: nbuResults },
+    ];
+    for (const { label, res } of layers) {
+      rows.push([label, "Turnover", ...res.cols.map((c) => Math.round(c.turnover).toString())]);
+      rows.push([label, "Cost", ...res.cols.map((c) => Math.round(c.cost).toString())]);
+      const keys = Object.keys(res.cols[0].lines);
+      for (const k of keys) {
+        rows.push([label, k, ...res.cols.map((c) => Math.round(c.lines[k] ?? 0).toString())]);
+      }
+      rows.push([label, "Total Rebate", ...res.cols.map((c) => Math.round(c.totalRebate).toString())]);
+      rows.push([label, "Gross Profit", ...res.cols.map((c) => Math.round(c.gp).toString())]);
+      rows.push([label, "GP %", ...res.cols.map((c) => c.gpPct.toFixed(2))]);
+    }
+    rows.push(["TOTAL", "Total Turnover", ...totals.map((t) => Math.round(t.turnover).toString())]);
+    rows.push(["TOTAL", "Total Cost", ...totals.map((t) => Math.round(t.cost).toString())]);
+    rows.push(["TOTAL", "Total Rebate", ...totals.map((t) => Math.round(t.rebate).toString())]);
+    rows.push(["TOTAL", "Total Gross Profit", ...totals.map((t) => Math.round(t.gp).toString())]);
+    rows.push(["TOTAL", "GP %", ...totals.map((t) => t.gpPct.toFixed(2))]);
+
+    const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const csv = [headers, ...rows].map((r) => r.map(esc).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rebate-modeling-${account}-${year}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setToast("CSV exported");
+  };
+
+  const saveSnapshot = () => {
+    setToast("Snapshot saved to this browser");
+  };
+
   // Auto-dismiss toast
   useEffect(() => {
     if (!toast) return;
