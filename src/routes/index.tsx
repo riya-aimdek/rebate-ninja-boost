@@ -437,7 +437,17 @@ function TopBar() {
 
 /* ---------------- Page header ---------------- */
 
-function PageHeader({ onCalculate }: { onCalculate: () => void }) {
+function PageHeader({
+  onCalculate,
+  calculating,
+  calculated,
+  stale,
+}: {
+  onCalculate: () => void;
+  calculating: boolean;
+  calculated: boolean;
+  stale: boolean;
+}) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -467,12 +477,223 @@ function PageHeader({ onCalculate }: { onCalculate: () => void }) {
           </div>
         </div>
       </div>
-      <button
-        onClick={onCalculate}
-        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-brand-foreground font-semibold shadow-sm hover:opacity-90 transition"
-      >
-        <CalcIcon className="size-4" /> Calculate
-      </button>
+      <div className="flex flex-col items-end gap-2">
+        <button
+          onClick={onCalculate}
+          disabled={calculating}
+          className={`inline-flex items-center gap-2 px-6 py-3 rounded-md font-semibold shadow-md transition-all ${
+            stale
+              ? "bg-brand text-brand-foreground ring-4 ring-brand/25 animate-pulse"
+              : "bg-brand text-brand-foreground hover:shadow-lg hover:-translate-y-0.5"
+          } disabled:opacity-70`}
+        >
+          {calculating ? (
+            <>
+              <RefreshCw className="size-4 animate-spin" /> Calculating…
+            </>
+          ) : calculated ? (
+            <>
+              <RefreshCw className="size-4" /> {stale ? "Recalculate" : "Recalculate"}
+            </>
+          ) : (
+            <>
+              <CalcIcon className="size-4" /> Calculate
+            </>
+          )}
+        </button>
+        {stale && (
+          <div className="text-xs text-brand font-medium flex items-center gap-1.5">
+            <AlertTriangle className="size-3.5" /> Inputs changed — click Recalculate
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Calculate CTA (pre-calc state) ---------------- */
+
+function CalculateCTA({
+  onCalculate,
+  calculating,
+}: {
+  onCalculate: () => void;
+  calculating: boolean;
+}) {
+  return (
+    <div className="relative overflow-hidden bg-gradient-to-br from-brand-soft via-card to-brand-soft border-2 border-dashed border-brand/40 rounded-2xl px-6 py-10 text-center">
+      <div className="absolute inset-0 opacity-30 pointer-events-none" aria-hidden>
+        <div className="absolute -top-12 -right-12 size-48 rounded-full bg-brand/20 blur-3xl" />
+        <div className="absolute -bottom-12 -left-12 size-48 rounded-full bg-amber-300/20 blur-3xl" />
+      </div>
+      <div className="relative">
+        <div className="size-14 mx-auto rounded-full bg-brand text-brand-foreground grid place-items-center mb-4 shadow-lg">
+          <CalcIcon className="size-7" />
+        </div>
+        <h3 className="text-xl font-bold">Ready to run your scenarios?</h3>
+        <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+          We've prepared the inputs above. Click <span className="font-semibold text-foreground">Calculate</span> to
+          see projected turnover, rebate breakdown, and Gross Profit impact for each scenario.
+        </p>
+        <button
+          onClick={onCalculate}
+          disabled={calculating}
+          className="mt-5 inline-flex items-center gap-2 px-7 py-3 rounded-md bg-brand text-brand-foreground font-semibold shadow-md hover:shadow-lg hover:-translate-y-0.5 transition disabled:opacity-70"
+        >
+          {calculating ? (
+            <>
+              <RefreshCw className="size-4 animate-spin" /> Calculating…
+            </>
+          ) : (
+            <>
+              <CalcIcon className="size-4" /> Calculate Now
+              <ArrowDown className="size-4 ml-1" />
+            </>
+          )}
+        </button>
+        <div className="mt-4 text-xs text-muted-foreground">
+          Results will appear here with EW, SOC, NBU breakdowns and a total summary.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Sticky KPI bar ---------------- */
+
+function StickyKPIBar({
+  totals,
+  stale,
+  onRecalculate,
+  calculating,
+  onJumpToResults,
+}: {
+  totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  stale: boolean;
+  onRecalculate: () => void;
+  calculating: boolean;
+  onJumpToResults: () => void;
+}) {
+  const actual = totals[0];
+  const best = totals.slice(1).reduce((a, b) => (b.gp > a.gp ? b : a), totals[1] ?? actual);
+  const uplift = best.gp - actual.gp;
+  const upliftPct = actual.gp ? (uplift / actual.gp) * 100 : 0;
+
+  return (
+    <div className={`sticky top-[57px] z-[5] border-b ${stale ? "border-brand/40 bg-brand-soft/60" : "border-border bg-card"} backdrop-blur px-6 py-2.5 flex flex-wrap items-center gap-4`}>
+      <div className="flex items-center gap-2">
+        <div className={`size-2 rounded-full ${stale ? "bg-brand animate-pulse" : "bg-success"}`} />
+        <span className="text-xs font-semibold uppercase tracking-wider">
+          {stale ? "Results outdated" : "Results ready"}
+        </span>
+      </div>
+      <div className="hidden md:flex items-center gap-5 text-sm">
+        <KPI label="Actual GP" value={fmtGBP(actual.gp)} sub={fmtPct(actual.gpPct)} />
+        <KPI label="Best Scenario GP" value={fmtGBP(best.gp)} sub={fmtPct(best.gpPct)} accent="success" />
+        <KPI
+          label="Uplift"
+          value={`${uplift >= 0 ? "+" : ""}${fmtGBP(uplift)}`}
+          sub={`${upliftPct >= 0 ? "+" : ""}${upliftPct.toFixed(1)}%`}
+          accent={uplift >= 0 ? "success" : "destructive"}
+        />
+      </div>
+      <div className="ml-auto flex items-center gap-2">
+        <button
+          onClick={onJumpToResults}
+          className="text-xs font-medium px-3 py-1.5 rounded-md border border-border hover:bg-muted transition inline-flex items-center gap-1.5"
+        >
+          <ArrowDown className="size-3.5" /> View results
+        </button>
+        {stale && (
+          <button
+            onClick={onRecalculate}
+            disabled={calculating}
+            className="text-xs font-semibold px-3 py-1.5 rounded-md bg-brand text-brand-foreground hover:opacity-90 transition inline-flex items-center gap-1.5 disabled:opacity-70"
+          >
+            <RefreshCw className={`size-3.5 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KPI({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: "success" | "destructive";
+}) {
+  const color =
+    accent === "success"
+      ? "text-[oklch(0.4_0.14_155)]"
+      : accent === "destructive"
+      ? "text-destructive"
+      : "text-foreground";
+  return (
+    <div className="leading-tight">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
+      <div className={`font-bold tabular-nums ${color}`}>
+        {value} {sub && <span className="text-xs font-medium opacity-70 ml-1">{sub}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Results section header ---------------- */
+
+function ResultsHeader({
+  stale,
+  bestIdx,
+  totals,
+  onRecalculate,
+  calculating,
+}: {
+  stale: boolean;
+  bestIdx: number;
+  totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  onRecalculate: () => void;
+  calculating: boolean;
+}) {
+  const scenarioName = bestIdx === 0 ? "Actual 2026" : `Scenario ${bestIdx}`;
+  const best = totals[bestIdx];
+  const actual = totals[0];
+  const uplift = best.gp - actual.gp;
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="size-10 rounded-lg bg-success-soft text-[oklch(0.4_0.14_155)] grid place-items-center shrink-0">
+            <CheckCircle2 className="size-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold">Calculation Results</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Showing projected turnover, cost, rebate breakdown, and Gross Profit for each scenario.
+            </p>
+            {bestIdx > 0 && (
+              <div className="mt-2 inline-flex items-center gap-2 text-xs bg-success-soft text-[oklch(0.4_0.14_155)] px-2.5 py-1 rounded-full font-medium">
+                <TrendingUp className="size-3.5" />
+                Best scenario: <span className="font-bold">{scenarioName}</span> · +{fmtGBP(uplift)} GP vs Actual
+              </div>
+            )}
+          </div>
+        </div>
+        {stale && (
+          <button
+            onClick={onRecalculate}
+            disabled={calculating}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-brand text-brand-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-70"
+          >
+            <RefreshCw className={`size-4 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+          </button>
+        )}
+      </div>
     </div>
   );
 }
