@@ -654,28 +654,28 @@ function ResultsTable({
           <tbody>
             <Row label="Turnover" values={result.cols.map((c) => fmtGBP(c.turnover))} />
             <Row label="Cost" values={result.cols.map((c) => fmtGBP(c.cost))} />
-            {lineKeys.map((k) =>
-              k === "National Growth Rebate" && layer === "ew" ? (
-                <>
-                  <tr key="qual" className="border-b border-border/60">
-                    <td className="py-2.5 px-5 text-muted-foreground">National Growth — Qualification</td>
-                    {result.cols.map((c, i) => (
-                      <td key={i} className="text-right py-2.5 px-5">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                            c.qualified
-                              ? "bg-success-soft text-[oklch(0.4_0.14_155)]"
-                              : "bg-destructive/10 text-destructive"
-                          }`}
-                        >
-                          {c.qualified ? "✓" : "✕"} {scenarios[i].nationalGrowthRebate}% (≥ {fmtGBP(scenarios[i].targetTurnover)})
-                        </span>
-                      </td>
-                    ))}
-                  </tr>
-                  <Row key={k} label={k} values={result.cols.map((c) => fmtGBP(c.lines[k]))} />
-                </>
-              ) : (
+            {lineKeys.flatMap((k) =>
+              k === "National Growth Rebate" && layer === "ew"
+                ? [
+                    <tr key="qual" className="border-b border-border/60">
+                      <td className="py-2.5 px-5 text-muted-foreground">National Growth — Qualification</td>
+                      {result.cols.map((c, i) => (
+                        <td key={i} className="text-right py-2.5 px-5">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                              c.qualified
+                                ? "bg-success-soft text-[oklch(0.4_0.14_155)]"
+                                : "bg-destructive/10 text-destructive"
+                            }`}
+                          >
+                            {c.qualified ? "✓" : "✕"} {scenarios[i].nationalGrowthRebate}% (≥ {fmtGBP(scenarios[i].targetTurnover)})
+                          </span>
+                        </td>
+                      ))}
+                    </tr>,
+                    <Row key={k} label={k} values={result.cols.map((c) => fmtGBP(c.lines[k]))} />,
+                  ]
+                : [(
                 <Row key={k} label={k} values={result.cols.map((c) => fmtGBP(c.lines[k] ?? 0))} />
               )
             )}
