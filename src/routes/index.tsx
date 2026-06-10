@@ -963,8 +963,18 @@ function ResultsTable({
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
               {scenarios.map((s, i) => (
-                <th key={s.name} className="text-right py-3 px-5 font-semibold whitespace-nowrap">
+                <th
+                  key={s.name}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${
+                    i === bestIdx && bestIdx > 0 ? "bg-success-soft/60 text-[oklch(0.4_0.14_155)]" : ""
+                  }`}
+                >
                   {colHeader(s, i)}
+                  {i === bestIdx && bestIdx > 0 && (
+                    <span className="ml-2 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider bg-[oklch(0.4_0.14_155)] text-white px-1.5 py-0.5 rounded-full font-bold">
+                      <TrendingUp className="size-2.5" /> Best
+                    </span>
+                  )}
                 </th>
               ))}
             </tr>
