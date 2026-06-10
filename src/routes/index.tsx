@@ -114,6 +114,61 @@ function RebateModeling() {
     if (calculated) setStale(true);
   };
 
+  const addScenario = () => {
+    setScenarios((s) => {
+      const next = s[s.length - 1];
+      const newGrowth = (next?.growth ?? 0) + 10;
+      return [
+        ...s,
+        {
+          name: `Scenario ${s.length + 1}`,
+          growth: newGrowth,
+          nationalGrowthRebate: next?.nationalGrowthRebate ?? 3.5,
+          targetTurnover: Math.round((next?.targetTurnover ?? 1200000) * 1.1),
+          branchGrowthRebate: next?.branchGrowthRebate ?? 0,
+          settlement: Math.round((next?.settlement ?? 30000) * 1.05),
+          mvhr: next?.mvhr ?? 0,
+        },
+      ];
+    });
+    if (calculated) setStale(true);
+  };
+
+  const removeScenario = (idx: number) => {
+    setScenarios((s) =>
+      s
+        .filter((_, i) => i !== idx)
+        .map((sc, i) => ({ ...sc, name: `Scenario ${i + 1}` }))
+    );
+    if (calculated) setStale(true);
+  };
+
+  const resetAll = () => {
+    setFixedEW(0); setTargetEW(0); setNbuRebate(0); setSocRebate(0);
+    setEwTurnover(0); setEwCost(0);
+    setSocTurnover(0); setSocCost(0);
+    setNbuTurnover(0); setNbuCost(0);
+    setActual({ name: "Actual", growth: 0, nationalGrowthRebate: 0, targetTurnover: 0, branchGrowthRebate: 0, settlement: 0, mvhr: 0 });
+    setScenarios([{ name: "Scenario 1", growth: 10, nationalGrowthRebate: 0, targetTurnover: 0, branchGrowthRebate: 0, settlement: 0, mvhr: 0 }]);
+    setCalculated(false); setStale(false);
+    setToast("All inputs cleared");
+  };
+
+  const loadSample = () => {
+    setFixedEW(5); setTargetEW(5); setNbuRebate(5); setSocRebate(5);
+    setEwTurnover(1194312); setEwCost(597834);
+    setSocTurnover(4098722); setSocCost(1591683);
+    setNbuTurnover(357780); setNbuCost(203516);
+    setActual({ name: "Actual", growth: 0, nationalGrowthRebate: 1, targetTurnover: 1141167, branchGrowthRebate: 0, settlement: 29858, mvhr: 0 });
+    setScenarios([
+      { name: "Scenario 1", growth: 10, nationalGrowthRebate: 3.5, targetTurnover: 1200000, branchGrowthRebate: 0, settlement: 32844, mvhr: 0 },
+      { name: "Scenario 2", growth: 20, nationalGrowthRebate: 3.5, targetTurnover: 1275000, branchGrowthRebate: 2, settlement: 35829, mvhr: 0 },
+      { name: "Scenario 3", growth: 30, nationalGrowthRebate: 4.5, targetTurnover: 1400000, branchGrowthRebate: 3, settlement: 38815, mvhr: 0 },
+    ]);
+    if (calculated) setStale(true);
+    setToast("Sample data loaded");
+  };
+
   // Wrap baseline setters to flag stale
   const markStale = () => {
     if (calculated) setStale(true);
