@@ -1,5 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowDown,
+  CheckCircle2,
+  AlertTriangle,
+  RefreshCw,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import {
   Bell,
   Calculator as CalcIcon,
