@@ -13,6 +13,8 @@ import {
   Sparkles,
   Printer,
   HelpCircle,
+  Download,
+  Save,
 } from "lucide-react";
 import {
   Bell,
@@ -106,6 +108,50 @@ function RebateModeling() {
   const [toast, setToast] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
+
+  // Header context
+  const [year, setYear] = useState("2026");
+  const [account, setAccount] = useState("AWEBB");
+  const [activeNav, setActiveNav] = useState("Rebate Modeling");
+  const [search, setSearch] = useState("");
+
+  // Persistence ------------------------------------------------------------
+  const STORAGE_KEY = "rebate-ninja:modeling:v1";
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.fixedEW !== undefined) setFixedEW(s.fixedEW);
+      if (s.targetEW !== undefined) setTargetEW(s.targetEW);
+      if (s.nbuRebate !== undefined) setNbuRebate(s.nbuRebate);
+      if (s.socRebate !== undefined) setSocRebate(s.socRebate);
+      if (s.ewTurnover !== undefined) setEwTurnover(s.ewTurnover);
+      if (s.ewCost !== undefined) setEwCost(s.ewCost);
+      if (s.socTurnover !== undefined) setSocTurnover(s.socTurnover);
+      if (s.socCost !== undefined) setSocCost(s.socCost);
+      if (s.nbuTurnover !== undefined) setNbuTurnover(s.nbuTurnover);
+      if (s.nbuCost !== undefined) setNbuCost(s.nbuCost);
+      if (s.actual) setActual(s.actual);
+      if (Array.isArray(s.scenarios) && s.scenarios.length) setScenarios(s.scenarios);
+      if (s.year) setYear(s.year);
+      if (s.account) setAccount(s.account);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined" || !restoredRef.current) return;
+    const payload = {
+      fixedEW, targetEW, nbuRebate, socRebate,
+      ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost,
+      actual, scenarios, year, account,
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch { /* ignore */ }
+  }, [fixedEW, targetEW, nbuRebate, socRebate, ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost, actual, scenarios, year, account]);
 
   const updateScenario = (i: number, patch: Partial<Scenario>) => {
     setScenarios((s) => s.map((sc, idx) => (idx === i ? { ...sc, ...patch } : sc)));
@@ -211,6 +257,54 @@ function RebateModeling() {
     }, 450);
   };
 
+  const exportCSV = () => {
+    if (!calculated) {
+      setToast("Run Calculate first, then export");
+      return;
+    }
+    const allScenarios = [actual, ...scenarios];
+    const headers = ["Layer", "Metric", ...allScenarios.map((s, i) => (i === 0 ? "Actual" : s.name))];
+    const rows: string[][] = [];
+    const layers: { label: string; res: { cols: ColResult[] } }[] = [
+      { label: "EW", res: ewResults },
+      { label: "SOC", res: socResults },
+      { label: "NBU", res: nbuResults },
+    ];
+    for (const { label, res } of layers) {
+      rows.push([label, "Turnover", ...res.cols.map((c) => Math.round(c.turnover).toString())]);
+      rows.push([label, "Cost", ...res.cols.map((c) => Math.round(c.cost).toString())]);
+      const keys = Object.keys(res.cols[0].lines);
+      for (const k of keys) {
+        rows.push([label, k, ...res.cols.map((c) => Math.round(c.lines[k] ?? 0).toString())]);
+      }
+      rows.push([label, "Total Rebate", ...res.cols.map((c) => Math.round(c.totalRebate).toString())]);
+      rows.push([label, "Gross Profit", ...res.cols.map((c) => Math.round(c.gp).toString())]);
+      rows.push([label, "GP %", ...res.cols.map((c) => c.gpPct.toFixed(2))]);
+    }
+    rows.push(["TOTAL", "Total Turnover", ...totals.map((t) => Math.round(t.turnover).toString())]);
+    rows.push(["TOTAL", "Total Cost", ...totals.map((t) => Math.round(t.cost).toString())]);
+    rows.push(["TOTAL", "Total Rebate", ...totals.map((t) => Math.round(t.rebate).toString())]);
+    rows.push(["TOTAL", "Total Gross Profit", ...totals.map((t) => Math.round(t.gp).toString())]);
+    rows.push(["TOTAL", "GP %", ...totals.map((t) => t.gpPct.toFixed(2))]);
+
+    const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const csv = [headers, ...rows].map((r) => r.map(esc).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rebate-modeling-${account}-${year}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setToast("CSV exported");
+  };
+
+  const saveSnapshot = () => {
+    setToast("Snapshot saved to this browser");
+  };
+
   // Auto-dismiss toast
   useEffect(() => {
     if (!toast) return;
@@ -227,9 +321,9 @@ function RebateModeling() {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar />
+      <Sidebar active={activeNav} onSelect={setActiveNav} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <TopBar />
+        <TopBar search={search} onSearch={setSearch} account={account} />
 
         {/* Sticky KPI bar — appears after calculation */}
         {calculated && (
@@ -253,6 +347,12 @@ function RebateModeling() {
             onReset={resetAll}
             onLoadSample={loadSample}
             onPrint={() => window.print()}
+            onExport={exportCSV}
+            onSave={saveSnapshot}
+            year={year}
+            setYear={setYear}
+            account={account}
+            setAccount={setAccount}
           />
 
           <StepStrip calculated={calculated} />
@@ -444,7 +544,7 @@ const NAV = [
   { icon: ClipboardList, label: "Supplier Rebate Claims" },
 ];
 
-function Sidebar() {
+function Sidebar({ active, onSelect }: { active: string; onSelect: (label: string) => void }) {
   return (
     <aside className="w-64 shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border hidden lg:flex flex-col">
       <div className="px-5 py-5 border-b border-sidebar-border flex items-center gap-3">
@@ -457,12 +557,13 @@ function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5 text-sm">
         {NAV.map((item) => {
           const Icon = item.icon;
-          const active = item.active;
+          const isActive = item.label === active;
           return (
             <button
               key={item.label}
+              onClick={() => onSelect(item.label)}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${
-                active
+                isActive
                   ? "bg-brand text-brand-foreground font-semibold"
                   : "hover:bg-sidebar-accent text-sidebar-foreground/80"
               }`}
@@ -473,13 +574,25 @@ function Sidebar() {
           );
         })}
       </nav>
+      <div className="px-4 py-3 border-t border-sidebar-border text-[11px] text-sidebar-foreground/60">
+        Built by <span className="font-semibold text-sidebar-foreground">AIMDek</span>
+      </div>
     </aside>
   );
 }
 
 /* ---------------- Top bar ---------------- */
 
-function TopBar() {
+function TopBar({
+  search,
+  onSearch,
+  account,
+}: {
+  search: string;
+  onSearch: (v: string) => void;
+  account: string;
+}) {
+  const initials = account.slice(0, 2).toUpperCase();
   return (
     <header className="sticky top-0 z-10 bg-card border-b border-border px-6 py-3 flex items-center gap-4">
       <button className="lg:hidden p-2 rounded-md hover:bg-muted">
@@ -488,18 +601,20 @@ function TopBar() {
       <div className="flex-1 max-w-2xl relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <input
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
           className="w-full pl-9 pr-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/30"
           placeholder="Search accounts, programs, scenarios…"
         />
       </div>
-      <button className="relative p-2 rounded-md hover:bg-muted">
+      <button className="relative p-2 rounded-md hover:bg-muted" title="Notifications">
         <Bell className="size-5" />
         <span className="absolute -top-0.5 -right-0.5 bg-brand text-brand-foreground text-[10px] font-bold rounded-full px-1.5 py-0.5">
           99+
         </span>
       </button>
-      <div className="size-9 rounded-full bg-gradient-to-br from-brand to-amber-500 grid place-items-center text-brand-foreground font-semibold text-sm">
-        AK
+      <div className="size-9 rounded-full bg-gradient-to-br from-brand to-amber-500 grid place-items-center text-brand-foreground font-semibold text-sm" title={account}>
+        {initials}
       </div>
     </header>
   );
@@ -515,6 +630,12 @@ function PageHeader({
   onReset,
   onLoadSample,
   onPrint,
+  onExport,
+  onSave,
+  year,
+  setYear,
+  account,
+  setAccount,
 }: {
   onCalculate: () => void;
   calculating: boolean;
@@ -523,6 +644,12 @@ function PageHeader({
   onReset: () => void;
   onLoadSample: () => void;
   onPrint: () => void;
+  onExport: () => void;
+  onSave: () => void;
+  year: string;
+  setYear: (v: string) => void;
+  account: string;
+  setAccount: (v: string) => void;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
@@ -532,23 +659,32 @@ function PageHeader({
           Model a single account's rebate agreement and instantly see the impact on Gross Profit.
         </p>
         <div className="flex flex-wrap items-center gap-3 mt-3 text-sm">
-          <span className="font-semibold text-brand">AWEBB</span>
+          <div className="flex items-center gap-2">
+            <label className="text-muted-foreground">Account</label>
+            <select
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+              className="px-2 py-1 rounded-md border border-input bg-background text-sm font-semibold text-brand"
+            >
+              <option>AWEBB</option>
+              <option>BMICO</option>
+              <option>CRESTA</option>
+              <option>DELTA</option>
+            </select>
+          </div>
           <span className="px-2 py-0.5 rounded-full bg-brand-soft text-brand text-xs font-medium border border-brand/20">
-            AWB-001
+            {account === "AWEBB" ? "AWB-001" : account === "BMICO" ? "BMI-002" : account === "CRESTA" ? "CRS-003" : "DLT-004"}
           </span>
           <div className="flex items-center gap-2">
             <label className="text-muted-foreground">Year</label>
-            <select className="px-2 py-1 rounded-md border border-input bg-background text-sm">
+            <select
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              className="px-2 py-1 rounded-md border border-input bg-background text-sm"
+            >
               <option>2026</option>
               <option>2025</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-muted-foreground">Layer</label>
-            <select className="px-2 py-1 rounded-md border border-input bg-background text-sm">
-              <option>National</option>
-              <option>Regional</option>
-              <option>Branch</option>
+              <option>2024</option>
             </select>
           </div>
         </div>
@@ -569,14 +705,30 @@ function PageHeader({
           >
             <RotateCcw className="size-4" /> Reset
           </button>
+          <button
+            onClick={onSave}
+            title="Save current setup to this browser"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+          >
+            <Save className="size-4" /> Save
+          </button>
           {calculated && (
-            <button
-              onClick={onPrint}
-              title="Print or save as PDF"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
-            >
-              <Printer className="size-4" /> Print
-            </button>
+            <>
+              <button
+                onClick={onExport}
+                title="Download results as CSV"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+              >
+                <Download className="size-4" /> Export CSV
+              </button>
+              <button
+                onClick={onPrint}
+                title="Print or save as PDF"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+              >
+                <Printer className="size-4" /> Print
+              </button>
+            </>
           )}
           <button
             onClick={onCalculate}
