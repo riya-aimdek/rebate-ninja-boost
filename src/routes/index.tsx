@@ -252,15 +252,14 @@ function RebateModeling() {
             calculating={calculating}
             calculated={calculated}
             stale={stale}
+            onReset={resetAll}
+            onLoadSample={loadSample}
+            onPrint={() => window.print()}
           />
 
+          <StepStrip calculated={calculated} />
+
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <GlobalConfig
-              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
-              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
-              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
-              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
-            />
             <BaselineInputs
               ewTurnover={ewTurnover} setEwTurnover={(n) => { setEwTurnover(n); markStale(); }}
               ewCost={ewCost} setEwCost={(n) => { setEwCost(n); markStale(); }}
@@ -269,6 +268,12 @@ function RebateModeling() {
               nbuTurnover={nbuTurnover} setNbuTurnover={(n) => { setNbuTurnover(n); markStale(); }}
               nbuCost={nbuCost} setNbuCost={(n) => { setNbuCost(n); markStale(); }}
             />
+            <GlobalConfig
+              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
+              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
+              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
+              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
+            />
           </div>
 
           <GrowthConfig
@@ -276,6 +281,8 @@ function RebateModeling() {
             setActual={(s) => { setActual(s); markStale(); }}
             scenarios={scenarios}
             updateScenario={updateScenario}
+            addScenario={addScenario}
+            removeScenario={removeScenario}
           />
 
           {/* Calculate hint / CTA card — only when results not yet shown */}
@@ -292,6 +299,7 @@ function RebateModeling() {
                   totals={totals}
                   onRecalculate={handleCalculate}
                   calculating={calculating}
+                  onPrint={() => window.print()}
                 />
                 <ResultsTable label="EW" scenarios={[actual, ...scenarios]} result={ewResults} layer="ew" bestIdx={bestScenarioIdx} />
                 <ResultsTable label="SOC" scenarios={[actual, ...scenarios]} result={socResults} layer="linear" bestIdx={bestScenarioIdx} />
@@ -306,6 +314,7 @@ function RebateModeling() {
           </footer>
         </main>
       </div>
+
 
       {/* Toast */}
       {toast && (
