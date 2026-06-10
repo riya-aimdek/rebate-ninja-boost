@@ -708,14 +708,46 @@ function ResultsHeader({
 
 /* ---------------- Cards ---------------- */
 
-function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Card({
+  title,
+  hint,
+  step,
+  tooltip,
+  action,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  step?: number;
+  tooltip?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="bg-card border border-border rounded-xl p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="font-semibold text-base">
-          {title}
-          {hint && <span className="text-xs text-muted-foreground font-normal ml-2">{hint}</span>}
-        </h2>
+    <section className="bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          {step !== undefined && (
+            <div className="size-7 shrink-0 rounded-lg bg-brand text-brand-foreground grid place-items-center text-xs font-black shadow-sm">
+              {step}
+            </div>
+          )}
+          <div className="min-w-0">
+            <h2 className="font-semibold text-base flex items-center gap-1.5">
+              <span className="truncate">{title}</span>
+              {tooltip && (
+                <span className="group relative inline-flex">
+                  <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+                  <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-20 w-56 rounded-md bg-foreground text-background text-xs font-normal p-2 opacity-0 group-hover:opacity-100 transition shadow-lg">
+                    {tooltip}
+                  </span>
+                </span>
+              )}
+            </h2>
+            {hint && <p className="text-xs text-muted-foreground font-normal mt-0.5">{hint}</p>}
+          </div>
+        </div>
+        {action}
       </div>
       {children}
     </section>
