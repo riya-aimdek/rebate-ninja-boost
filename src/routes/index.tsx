@@ -494,7 +494,7 @@ function RebateModeling() {
 
         {/* (Bottom-fixed KPI bar rendered at end of layout) */}
 
-        <main className={`flex-1 px-6 py-6 space-y-6 ${calculated ? "pb-28" : ""}`}>
+        <main className="flex-1 px-6 py-6 space-y-6">
           <input
             ref={fileInputRef}
             type="file"
@@ -577,24 +577,27 @@ function RebateModeling() {
           <footer className="pt-4 pb-2 text-center text-xs text-muted-foreground">
             Rebate Ninja · Built by <span className="font-semibold text-foreground">AIMDek Technologies</span>
           </footer>
+
+          {/* Sticky-to-viewport-bottom summary bar; lives inside main so it only spans content width and stops sticking once the user reaches the page bottom. */}
+          {calculated && (
+            <div className="sticky bottom-0 -mx-6 px-6 pb-3 pt-3 z-30">
+              <BottomKPIBar
+                totals={totals}
+                stale={stale}
+                account={account}
+                bestIdx={bestScenarioIdx}
+                bestGrowth={bestScenarioIdx > 0 ? scenarios[bestScenarioIdx - 1]?.growth ?? 0 : 0}
+                onJumpToResults={() =>
+                  resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                onRecalculate={handleCalculate}
+                calculating={calculating}
+              />
+            </div>
+          )}
         </main>
       </div>
 
-      {/* Bottom-fixed results summary bar */}
-      {calculated && (
-        <BottomKPIBar
-          totals={totals}
-          stale={stale}
-          account={account}
-          bestIdx={bestScenarioIdx}
-          bestGrowth={bestScenarioIdx > 0 ? scenarios[bestScenarioIdx - 1]?.growth ?? 0 : 0}
-          onJumpToResults={() =>
-            resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-          }
-          onRecalculate={handleCalculate}
-          calculating={calculating}
-        />
-      )}
 
 
       {toast && (
@@ -1026,8 +1029,8 @@ function BottomKPIBar({
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-30 border-t backdrop-blur shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.15)] ${
-        stale ? "border-brand/40 bg-brand-soft/90" : "border-border bg-card/95"
+      className={`rounded-xl border backdrop-blur shadow-[0_-4px_20px_-8px_rgba(0,0,0,0.15)] ${
+        stale ? "border-brand/40 bg-brand-soft/95" : "border-border bg-card/95"
       }`}
     >
       <div className="px-6 py-3 flex flex-wrap items-center gap-x-8 gap-y-2">
