@@ -615,6 +615,12 @@ function PageHeader({
   onReset,
   onLoadSample,
   onPrint,
+  onExport,
+  onSave,
+  year,
+  setYear,
+  account,
+  setAccount,
 }: {
   onCalculate: () => void;
   calculating: boolean;
@@ -623,6 +629,12 @@ function PageHeader({
   onReset: () => void;
   onLoadSample: () => void;
   onPrint: () => void;
+  onExport: () => void;
+  onSave: () => void;
+  year: string;
+  setYear: (v: string) => void;
+  account: string;
+  setAccount: (v: string) => void;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
