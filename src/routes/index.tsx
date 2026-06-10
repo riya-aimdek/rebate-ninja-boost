@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import {
   ArrowDown,
   CheckCircle2,
@@ -15,6 +16,8 @@ import {
   HelpCircle,
   Download,
   Save,
+  Upload,
+  FileSpreadsheet,
 } from "lucide-react";
 import {
   Bell,
@@ -198,20 +201,161 @@ function RebateModeling() {
     setToast("All inputs cleared");
   };
 
-  const loadSample = () => {
-    setFixedEW(5); setTargetEW(5); setNbuRebate(5); setSocRebate(5);
-    setEwTurnover(1194312); setEwCost(597834);
-    setSocTurnover(4098722); setSocCost(1591683);
-    setNbuTurnover(357780); setNbuCost(203516);
-    setActual({ name: "Actual", growth: 0, nationalGrowthRebate: 1, targetTurnover: 1141167, branchGrowthRebate: 0, settlement: 29858, mvhr: 0 });
-    setScenarios([
-      { name: "Scenario 1", growth: 10, nationalGrowthRebate: 3.5, targetTurnover: 1200000, branchGrowthRebate: 0, settlement: 32844, mvhr: 0 },
-      { name: "Scenario 2", growth: 20, nationalGrowthRebate: 3.5, targetTurnover: 1275000, branchGrowthRebate: 2, settlement: 35829, mvhr: 0 },
-      { name: "Scenario 3", growth: 30, nationalGrowthRebate: 4.5, targetTurnover: 1400000, branchGrowthRebate: 3, settlement: 38815, mvhr: 0 },
-    ]);
+  // ---- Excel upload / template ----
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const triggerUpload = () => fileInputRef.current?.click();
+
+  const applyImported = (data: {
+    fixedEW?: number; targetEW?: number; nbuRebate?: number; socRebate?: number;
+    ewTurnover?: number; ewCost?: number;
+    socTurnover?: number; socCost?: number;
+    nbuTurnover?: number; nbuCost?: number;
+    actual?: Partial<Scenario>;
+    scenarios?: Scenario[];
+  }) => {
+    if (data.fixedEW !== undefined) setFixedEW(data.fixedEW);
+    if (data.targetEW !== undefined) setTargetEW(data.targetEW);
+    if (data.nbuRebate !== undefined) setNbuRebate(data.nbuRebate);
+    if (data.socRebate !== undefined) setSocRebate(data.socRebate);
+    if (data.ewTurnover !== undefined) setEwTurnover(data.ewTurnover);
+    if (data.ewCost !== undefined) setEwCost(data.ewCost);
+    if (data.socTurnover !== undefined) setSocTurnover(data.socTurnover);
+    if (data.socCost !== undefined) setSocCost(data.socCost);
+    if (data.nbuTurnover !== undefined) setNbuTurnover(data.nbuTurnover);
+    if (data.nbuCost !== undefined) setNbuCost(data.nbuCost);
+    if (data.actual) setActual((a) => ({ ...a, ...data.actual!, name: "Actual" }));
+    if (data.scenarios && data.scenarios.length) setScenarios(data.scenarios);
     if (calculated) setStale(true);
-    setToast("Sample data loaded");
   };
+
+  const handleFile = async (file: File) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const num = (v: unknown) => {
+        if (v === null || v === undefined || v === "") return undefined;
+        const n = Number(String(v).replace(/[£,%\s]/g, ""));
+        return Number.isFinite(n) ? n : undefined;
+      };
+      const data: Parameters<typeof applyImported>[0] = {};
+
+      // Inputs sheet: two columns Key, Value
+      const inputsSheet = wb.Sheets["Inputs"] ?? wb.Sheets[wb.SheetNames[0]];
+      if (inputsSheet) {
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(inputsSheet, { header: ["key", "value"] });
+        const map: Record<string, number | undefined> = {};
+        for (const r of rows) {
+          const k = String(r.key ?? "").trim();
+          if (!k || k.toLowerCase() === "key") continue;
+          map[k] = num(r.value);
+        }
+        const get = (...keys: string[]) => {
+          for (const k of keys) {
+            const found = Object.keys(map).find((mk) => mk.toLowerCase() === k.toLowerCase());
+            if (found && map[found] !== undefined) return map[found];
+          }
+          return undefined;
+        };
+        data.fixedEW = get("fixedEW", "Fixed EW %");
+        data.targetEW = get("targetEW", "Target EW %");
+        data.nbuRebate = get("nbuRebate", "NBU Rebate %");
+        data.socRebate = get("socRebate", "SOC Rebate %");
+        data.ewTurnover = get("ewTurnover", "EW Turnover");
+        data.ewCost = get("ewCost", "EW Cost");
+        data.socTurnover = get("socTurnover", "SOC Turnover");
+        data.socCost = get("socCost", "SOC Cost");
+        data.nbuTurnover = get("nbuTurnover", "NBU Turnover");
+        data.nbuCost = get("nbuCost", "NBU Cost");
+        const actualPatch: Partial<Scenario> = {};
+        const ag = get("actual.growth"); if (ag !== undefined) actualPatch.growth = ag;
+        const an = get("actual.nationalGrowthRebate"); if (an !== undefined) actualPatch.nationalGrowthRebate = an;
+        const at = get("actual.targetTurnover"); if (at !== undefined) actualPatch.targetTurnover = at;
+        const ab = get("actual.branchGrowthRebate"); if (ab !== undefined) actualPatch.branchGrowthRebate = ab;
+        const as = get("actual.settlement"); if (as !== undefined) actualPatch.settlement = as;
+        const am = get("actual.mvhr"); if (am !== undefined) actualPatch.mvhr = am;
+        if (Object.keys(actualPatch).length) data.actual = actualPatch;
+      }
+
+      // Scenarios sheet: header row with name, growth, nationalGrowthRebate, targetTurnover, branchGrowthRebate, settlement, mvhr
+      const scSheet = wb.Sheets["Scenarios"];
+      if (scSheet) {
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(scSheet);
+        const parsed: Scenario[] = rows
+          .map((r, i) => {
+            const get = (...keys: string[]) => {
+              for (const k of keys) {
+                const found = Object.keys(r).find((rk) => rk.toLowerCase().replace(/\s|_/g, "") === k.toLowerCase().replace(/\s|_/g, ""));
+                if (found) return num(r[found]);
+              }
+              return undefined;
+            };
+            const growth = get("growth", "growth%");
+            if (growth === undefined) return null;
+            return {
+              name: String(r.name ?? r.Name ?? `Scenario ${i + 1}`),
+              growth,
+              nationalGrowthRebate: get("nationalGrowthRebate", "national growth rebate") ?? 0,
+              targetTurnover: get("targetTurnover", "target turnover") ?? 0,
+              branchGrowthRebate: get("branchGrowthRebate", "branch growth rebate") ?? 0,
+              settlement: get("settlement") ?? 0,
+              mvhr: get("mvhr") ?? 0,
+            } as Scenario;
+          })
+          .filter((s): s is Scenario => !!s);
+        if (parsed.length) data.scenarios = parsed;
+      }
+
+      const filledKeys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined);
+      if (!filledKeys.length) {
+        setToast("No matching data found. Use the template format.");
+        return;
+      }
+      applyImported(data);
+      setToast(`Imported ${filledKeys.length} field${filledKeys.length === 1 ? "" : "s"} from ${file.name}`);
+    } catch (err) {
+      console.error(err);
+      setToast("Failed to read file. Make sure it's a valid .xlsx");
+    }
+  };
+
+  const downloadTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const inputs = [
+      ["Key", "Value"],
+      ["fixedEW", 5],
+      ["targetEW", 5],
+      ["nbuRebate", 5],
+      ["socRebate", 5],
+      ["ewTurnover", 1194312],
+      ["ewCost", 597834],
+      ["socTurnover", 4098722],
+      ["socCost", 1591683],
+      ["nbuTurnover", 357780],
+      ["nbuCost", 203516],
+      ["actual.growth", 0],
+      ["actual.nationalGrowthRebate", 1],
+      ["actual.targetTurnover", 1141167],
+      ["actual.branchGrowthRebate", 0],
+      ["actual.settlement", 29858],
+      ["actual.mvhr", 0],
+    ];
+    const inputsSheet = XLSX.utils.aoa_to_sheet(inputs);
+    XLSX.utils.book_append_sheet(wb, inputsSheet, "Inputs");
+
+    const scenarios = [
+      ["name", "growth", "nationalGrowthRebate", "targetTurnover", "branchGrowthRebate", "settlement", "mvhr"],
+      ["Scenario 1", 10, 3.5, 1200000, 0, 32844, 0],
+      ["Scenario 2", 20, 3.5, 1275000, 2, 35829, 0],
+      ["Scenario 3", 30, 4.5, 1400000, 3, 38815, 0],
+    ];
+    const scSheet = XLSX.utils.aoa_to_sheet(scenarios);
+    XLSX.utils.book_append_sheet(wb, scSheet, "Scenarios");
+
+    XLSX.writeFile(wb, "rebate-modeling-template.xlsx");
+    setToast("Template downloaded");
+  };
+
 
   // Wrap baseline setters to flag stale
   const markStale = () => {
@@ -319,6 +463,43 @@ function RebateModeling() {
     return best;
   }, [totals]);
 
+  // ---- Stepper navigation ----
+  const baselineRef = useRef<HTMLDivElement>(null);
+  const ratesRef = useRef<HTMLDivElement>(null);
+  const scenariosRef = useRef<HTMLDivElement>(null);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
+
+  const goToStep = (n: 1 | 2 | 3 | 4) => {
+    const map = { 1: baselineRef, 2: ratesRef, 3: scenariosRef, 4: resultsRef } as const;
+    setCurrentStep(n);
+    map[n].current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const targets: { n: 1 | 2 | 3 | 4; el: HTMLElement | null }[] = [
+      { n: 1, el: baselineRef.current },
+      { n: 2, el: ratesRef.current },
+      { n: 3, el: scenariosRef.current },
+      { n: 4, el: resultsRef.current },
+    ];
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const top = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (top) {
+          const found = targets.find((t) => t.el === top.target);
+          if (found) setCurrentStep(found.n);
+        }
+      },
+      { rootMargin: "-30% 0px -55% 0px", threshold: [0, 0.25, 0.5, 1] },
+    );
+    targets.forEach((t) => t.el && obs.observe(t.el));
+    return () => obs.disconnect();
+  }, [calculated]);
+
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar active={activeNav} onSelect={setActiveNav} />
@@ -339,13 +520,25 @@ function RebateModeling() {
         )}
 
         <main className="flex-1 px-6 py-6 space-y-6">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              e.target.value = "";
+            }}
+          />
           <PageHeader
             onCalculate={handleCalculate}
             calculating={calculating}
             calculated={calculated}
             stale={stale}
             onReset={resetAll}
-            onLoadSample={loadSample}
+            onUpload={triggerUpload}
+            onTemplate={downloadTemplate}
             onPrint={() => window.print()}
             onExport={exportCSV}
             onSave={saveSnapshot}
@@ -355,9 +548,9 @@ function RebateModeling() {
             setAccount={setAccount}
           />
 
-          <StepStrip calculated={calculated} />
+          <StepStrip currentStep={currentStep} calculated={calculated} onStepClick={goToStep} />
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div ref={baselineRef} data-step="1" className="grid grid-cols-1 xl:grid-cols-2 gap-6 scroll-mt-32">
             <BaselineInputs
               ewTurnover={ewTurnover} setEwTurnover={(n) => { setEwTurnover(n); markStale(); }}
               ewCost={ewCost} setEwCost={(n) => { setEwCost(n); markStale(); }}
@@ -366,29 +559,34 @@ function RebateModeling() {
               nbuTurnover={nbuTurnover} setNbuTurnover={(n) => { setNbuTurnover(n); markStale(); }}
               nbuCost={nbuCost} setNbuCost={(n) => { setNbuCost(n); markStale(); }}
             />
-            <GlobalConfig
-              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
-              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
-              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
-              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
-            />
+            <div ref={ratesRef} data-step="2" className="scroll-mt-32">
+              <GlobalConfig
+                fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
+                targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
+                nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
+                socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
+              />
+            </div>
           </div>
 
-          <GrowthConfig
-            actual={actual}
-            setActual={(s) => { setActual(s); markStale(); }}
-            scenarios={scenarios}
-            updateScenario={updateScenario}
-            addScenario={addScenario}
-            removeScenario={removeScenario}
-          />
+          <div ref={scenariosRef} data-step="3" className="scroll-mt-32">
+            <GrowthConfig
+              actual={actual}
+              setActual={(s) => { setActual(s); markStale(); }}
+              scenarios={scenarios}
+              updateScenario={updateScenario}
+              addScenario={addScenario}
+              removeScenario={removeScenario}
+            />
+          </div>
 
           {/* Calculate hint / CTA card — only when results not yet shown */}
           {!calculated && (
             <CalculateCTA onCalculate={handleCalculate} calculating={calculating} />
           )}
 
-          <div ref={resultsRef} className="scroll-mt-24">
+          <div ref={resultsRef} data-step="4" className="scroll-mt-32">
+
             {calculated && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <ResultsHeader
@@ -628,7 +826,8 @@ function PageHeader({
   calculated,
   stale,
   onReset,
-  onLoadSample,
+  onUpload,
+  onTemplate,
   onPrint,
   onExport,
   onSave,
@@ -642,7 +841,8 @@ function PageHeader({
   calculated: boolean;
   stale: boolean;
   onReset: () => void;
-  onLoadSample: () => void;
+  onUpload: () => void;
+  onTemplate: () => void;
   onPrint: () => void;
   onExport: () => void;
   onSave: () => void;
@@ -692,11 +892,18 @@ function PageHeader({
       <div className="flex flex-col items-end gap-2">
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <button
-            onClick={onLoadSample}
-            title="Populate inputs with example data"
+            onClick={onUpload}
+            title="Import baseline & scenarios from an Excel file"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-brand/40 bg-brand-soft text-sm font-semibold text-brand hover:bg-brand/15 transition"
+          >
+            <Upload className="size-4" /> Upload Excel
+          </button>
+          <button
+            onClick={onTemplate}
+            title="Download a sample Excel template you can fill in"
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
           >
-            <Sparkles className="size-4 text-brand" /> Load sample
+            <FileSpreadsheet className="size-4 text-brand" /> Template
           </button>
           <button
             onClick={onReset}
@@ -766,29 +973,45 @@ function PageHeader({
 
 /* ---------------- Workflow step strip ---------------- */
 
-function StepStrip({ calculated }: { calculated: boolean }) {
+function StepStrip({
+  currentStep,
+  calculated,
+  onStepClick,
+}: {
+  currentStep: 1 | 2 | 3 | 4;
+  calculated: boolean;
+  onStepClick: (n: 1 | 2 | 3 | 4) => void;
+}) {
   const steps = [
-    { n: 1, label: "Baseline", desc: "Enter current actuals" },
-    { n: 2, label: "Rebate Rates", desc: "Set % per layer" },
-    { n: 3, label: "Scenarios", desc: "Configure what-ifs" },
-    { n: 4, label: "Results", desc: "Review GP impact" },
+    { n: 1 as const, label: "Baseline", desc: "Enter current actuals" },
+    { n: 2 as const, label: "Rebate Rates", desc: "Set % per layer" },
+    { n: 3 as const, label: "Scenarios", desc: "Configure what-ifs" },
+    { n: 4 as const, label: "Results", desc: calculated ? "Review GP impact" : "Run Calculate to unlock" },
   ];
-  const activeStep = calculated ? 4 : 3;
   return (
-    <div className="bg-card border border-border rounded-xl p-3 flex items-stretch overflow-x-auto shadow-sm">
+    <div className="sticky top-14 z-30 bg-card/95 backdrop-blur border border-border rounded-xl p-3 flex items-stretch overflow-x-auto shadow-sm">
       {steps.map((s, i) => {
-        const done = s.n < activeStep || (calculated && s.n === 4);
-        const active = s.n === activeStep && !calculated;
+        const active = s.n === currentStep;
+        const done = s.n < currentStep || (calculated && s.n === 4 && currentStep === 4);
+        const locked = s.n === 4 && !calculated;
         return (
           <div key={s.n} className="flex items-center min-w-0 flex-1">
-            <div className={`flex items-center gap-3 px-3 py-1 flex-1 min-w-0 rounded-md ${active ? "bg-brand-soft" : ""}`}>
+            <button
+              type="button"
+              onClick={() => onStepClick(s.n)}
+              disabled={locked}
+              className={`group flex items-center gap-3 px-3 py-1.5 flex-1 min-w-0 rounded-md text-left transition ${
+                active ? "bg-brand-soft ring-1 ring-brand/30" : "hover:bg-muted"
+              } ${locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+              aria-current={active ? "step" : undefined}
+            >
               <div
-                className={`size-8 shrink-0 rounded-full grid place-items-center text-xs font-bold ${
+                className={`size-8 shrink-0 rounded-full grid place-items-center text-xs font-bold transition ${
                   done
                     ? "bg-success-soft text-[oklch(0.4_0.14_155)] border border-success/30"
                     : active
                     ? "bg-brand text-brand-foreground shadow"
-                    : "bg-muted text-muted-foreground border border-border"
+                    : "bg-muted text-muted-foreground border border-border group-hover:border-brand/40"
                 }`}
               >
                 {done ? <CheckCircle2 className="size-4" /> : s.n}
@@ -799,9 +1022,9 @@ function StepStrip({ calculated }: { calculated: boolean }) {
                 </div>
                 <div className="text-[11px] text-muted-foreground truncate">{s.desc}</div>
               </div>
-            </div>
+            </button>
             {i < steps.length - 1 && (
-              <div className={`hidden md:block h-px w-6 mx-1 shrink-0 ${done ? "bg-success/40" : "bg-border"}`} />
+              <div className={`hidden md:block h-px w-6 mx-1 shrink-0 ${s.n < currentStep ? "bg-success/40" : "bg-border"}`} />
             )}
           </div>
         );
@@ -809,6 +1032,7 @@ function StepStrip({ calculated }: { calculated: boolean }) {
     </div>
   );
 }
+
 
 /* ---------------- Calculate CTA (pre-calc state) ---------------- */
 
