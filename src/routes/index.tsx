@@ -201,20 +201,161 @@ function RebateModeling() {
     setToast("All inputs cleared");
   };
 
-  const loadSample = () => {
-    setFixedEW(5); setTargetEW(5); setNbuRebate(5); setSocRebate(5);
-    setEwTurnover(1194312); setEwCost(597834);
-    setSocTurnover(4098722); setSocCost(1591683);
-    setNbuTurnover(357780); setNbuCost(203516);
-    setActual({ name: "Actual", growth: 0, nationalGrowthRebate: 1, targetTurnover: 1141167, branchGrowthRebate: 0, settlement: 29858, mvhr: 0 });
-    setScenarios([
-      { name: "Scenario 1", growth: 10, nationalGrowthRebate: 3.5, targetTurnover: 1200000, branchGrowthRebate: 0, settlement: 32844, mvhr: 0 },
-      { name: "Scenario 2", growth: 20, nationalGrowthRebate: 3.5, targetTurnover: 1275000, branchGrowthRebate: 2, settlement: 35829, mvhr: 0 },
-      { name: "Scenario 3", growth: 30, nationalGrowthRebate: 4.5, targetTurnover: 1400000, branchGrowthRebate: 3, settlement: 38815, mvhr: 0 },
-    ]);
+  // ---- Excel upload / template ----
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const triggerUpload = () => fileInputRef.current?.click();
+
+  const applyImported = (data: {
+    fixedEW?: number; targetEW?: number; nbuRebate?: number; socRebate?: number;
+    ewTurnover?: number; ewCost?: number;
+    socTurnover?: number; socCost?: number;
+    nbuTurnover?: number; nbuCost?: number;
+    actual?: Partial<Scenario>;
+    scenarios?: Scenario[];
+  }) => {
+    if (data.fixedEW !== undefined) setFixedEW(data.fixedEW);
+    if (data.targetEW !== undefined) setTargetEW(data.targetEW);
+    if (data.nbuRebate !== undefined) setNbuRebate(data.nbuRebate);
+    if (data.socRebate !== undefined) setSocRebate(data.socRebate);
+    if (data.ewTurnover !== undefined) setEwTurnover(data.ewTurnover);
+    if (data.ewCost !== undefined) setEwCost(data.ewCost);
+    if (data.socTurnover !== undefined) setSocTurnover(data.socTurnover);
+    if (data.socCost !== undefined) setSocCost(data.socCost);
+    if (data.nbuTurnover !== undefined) setNbuTurnover(data.nbuTurnover);
+    if (data.nbuCost !== undefined) setNbuCost(data.nbuCost);
+    if (data.actual) setActual((a) => ({ ...a, ...data.actual!, name: "Actual" }));
+    if (data.scenarios && data.scenarios.length) setScenarios(data.scenarios);
     if (calculated) setStale(true);
-    setToast("Sample data loaded");
   };
+
+  const handleFile = async (file: File) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const num = (v: unknown) => {
+        if (v === null || v === undefined || v === "") return undefined;
+        const n = Number(String(v).replace(/[£,%\s]/g, ""));
+        return Number.isFinite(n) ? n : undefined;
+      };
+      const data: Parameters<typeof applyImported>[0] = {};
+
+      // Inputs sheet: two columns Key, Value
+      const inputsSheet = wb.Sheets["Inputs"] ?? wb.Sheets[wb.SheetNames[0]];
+      if (inputsSheet) {
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(inputsSheet, { header: ["key", "value"] });
+        const map: Record<string, number | undefined> = {};
+        for (const r of rows) {
+          const k = String(r.key ?? "").trim();
+          if (!k || k.toLowerCase() === "key") continue;
+          map[k] = num(r.value);
+        }
+        const get = (...keys: string[]) => {
+          for (const k of keys) {
+            const found = Object.keys(map).find((mk) => mk.toLowerCase() === k.toLowerCase());
+            if (found && map[found] !== undefined) return map[found];
+          }
+          return undefined;
+        };
+        data.fixedEW = get("fixedEW", "Fixed EW %");
+        data.targetEW = get("targetEW", "Target EW %");
+        data.nbuRebate = get("nbuRebate", "NBU Rebate %");
+        data.socRebate = get("socRebate", "SOC Rebate %");
+        data.ewTurnover = get("ewTurnover", "EW Turnover");
+        data.ewCost = get("ewCost", "EW Cost");
+        data.socTurnover = get("socTurnover", "SOC Turnover");
+        data.socCost = get("socCost", "SOC Cost");
+        data.nbuTurnover = get("nbuTurnover", "NBU Turnover");
+        data.nbuCost = get("nbuCost", "NBU Cost");
+        const actualPatch: Partial<Scenario> = {};
+        const ag = get("actual.growth"); if (ag !== undefined) actualPatch.growth = ag;
+        const an = get("actual.nationalGrowthRebate"); if (an !== undefined) actualPatch.nationalGrowthRebate = an;
+        const at = get("actual.targetTurnover"); if (at !== undefined) actualPatch.targetTurnover = at;
+        const ab = get("actual.branchGrowthRebate"); if (ab !== undefined) actualPatch.branchGrowthRebate = ab;
+        const as = get("actual.settlement"); if (as !== undefined) actualPatch.settlement = as;
+        const am = get("actual.mvhr"); if (am !== undefined) actualPatch.mvhr = am;
+        if (Object.keys(actualPatch).length) data.actual = actualPatch;
+      }
+
+      // Scenarios sheet: header row with name, growth, nationalGrowthRebate, targetTurnover, branchGrowthRebate, settlement, mvhr
+      const scSheet = wb.Sheets["Scenarios"];
+      if (scSheet) {
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(scSheet);
+        const parsed: Scenario[] = rows
+          .map((r, i) => {
+            const get = (...keys: string[]) => {
+              for (const k of keys) {
+                const found = Object.keys(r).find((rk) => rk.toLowerCase().replace(/\s|_/g, "") === k.toLowerCase().replace(/\s|_/g, ""));
+                if (found) return num(r[found]);
+              }
+              return undefined;
+            };
+            const growth = get("growth", "growth%");
+            if (growth === undefined) return null;
+            return {
+              name: String(r.name ?? r.Name ?? `Scenario ${i + 1}`),
+              growth,
+              nationalGrowthRebate: get("nationalGrowthRebate", "national growth rebate") ?? 0,
+              targetTurnover: get("targetTurnover", "target turnover") ?? 0,
+              branchGrowthRebate: get("branchGrowthRebate", "branch growth rebate") ?? 0,
+              settlement: get("settlement") ?? 0,
+              mvhr: get("mvhr") ?? 0,
+            } as Scenario;
+          })
+          .filter((s): s is Scenario => !!s);
+        if (parsed.length) data.scenarios = parsed;
+      }
+
+      const filledKeys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined);
+      if (!filledKeys.length) {
+        setToast("No matching data found. Use the template format.");
+        return;
+      }
+      applyImported(data);
+      setToast(`Imported ${filledKeys.length} field${filledKeys.length === 1 ? "" : "s"} from ${file.name}`);
+    } catch (err) {
+      console.error(err);
+      setToast("Failed to read file. Make sure it's a valid .xlsx");
+    }
+  };
+
+  const downloadTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const inputs = [
+      ["Key", "Value"],
+      ["fixedEW", 5],
+      ["targetEW", 5],
+      ["nbuRebate", 5],
+      ["socRebate", 5],
+      ["ewTurnover", 1194312],
+      ["ewCost", 597834],
+      ["socTurnover", 4098722],
+      ["socCost", 1591683],
+      ["nbuTurnover", 357780],
+      ["nbuCost", 203516],
+      ["actual.growth", 0],
+      ["actual.nationalGrowthRebate", 1],
+      ["actual.targetTurnover", 1141167],
+      ["actual.branchGrowthRebate", 0],
+      ["actual.settlement", 29858],
+      ["actual.mvhr", 0],
+    ];
+    const inputsSheet = XLSX.utils.aoa_to_sheet(inputs);
+    XLSX.utils.book_append_sheet(wb, inputsSheet, "Inputs");
+
+    const scenarios = [
+      ["name", "growth", "nationalGrowthRebate", "targetTurnover", "branchGrowthRebate", "settlement", "mvhr"],
+      ["Scenario 1", 10, 3.5, 1200000, 0, 32844, 0],
+      ["Scenario 2", 20, 3.5, 1275000, 2, 35829, 0],
+      ["Scenario 3", 30, 4.5, 1400000, 3, 38815, 0],
+    ];
+    const scSheet = XLSX.utils.aoa_to_sheet(scenarios);
+    XLSX.utils.book_append_sheet(wb, scSheet, "Scenarios");
+
+    XLSX.writeFile(wb, "rebate-modeling-template.xlsx");
+    setToast("Template downloaded");
+  };
+
 
   // Wrap baseline setters to flag stale
   const markStale = () => {
