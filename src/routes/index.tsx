@@ -1053,9 +1053,11 @@ function Row({
 function TotalSummary({
   scenarios,
   totals,
+  bestIdx,
 }: {
   scenarios: Scenario[];
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  bestIdx: number;
 }) {
   return (
     <section className="bg-card border-2 border-brand/30 rounded-xl overflow-hidden shadow-md">
