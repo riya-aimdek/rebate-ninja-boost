@@ -818,22 +818,24 @@ function GlobalConfig(props: {
   socRebate: number; setSocRebate: (n: number) => void;
 }) {
   return (
-    <Card title="Global EW Configuration">
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Fixed EW %">
-          <NumInput value={props.fixedEW} onChange={props.setFixedEW} suffix="%" />
-        </Field>
-        <Field label="Target EW">
-          <div className="flex gap-2">
-            <select className="px-2 py-2 rounded-md border border-input bg-background text-sm">
-              <option>%</option>
-              <option>£</option>
-            </select>
-            <div className="flex-1">
-              <NumInput value={props.targetEW} onChange={props.setTargetEW} suffix="%" />
-            </div>
-          </div>
-        </Field>
+    <Card
+      title="Rebate Rates"
+      step={2}
+      hint="Set the percentage rates used across all scenarios"
+      tooltip="These rates apply globally. Fixed/Target EW apply to the EW layer; NBU and SOC apply to their respective layers."
+    >
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+          EW (Employee Wellness)
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Fixed EW %">
+            <NumInput value={props.fixedEW} onChange={props.setFixedEW} suffix="%" />
+          </Field>
+          <Field label="Target EW %">
+            <NumInput value={props.targetEW} onChange={props.setTargetEW} suffix="%" />
+          </Field>
+        </div>
       </div>
       <div className="mt-5">
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
@@ -852,6 +854,12 @@ function GlobalConfig(props: {
   );
 }
 
+const LAYER_INFO: Record<string, string> = {
+  EW: "Employee Wellness — multi-component rebate including Fixed, Target, National & Branch growth rebates, Settlement discount and MVHR.",
+  SOC: "Standard Order Code — flat-rate rebate applied as a percentage of turnover.",
+  NBU: "New Business Uplift — flat-rate rebate applied as a percentage of turnover.",
+};
+
 function BaselineInputs(props: {
   ewTurnover: number; setEwTurnover: (n: number) => void;
   ewCost: number; setEwCost: (n: number) => void;
@@ -869,7 +877,18 @@ function BaselineInputs(props: {
     c: number; setC: (n: number) => void;
   }) => (
     <div>
-      <div className="text-sm font-bold text-brand mb-2">{label}</div>
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-sm font-bold text-brand">{label}</span>
+        <span className="group relative inline-flex">
+          <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+          <span className="pointer-events-none absolute left-0 top-full mt-1.5 z-20 w-64 rounded-md bg-foreground text-background text-xs font-normal p-2 opacity-0 group-hover:opacity-100 transition shadow-lg">
+            {LAYER_INFO[label]}
+          </span>
+        </span>
+        <span className="ml-auto text-xs text-muted-foreground font-normal">
+          GP: <span className="tabular-nums font-medium text-foreground">{fmtGBP(Math.max(0, t - c))}</span>
+        </span>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Turnover">
           <NumInput value={t} onChange={setT} prefix="£" />
@@ -882,7 +901,12 @@ function BaselineInputs(props: {
   );
 
   return (
-    <Card title="Baseline Financial Inputs" hint="(Current Year Actuals · pulled from Sage)">
+    <Card
+      title="Baseline Financial Inputs"
+      step={1}
+      hint="Current year actuals · pulled from Sage"
+      tooltip="The current-year turnover and cost per layer. These form the baseline that growth scenarios are projected from."
+    >
       <div className="space-y-4">
         <Section label="EW" t={props.ewTurnover} setT={props.setEwTurnover} c={props.ewCost} setC={props.setEwCost} />
         <Section label="SOC" t={props.socTurnover} setT={props.setSocTurnover} c={props.socCost} setC={props.setSocCost} />
