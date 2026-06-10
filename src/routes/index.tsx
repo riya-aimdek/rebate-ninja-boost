@@ -94,10 +94,22 @@ function RebateModeling() {
     { name: "Scenario 3", growth: 30, nationalGrowthRebate: 4.5, targetTurnover: 1400000, branchGrowthRebate: 3, settlement: 38815, mvhr: 0 },
   ]);
 
-  const [calculated, setCalculated] = useState(true);
+  // UX state
+  const [calculated, setCalculated] = useState(false);
+  const [stale, setStale] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [calculating, setCalculating] = useState(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
-  const updateScenario = (i: number, patch: Partial<Scenario>) =>
+  const updateScenario = (i: number, patch: Partial<Scenario>) => {
     setScenarios((s) => s.map((sc, idx) => (idx === i ? { ...sc, ...patch } : sc)));
+    if (calculated) setStale(true);
+  };
+
+  // Wrap baseline setters to flag stale
+  const markStale = () => {
+    if (calculated) setStale(true);
+  };
 
   /* ---- Calculation ---- */
   const ewResults = useMemo(
@@ -123,54 +135,129 @@ function RebateModeling() {
     });
   }, [ewResults, socResults, nbuResults, actual, scenarios]);
 
+  const handleCalculate = () => {
+    setCalculating(true);
+    // Brief simulated processing so the user perceives action
+    setTimeout(() => {
+      setCalculated(true);
+      setStale(false);
+      setCalculating(false);
+      setToast("Calculation complete — scroll down to view results");
+      // Scroll results into view smoothly
+      requestAnimationFrame(() => {
+        resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }, 450);
+  };
+
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const bestScenarioIdx = useMemo(() => {
+    if (!totals.length) return 0;
+    let best = 0;
+    for (let i = 1; i < totals.length; i++) if (totals[i].gp > totals[best].gp) best = i;
+    return best;
+  }, [totals]);
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar />
       <div className="flex-1 min-w-0 flex flex-col">
         <TopBar />
+
+        {/* Sticky KPI bar — appears after calculation */}
+        {calculated && (
+          <StickyKPIBar
+            totals={totals}
+            stale={stale}
+            onRecalculate={handleCalculate}
+            calculating={calculating}
+            onJumpToResults={() =>
+              resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+          />
+        )}
+
         <main className="flex-1 px-6 py-6 space-y-6">
-          <PageHeader onCalculate={() => setCalculated(true)} />
+          <PageHeader
+            onCalculate={handleCalculate}
+            calculating={calculating}
+            calculated={calculated}
+            stale={stale}
+          />
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <GlobalConfig
-              fixedEW={fixedEW} setFixedEW={setFixedEW}
-              targetEW={targetEW} setTargetEW={setTargetEW}
-              nbuRebate={nbuRebate} setNbuRebate={setNbuRebate}
-              socRebate={socRebate} setSocRebate={setSocRebate}
+              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
+              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
+              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
+              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
             />
             <BaselineInputs
-              ewTurnover={ewTurnover} setEwTurnover={setEwTurnover}
-              ewCost={ewCost} setEwCost={setEwCost}
-              socTurnover={socTurnover} setSocTurnover={setSocTurnover}
-              socCost={socCost} setSocCost={setSocCost}
-              nbuTurnover={nbuTurnover} setNbuTurnover={setNbuTurnover}
-              nbuCost={nbuCost} setNbuCost={setNbuCost}
+              ewTurnover={ewTurnover} setEwTurnover={(n) => { setEwTurnover(n); markStale(); }}
+              ewCost={ewCost} setEwCost={(n) => { setEwCost(n); markStale(); }}
+              socTurnover={socTurnover} setSocTurnover={(n) => { setSocTurnover(n); markStale(); }}
+              socCost={socCost} setSocCost={(n) => { setSocCost(n); markStale(); }}
+              nbuTurnover={nbuTurnover} setNbuTurnover={(n) => { setNbuTurnover(n); markStale(); }}
+              nbuCost={nbuCost} setNbuCost={(n) => { setNbuCost(n); markStale(); }}
             />
           </div>
 
           <GrowthConfig
             actual={actual}
-            setActual={setActual}
+            setActual={(s) => { setActual(s); markStale(); }}
             scenarios={scenarios}
             updateScenario={updateScenario}
           />
 
-          {calculated ? (
-            <div className="space-y-6">
-              <ResultsTable label="EW" scenarios={[actual, ...scenarios]} result={ewResults} layer="ew" />
-              <ResultsTable label="SOC" scenarios={[actual, ...scenarios]} result={socResults} layer="linear" />
-              <ResultsTable label="NBU" scenarios={[actual, ...scenarios]} result={nbuResults} layer="linear" />
-              <TotalSummary scenarios={[actual, ...scenarios]} totals={totals} />
-            </div>
-          ) : (
-            <EmptyState />
+          {/* Calculate hint / CTA card — only when results not yet shown */}
+          {!calculated && (
+            <CalculateCTA onCalculate={handleCalculate} calculating={calculating} />
           )}
+
+          <div ref={resultsRef} className="scroll-mt-24">
+            {calculated && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <ResultsHeader
+                  stale={stale}
+                  bestIdx={bestScenarioIdx}
+                  totals={totals}
+                  onRecalculate={handleCalculate}
+                  calculating={calculating}
+                />
+                <ResultsTable label="EW" scenarios={[actual, ...scenarios]} result={ewResults} layer="ew" bestIdx={bestScenarioIdx} />
+                <ResultsTable label="SOC" scenarios={[actual, ...scenarios]} result={socResults} layer="linear" bestIdx={bestScenarioIdx} />
+                <ResultsTable label="NBU" scenarios={[actual, ...scenarios]} result={nbuResults} layer="linear" bestIdx={bestScenarioIdx} />
+                <TotalSummary scenarios={[actual, ...scenarios]} totals={totals} bestIdx={bestScenarioIdx} />
+              </div>
+            )}
+          </div>
 
           <footer className="pt-4 pb-2 text-center text-xs text-muted-foreground">
             Rebate Ninja · Built by <span className="font-semibold text-foreground">AIMDek Technologies</span>
           </footer>
         </main>
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="bg-card border border-success/30 shadow-lg rounded-lg px-4 py-3 flex items-center gap-3 max-w-sm">
+            <div className="size-8 rounded-full bg-success-soft grid place-items-center text-[oklch(0.4_0.14_155)]">
+              <CheckCircle2 className="size-4" />
+            </div>
+            <div className="flex-1 text-sm font-medium">{toast}</div>
+            <button onClick={() => setToast(null)} className="text-muted-foreground hover:text-foreground p-1">
+              <X className="size-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
