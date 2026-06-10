@@ -321,9 +321,9 @@ function RebateModeling() {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar />
+      <Sidebar active={activeNav} onSelect={setActiveNav} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <TopBar />
+        <TopBar search={search} onSearch={setSearch} account={account} />
 
         {/* Sticky KPI bar — appears after calculation */}
         {calculated && (
@@ -347,6 +347,12 @@ function RebateModeling() {
             onReset={resetAll}
             onLoadSample={loadSample}
             onPrint={() => window.print()}
+            onExport={exportCSV}
+            onSave={saveSnapshot}
+            year={year}
+            setYear={setYear}
+            account={account}
+            setAccount={setAccount}
           />
 
           <StepStrip calculated={calculated} />
