@@ -444,10 +444,6 @@ function RebateModeling() {
     setToast("CSV exported");
   };
 
-  const saveSnapshot = () => {
-    setToast("Snapshot saved to this browser");
-  };
-
   // Auto-dismiss toast
   useEffect(() => {
     if (!toast) return;
@@ -540,7 +536,6 @@ function RebateModeling() {
             onTemplate={downloadTemplate}
             onPrint={() => window.print()}
             onExport={exportCSV}
-            onSave={saveSnapshot}
             year={year}
             setYear={setYear}
             account={account}
@@ -829,7 +824,6 @@ function PageHeader({
   onTemplate,
   onPrint,
   onExport,
-  onSave,
   year,
   setYear,
   account,
@@ -844,7 +838,6 @@ function PageHeader({
   onTemplate: () => void;
   onPrint: () => void;
   onExport: () => void;
-  onSave: () => void;
   year: string;
   setYear: (v: string) => void;
   account: string;
@@ -910,13 +903,6 @@ function PageHeader({
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
           >
             <RotateCcw className="size-4" /> Reset
-          </button>
-          <button
-            onClick={onSave}
-            title="Save current setup to this browser"
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
-          >
-            <Save className="size-4" /> Save
           </button>
           {calculated && (
             <>
