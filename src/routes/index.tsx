@@ -492,18 +492,7 @@ function RebateModeling() {
       <div className="flex-1 min-w-0 flex flex-col">
         <TopBar search={search} onSearch={setSearch} account={account} />
 
-        {/* Sticky KPI bar — appears after calculation */}
-        {calculated && (
-          <StickyKPIBar
-            totals={totals}
-            stale={stale}
-            onRecalculate={handleCalculate}
-            calculating={calculating}
-            onJumpToResults={() =>
-              resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-            }
-          />
-        )}
+        {/* (Bottom-fixed KPI bar rendered at end of layout) */}
 
         <main className="flex-1 px-6 py-6 space-y-6">
           <input
