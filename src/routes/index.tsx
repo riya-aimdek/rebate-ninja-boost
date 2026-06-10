@@ -7,6 +7,12 @@ import {
   RefreshCw,
   TrendingUp,
   X,
+  Plus,
+  Trash2,
+  RotateCcw,
+  Sparkles,
+  Printer,
+  HelpCircle,
 } from "lucide-react";
 import {
   Bell,
@@ -106,6 +112,61 @@ function RebateModeling() {
     if (calculated) setStale(true);
   };
 
+  const addScenario = () => {
+    setScenarios((s) => {
+      const next = s[s.length - 1];
+      const newGrowth = (next?.growth ?? 0) + 10;
+      return [
+        ...s,
+        {
+          name: `Scenario ${s.length + 1}`,
+          growth: newGrowth,
+          nationalGrowthRebate: next?.nationalGrowthRebate ?? 3.5,
+          targetTurnover: Math.round((next?.targetTurnover ?? 1200000) * 1.1),
+          branchGrowthRebate: next?.branchGrowthRebate ?? 0,
+          settlement: Math.round((next?.settlement ?? 30000) * 1.05),
+          mvhr: next?.mvhr ?? 0,
+        },
+      ];
+    });
+    if (calculated) setStale(true);
+  };
+
+  const removeScenario = (idx: number) => {
+    setScenarios((s) =>
+      s
+        .filter((_, i) => i !== idx)
+        .map((sc, i) => ({ ...sc, name: `Scenario ${i + 1}` }))
+    );
+    if (calculated) setStale(true);
+  };
+
+  const resetAll = () => {
+    setFixedEW(0); setTargetEW(0); setNbuRebate(0); setSocRebate(0);
+    setEwTurnover(0); setEwCost(0);
+    setSocTurnover(0); setSocCost(0);
+    setNbuTurnover(0); setNbuCost(0);
+    setActual({ name: "Actual", growth: 0, nationalGrowthRebate: 0, targetTurnover: 0, branchGrowthRebate: 0, settlement: 0, mvhr: 0 });
+    setScenarios([{ name: "Scenario 1", growth: 10, nationalGrowthRebate: 0, targetTurnover: 0, branchGrowthRebate: 0, settlement: 0, mvhr: 0 }]);
+    setCalculated(false); setStale(false);
+    setToast("All inputs cleared");
+  };
+
+  const loadSample = () => {
+    setFixedEW(5); setTargetEW(5); setNbuRebate(5); setSocRebate(5);
+    setEwTurnover(1194312); setEwCost(597834);
+    setSocTurnover(4098722); setSocCost(1591683);
+    setNbuTurnover(357780); setNbuCost(203516);
+    setActual({ name: "Actual", growth: 0, nationalGrowthRebate: 1, targetTurnover: 1141167, branchGrowthRebate: 0, settlement: 29858, mvhr: 0 });
+    setScenarios([
+      { name: "Scenario 1", growth: 10, nationalGrowthRebate: 3.5, targetTurnover: 1200000, branchGrowthRebate: 0, settlement: 32844, mvhr: 0 },
+      { name: "Scenario 2", growth: 20, nationalGrowthRebate: 3.5, targetTurnover: 1275000, branchGrowthRebate: 2, settlement: 35829, mvhr: 0 },
+      { name: "Scenario 3", growth: 30, nationalGrowthRebate: 4.5, targetTurnover: 1400000, branchGrowthRebate: 3, settlement: 38815, mvhr: 0 },
+    ]);
+    if (calculated) setStale(true);
+    setToast("Sample data loaded");
+  };
+
   // Wrap baseline setters to flag stale
   const markStale = () => {
     if (calculated) setStale(true);
@@ -189,15 +250,14 @@ function RebateModeling() {
             calculating={calculating}
             calculated={calculated}
             stale={stale}
+            onReset={resetAll}
+            onLoadSample={loadSample}
+            onPrint={() => window.print()}
           />
 
+          <StepStrip calculated={calculated} />
+
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <GlobalConfig
-              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
-              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
-              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
-              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
-            />
             <BaselineInputs
               ewTurnover={ewTurnover} setEwTurnover={(n) => { setEwTurnover(n); markStale(); }}
               ewCost={ewCost} setEwCost={(n) => { setEwCost(n); markStale(); }}
@@ -206,6 +266,12 @@ function RebateModeling() {
               nbuTurnover={nbuTurnover} setNbuTurnover={(n) => { setNbuTurnover(n); markStale(); }}
               nbuCost={nbuCost} setNbuCost={(n) => { setNbuCost(n); markStale(); }}
             />
+            <GlobalConfig
+              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
+              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
+              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
+              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
+            />
           </div>
 
           <GrowthConfig
@@ -213,6 +279,8 @@ function RebateModeling() {
             setActual={(s) => { setActual(s); markStale(); }}
             scenarios={scenarios}
             updateScenario={updateScenario}
+            addScenario={addScenario}
+            removeScenario={removeScenario}
           />
 
           {/* Calculate hint / CTA card — only when results not yet shown */}
@@ -229,6 +297,7 @@ function RebateModeling() {
                   totals={totals}
                   onRecalculate={handleCalculate}
                   calculating={calculating}
+                  onPrint={() => window.print()}
                 />
                 <ResultsTable label="EW" scenarios={[actual, ...scenarios]} result={ewResults} layer="ew" bestIdx={bestScenarioIdx} />
                 <ResultsTable label="SOC" scenarios={[actual, ...scenarios]} result={socResults} layer="linear" bestIdx={bestScenarioIdx} />
@@ -243,6 +312,7 @@ function RebateModeling() {
           </footer>
         </main>
       </div>
+
 
       {/* Toast */}
       {toast && (
@@ -442,11 +512,17 @@ function PageHeader({
   calculating,
   calculated,
   stale,
+  onReset,
+  onLoadSample,
+  onPrint,
 }: {
   onCalculate: () => void;
   calculating: boolean;
   calculated: boolean;
   stale: boolean;
+  onReset: () => void;
+  onLoadSample: () => void;
+  onPrint: () => void;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
@@ -478,35 +554,106 @@ function PageHeader({
         </div>
       </div>
       <div className="flex flex-col items-end gap-2">
-        <button
-          onClick={onCalculate}
-          disabled={calculating}
-          className={`inline-flex items-center gap-2 px-6 py-3 rounded-md font-semibold shadow-md transition-all ${
-            stale
-              ? "bg-brand text-brand-foreground ring-4 ring-brand/25 animate-pulse"
-              : "bg-brand text-brand-foreground hover:shadow-lg hover:-translate-y-0.5"
-          } disabled:opacity-70`}
-        >
-          {calculating ? (
-            <>
-              <RefreshCw className="size-4 animate-spin" /> Calculating…
-            </>
-          ) : calculated ? (
-            <>
-              <RefreshCw className="size-4" /> {stale ? "Recalculate" : "Recalculate"}
-            </>
-          ) : (
-            <>
-              <CalcIcon className="size-4" /> Calculate
-            </>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button
+            onClick={onLoadSample}
+            title="Populate inputs with example data"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+          >
+            <Sparkles className="size-4 text-brand" /> Load sample
+          </button>
+          <button
+            onClick={onReset}
+            title="Clear all inputs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+          >
+            <RotateCcw className="size-4" /> Reset
+          </button>
+          {calculated && (
+            <button
+              onClick={onPrint}
+              title="Print or save as PDF"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+            >
+              <Printer className="size-4" /> Print
+            </button>
           )}
-        </button>
+          <button
+            onClick={onCalculate}
+            disabled={calculating}
+            className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-md font-semibold shadow-md transition-all ${
+              stale
+                ? "bg-brand text-brand-foreground ring-4 ring-brand/25 animate-pulse"
+                : "bg-brand text-brand-foreground hover:shadow-lg hover:-translate-y-0.5"
+            } disabled:opacity-70`}
+          >
+            {calculating ? (
+              <>
+                <RefreshCw className="size-4 animate-spin" /> Calculating…
+              </>
+            ) : calculated ? (
+              <>
+                <RefreshCw className="size-4" /> Recalculate
+              </>
+            ) : (
+              <>
+                <CalcIcon className="size-4" /> Calculate
+              </>
+            )}
+          </button>
+        </div>
         {stale && (
           <div className="text-xs text-brand font-medium flex items-center gap-1.5">
             <AlertTriangle className="size-3.5" /> Inputs changed — click Recalculate
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------------- Workflow step strip ---------------- */
+
+function StepStrip({ calculated }: { calculated: boolean }) {
+  const steps = [
+    { n: 1, label: "Baseline", desc: "Enter current actuals" },
+    { n: 2, label: "Rebate Rates", desc: "Set % per layer" },
+    { n: 3, label: "Scenarios", desc: "Configure what-ifs" },
+    { n: 4, label: "Results", desc: "Review GP impact" },
+  ];
+  const activeStep = calculated ? 4 : 3;
+  return (
+    <div className="bg-card border border-border rounded-xl p-3 flex items-stretch overflow-x-auto shadow-sm">
+      {steps.map((s, i) => {
+        const done = s.n < activeStep || (calculated && s.n === 4);
+        const active = s.n === activeStep && !calculated;
+        return (
+          <div key={s.n} className="flex items-center min-w-0 flex-1">
+            <div className={`flex items-center gap-3 px-3 py-1 flex-1 min-w-0 rounded-md ${active ? "bg-brand-soft" : ""}`}>
+              <div
+                className={`size-8 shrink-0 rounded-full grid place-items-center text-xs font-bold ${
+                  done
+                    ? "bg-success-soft text-[oklch(0.4_0.14_155)] border border-success/30"
+                    : active
+                    ? "bg-brand text-brand-foreground shadow"
+                    : "bg-muted text-muted-foreground border border-border"
+                }`}
+              >
+                {done ? <CheckCircle2 className="size-4" /> : s.n}
+              </div>
+              <div className="min-w-0 leading-tight">
+                <div className={`text-sm font-semibold truncate ${active ? "text-brand" : done ? "text-foreground" : "text-muted-foreground"}`}>
+                  {s.label}
+                </div>
+                <div className="text-[11px] text-muted-foreground truncate">{s.desc}</div>
+              </div>
+            </div>
+            {i < steps.length - 1 && (
+              <div className={`hidden md:block h-px w-6 mx-1 shrink-0 ${done ? "bg-success/40" : "bg-border"}`} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -653,12 +800,14 @@ function ResultsHeader({
   totals,
   onRecalculate,
   calculating,
+  onPrint,
 }: {
   stale: boolean;
   bestIdx: number;
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   onRecalculate: () => void;
   calculating: boolean;
+  onPrint: () => void;
 }) {
   const scenarioName = bestIdx === 0 ? "Actual 2026" : `Scenario ${bestIdx}`;
   const best = totals[bestIdx];
@@ -684,15 +833,23 @@ function ResultsHeader({
             )}
           </div>
         </div>
-        {stale && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={onRecalculate}
-            disabled={calculating}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-brand text-brand-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-70"
+            onClick={onPrint}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium hover:bg-muted transition"
           >
-            <RefreshCw className={`size-4 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+            <Printer className="size-4" /> Print / Export
           </button>
-        )}
+          {stale && (
+            <button
+              onClick={onRecalculate}
+              disabled={calculating}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-brand text-brand-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-70"
+            >
+              <RefreshCw className={`size-4 ${calculating ? "animate-spin" : ""}`} /> Recalculate
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -700,14 +857,46 @@ function ResultsHeader({
 
 /* ---------------- Cards ---------------- */
 
-function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Card({
+  title,
+  hint,
+  step,
+  tooltip,
+  action,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  step?: number;
+  tooltip?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section className="bg-card border border-border rounded-xl p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="font-semibold text-base">
-          {title}
-          {hint && <span className="text-xs text-muted-foreground font-normal ml-2">{hint}</span>}
-        </h2>
+    <section className="bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          {step !== undefined && (
+            <div className="size-7 shrink-0 rounded-lg bg-brand text-brand-foreground grid place-items-center text-xs font-black shadow-sm">
+              {step}
+            </div>
+          )}
+          <div className="min-w-0">
+            <h2 className="font-semibold text-base flex items-center gap-1.5">
+              <span className="truncate">{title}</span>
+              {tooltip && (
+                <span className="group relative inline-flex">
+                  <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+                  <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-20 w-56 rounded-md bg-foreground text-background text-xs font-normal p-2 opacity-0 group-hover:opacity-100 transition shadow-lg">
+                    {tooltip}
+                  </span>
+                </span>
+              )}
+            </h2>
+            {hint && <p className="text-xs text-muted-foreground font-normal mt-0.5">{hint}</p>}
+          </div>
+        </div>
+        {action}
       </div>
       {children}
     </section>
@@ -719,22 +908,45 @@ function NumInput({
   onChange,
   suffix,
   prefix,
+  format,
+  placeholder,
 }: {
   value: number;
   onChange: (n: number) => void;
   suffix?: string;
   prefix?: string;
+  format?: "number" | "currency";
+  placeholder?: string;
 }) {
+  const useCurrency = format === "currency" || prefix === "£";
+  const [focused, setFocused] = useState(false);
+  const display = focused
+    ? Number.isFinite(value) && value !== 0
+      ? String(value)
+      : ""
+    : useCurrency
+    ? Number.isFinite(value)
+      ? value.toLocaleString("en-GB", { maximumFractionDigits: 0 })
+      : "0"
+    : String(Number.isFinite(value) ? value : 0);
   return (
-    <div className="flex items-center rounded-md border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring/30">
-      {prefix && <span className="px-2.5 text-muted-foreground text-sm border-r border-input bg-muted">{prefix}</span>}
+    <div className="flex items-center rounded-md border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring/40 focus-within:border-brand/50 transition">
+      {prefix && <span className="px-2.5 text-muted-foreground text-sm border-r border-input bg-muted font-medium">{prefix}</span>}
       <input
-        type="number"
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="flex-1 min-w-0 px-3 py-2 text-sm bg-transparent focus:outline-none"
+        type="text"
+        inputMode="decimal"
+        value={display}
+        placeholder={placeholder}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => {
+          const cleaned = e.target.value.replace(/[, ]/g, "");
+          const n = parseFloat(cleaned);
+          onChange(Number.isFinite(n) ? n : 0);
+        }}
+        className="flex-1 min-w-0 px-3 py-2 text-sm bg-transparent focus:outline-none tabular-nums"
       />
-      {suffix && <span className="px-2.5 text-muted-foreground text-sm border-l border-input bg-muted">{suffix}</span>}
+      {suffix && <span className="px-2.5 text-muted-foreground text-sm border-l border-input bg-muted font-medium">{suffix}</span>}
     </div>
   );
 }
@@ -755,22 +967,24 @@ function GlobalConfig(props: {
   socRebate: number; setSocRebate: (n: number) => void;
 }) {
   return (
-    <Card title="Global EW Configuration">
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Fixed EW %">
-          <NumInput value={props.fixedEW} onChange={props.setFixedEW} suffix="%" />
-        </Field>
-        <Field label="Target EW">
-          <div className="flex gap-2">
-            <select className="px-2 py-2 rounded-md border border-input bg-background text-sm">
-              <option>%</option>
-              <option>£</option>
-            </select>
-            <div className="flex-1">
-              <NumInput value={props.targetEW} onChange={props.setTargetEW} suffix="%" />
-            </div>
-          </div>
-        </Field>
+    <Card
+      title="Rebate Rates"
+      step={2}
+      hint="Set the percentage rates used across all scenarios"
+      tooltip="These rates apply globally. Fixed/Target EW apply to the EW layer; NBU and SOC apply to their respective layers."
+    >
+      <div>
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
+          EW (Employee Wellness)
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Fixed EW %">
+            <NumInput value={props.fixedEW} onChange={props.setFixedEW} suffix="%" />
+          </Field>
+          <Field label="Target EW %">
+            <NumInput value={props.targetEW} onChange={props.setTargetEW} suffix="%" />
+          </Field>
+        </div>
       </div>
       <div className="mt-5">
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
@@ -789,6 +1003,12 @@ function GlobalConfig(props: {
   );
 }
 
+const LAYER_INFO: Record<string, string> = {
+  EW: "Employee Wellness — multi-component rebate including Fixed, Target, National & Branch growth rebates, Settlement discount and MVHR.",
+  SOC: "Standard Order Code — flat-rate rebate applied as a percentage of turnover.",
+  NBU: "New Business Uplift — flat-rate rebate applied as a percentage of turnover.",
+};
+
 function BaselineInputs(props: {
   ewTurnover: number; setEwTurnover: (n: number) => void;
   ewCost: number; setEwCost: (n: number) => void;
@@ -806,7 +1026,18 @@ function BaselineInputs(props: {
     c: number; setC: (n: number) => void;
   }) => (
     <div>
-      <div className="text-sm font-bold text-brand mb-2">{label}</div>
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-sm font-bold text-brand">{label}</span>
+        <span className="group relative inline-flex">
+          <HelpCircle className="size-3.5 text-muted-foreground cursor-help" />
+          <span className="pointer-events-none absolute left-0 top-full mt-1.5 z-20 w-64 rounded-md bg-foreground text-background text-xs font-normal p-2 opacity-0 group-hover:opacity-100 transition shadow-lg">
+            {LAYER_INFO[label]}
+          </span>
+        </span>
+        <span className="ml-auto text-xs text-muted-foreground font-normal">
+          GP: <span className="tabular-nums font-medium text-foreground">{fmtGBP(Math.max(0, t - c))}</span>
+        </span>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Turnover">
           <NumInput value={t} onChange={setT} prefix="£" />
@@ -819,7 +1050,12 @@ function BaselineInputs(props: {
   );
 
   return (
-    <Card title="Baseline Financial Inputs" hint="(Current Year Actuals · pulled from Sage)">
+    <Card
+      title="Baseline Financial Inputs"
+      step={1}
+      hint="Current year actuals · pulled from Sage"
+      tooltip="The current-year turnover and cost per layer. These form the baseline that growth scenarios are projected from."
+    >
       <div className="space-y-4">
         <Section label="EW" t={props.ewTurnover} setT={props.setEwTurnover} c={props.ewCost} setC={props.setEwCost} />
         <Section label="SOC" t={props.socTurnover} setT={props.setSocTurnover} c={props.socCost} setC={props.setSocCost} />
@@ -836,11 +1072,15 @@ function GrowthConfig({
   setActual,
   scenarios,
   updateScenario,
+  addScenario,
+  removeScenario,
 }: {
   actual: Scenario;
   setActual: (s: Scenario) => void;
   scenarios: Scenario[];
   updateScenario: (i: number, patch: Partial<Scenario>) => void;
+  addScenario: () => void;
+  removeScenario: (i: number) => void;
 }) {
   const rows: {
     label: string;
@@ -849,10 +1089,11 @@ function GrowthConfig({
     prefix?: string;
     actualDisplay?: string;
     editableActual?: boolean;
+    hint?: string;
   }[] = [
-    { label: "Growth %", field: "growth", suffix: "%", actualDisplay: "0% (Actual)" },
-    { label: "National Growth Rebate %", field: "nationalGrowthRebate", suffix: "%", editableActual: true },
-    { label: "Target Turnover", field: "targetTurnover", prefix: "£", editableActual: true },
+    { label: "Growth %", field: "growth", suffix: "%", actualDisplay: "0% (Actual)", hint: "Projected turnover growth vs baseline" },
+    { label: "National Growth Rebate %", field: "nationalGrowthRebate", suffix: "%", editableActual: true, hint: "Applied only if turnover ≥ Target Turnover" },
+    { label: "Target Turnover", field: "targetTurnover", prefix: "£", editableActual: true, hint: "Qualifying threshold for National Growth Rebate" },
     { label: "Branch Growth Rebate %", field: "branchGrowthRebate", suffix: "%", editableActual: true },
     { label: "Settlement Discount (£)", field: "settlement", prefix: "£", editableActual: true },
     { label: "MVHR Rebate (£)", field: "mvhr", prefix: "£", editableActual: true },
@@ -861,7 +1102,17 @@ function GrowthConfig({
   return (
     <Card
       title="Growth Scenario Configuration"
-      hint="Set growth %, national growth rebate %, qualifying target, branch growth %, settlement and MVHR per scenario"
+      step={3}
+      hint="Compare side-by-side what-if scenarios"
+      tooltip="Each column is a what-if scenario. Set growth %, qualifying target, and rebate parameters per scenario, then click Calculate."
+      action={
+        <button
+          onClick={addScenario}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-soft text-brand text-xs font-semibold hover:bg-brand hover:text-brand-foreground transition border border-brand/30"
+        >
+          <Plus className="size-3.5" /> Add scenario
+        </button>
+      }
     >
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -869,27 +1120,34 @@ function GrowthConfig({
             <tr className="text-left border-b border-border">
               <th className="py-3 pr-4 font-semibold w-56">Parameter</th>
               <th className="py-3 px-3 font-semibold text-center bg-muted/40 rounded-t-md">Actual</th>
-              {scenarios.map((s) => (
-                <th key={s.name} className="py-3 px-3 font-semibold text-brand text-center">
-                  {s.name}
+              {scenarios.map((s, i) => (
+                <th key={s.name} className="py-3 px-3 font-semibold text-brand text-center min-w-[140px]">
+                  <div className="flex items-center justify-center gap-1.5 group/sc">
+                    <span>{s.name}</span>
+                    {scenarios.length > 1 && (
+                      <button
+                        onClick={() => removeScenario(i)}
+                        title={`Remove ${s.name}`}
+                        className="opacity-0 group-hover/sc:opacity-100 transition text-muted-foreground hover:text-destructive p-0.5 rounded"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.label} className="border-b border-border/60 last:border-0">
-                <td className="py-2.5 pr-4 font-medium">
-                  {r.label.includes("Target Turnover") ? (
-                    <>
-                      Target Turnover{" "}
-                      <span className="text-xs text-muted-foreground font-normal">(qualifying threshold)</span>
-                    </>
-                  ) : (
-                    r.label
-                  )}
+              <tr key={r.label} className="border-b border-border/60 last:border-0 hover:bg-muted/30 transition-colors">
+                <td className="py-2.5 pr-4 font-medium align-top">
+                  <div className="leading-tight">
+                    <div>{r.label.replace(" (£)", "")}</div>
+                    {r.hint && <div className="text-[11px] text-muted-foreground font-normal mt-0.5">{r.hint}</div>}
+                  </div>
                 </td>
-                <td className="py-2.5 px-3 text-center bg-muted/30">
+                <td className="py-2.5 px-3 text-center bg-muted/30 align-top">
                   {r.actualDisplay ? (
                     <span className="text-muted-foreground italic text-sm">{r.actualDisplay}</span>
                   ) : r.editableActual ? (
@@ -902,7 +1160,7 @@ function GrowthConfig({
                   ) : null}
                 </td>
                 {scenarios.map((s, i) => (
-                  <td key={s.name} className="py-2.5 px-3">
+                  <td key={s.name} className="py-2.5 px-3 align-top">
                     <NumInput
                       value={s[r.field] as number}
                       onChange={(n) => updateScenario(i, { [r.field]: n } as Partial<Scenario>)}
