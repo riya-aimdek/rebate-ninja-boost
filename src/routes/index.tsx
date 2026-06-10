@@ -7,6 +7,14 @@ import {
   RefreshCw,
   TrendingUp,
   X,
+  Plus,
+  Trash2,
+  RotateCcw,
+  Sparkles,
+  Printer,
+  HelpCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   Bell,
