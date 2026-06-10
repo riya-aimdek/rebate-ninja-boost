@@ -118,7 +118,7 @@ function RebateModeling() {
   const [search, setSearch] = useState("");
 
   // Persistence ------------------------------------------------------------
-  const STORAGE_KEY = "rebate-ninja:modeling:v2";
+  const STORAGE_KEY = "rebate-ninja:modeling:v3";
   const restoredRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined" || restoredRef.current) return;
