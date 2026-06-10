@@ -118,7 +118,7 @@ function RebateModeling() {
   const [search, setSearch] = useState("");
 
   // Persistence ------------------------------------------------------------
-  const STORAGE_KEY = "rebate-ninja:modeling:v1";
+  const STORAGE_KEY = "rebate-ninja:modeling:v2";
   const restoredRef = useRef(false);
   useEffect(() => {
     if (typeof window === "undefined" || restoredRef.current) return;
@@ -458,41 +458,7 @@ function RebateModeling() {
     return best;
   }, [totals]);
 
-  // ---- Stepper navigation ----
-  const baselineRef = useRef<HTMLDivElement>(null);
-  const ratesRef = useRef<HTMLDivElement>(null);
-  const scenariosRef = useRef<HTMLDivElement>(null);
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
-  const goToStep = (n: 1 | 2 | 3 | 4) => {
-    const map = { 1: baselineRef, 2: ratesRef, 3: scenariosRef, 4: resultsRef } as const;
-    setCurrentStep(n);
-    map[n].current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const targets: { n: 1 | 2 | 3 | 4; el: HTMLElement | null }[] = [
-      { n: 1, el: baselineRef.current },
-      { n: 2, el: ratesRef.current },
-      { n: 3, el: scenariosRef.current },
-      { n: 4, el: resultsRef.current },
-    ];
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const top = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (top) {
-          const found = targets.find((t) => t.el === top.target);
-          if (found) setCurrentStep(found.n);
-        }
-      },
-      { rootMargin: "-30% 0px -55% 0px", threshold: [0, 0.25, 0.5, 1] },
-    );
-    targets.forEach((t) => t.el && obs.observe(t.el));
-    return () => obs.disconnect();
-  }, [calculated]);
 
 
   return (
@@ -542,9 +508,7 @@ function RebateModeling() {
             setAccount={setAccount}
           />
 
-          <StepStrip currentStep={currentStep} calculated={calculated} onStepClick={goToStep} />
-
-          <div ref={baselineRef} data-step="1" className="grid grid-cols-1 xl:grid-cols-2 gap-6 scroll-mt-32">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <BaselineInputs
               ewTurnover={ewTurnover} setEwTurnover={(n) => { setEwTurnover(n); markStale(); }}
               ewCost={ewCost} setEwCost={(n) => { setEwCost(n); markStale(); }}
@@ -553,26 +517,23 @@ function RebateModeling() {
               nbuTurnover={nbuTurnover} setNbuTurnover={(n) => { setNbuTurnover(n); markStale(); }}
               nbuCost={nbuCost} setNbuCost={(n) => { setNbuCost(n); markStale(); }}
             />
-            <div ref={ratesRef} data-step="2" className="scroll-mt-32">
-              <GlobalConfig
-                fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
-                targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
-                nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
-                socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
-              />
-            </div>
-          </div>
-
-          <div ref={scenariosRef} data-step="3" className="scroll-mt-32">
-            <GrowthConfig
-              actual={actual}
-              setActual={(s) => { setActual(s); markStale(); }}
-              scenarios={scenarios}
-              updateScenario={updateScenario}
-              addScenario={addScenario}
-              removeScenario={removeScenario}
+            <GlobalConfig
+              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
+              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
+              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
+              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
             />
           </div>
+
+          <GrowthConfig
+            actual={actual}
+            setActual={(s) => { setActual(s); markStale(); }}
+            scenarios={scenarios}
+            updateScenario={updateScenario}
+            addScenario={addScenario}
+            removeScenario={removeScenario}
+          />
+
 
           {/* Calculate hint / CTA card — only when results not yet shown */}
           {!calculated && (
@@ -956,67 +917,7 @@ function PageHeader({
   );
 }
 
-/* ---------------- Workflow step strip ---------------- */
 
-function StepStrip({
-  currentStep,
-  calculated,
-  onStepClick,
-}: {
-  currentStep: 1 | 2 | 3 | 4;
-  calculated: boolean;
-  onStepClick: (n: 1 | 2 | 3 | 4) => void;
-}) {
-  const steps = [
-    { n: 1 as const, label: "Baseline", desc: "Enter current actuals" },
-    { n: 2 as const, label: "Rebate Rates", desc: "Set % per layer" },
-    { n: 3 as const, label: "Scenarios", desc: "Configure what-ifs" },
-    { n: 4 as const, label: "Results", desc: calculated ? "Review GP impact" : "Run Calculate to unlock" },
-  ];
-  return (
-    <div className="sticky top-14 z-30 bg-card/95 backdrop-blur border border-border rounded-xl p-3 flex items-stretch overflow-x-auto shadow-sm">
-      {steps.map((s, i) => {
-        const active = s.n === currentStep;
-        const done = s.n < currentStep || (calculated && s.n === 4 && currentStep === 4);
-        const locked = s.n === 4 && !calculated;
-        return (
-          <div key={s.n} className="flex items-center min-w-0 flex-1">
-            <button
-              type="button"
-              onClick={() => onStepClick(s.n)}
-              disabled={locked}
-              className={`group flex items-center gap-3 px-3 py-1.5 flex-1 min-w-0 rounded-md text-left transition ${
-                active ? "bg-brand-soft ring-1 ring-brand/30" : "hover:bg-muted"
-              } ${locked ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
-              aria-current={active ? "step" : undefined}
-            >
-              <div
-                className={`size-8 shrink-0 rounded-full grid place-items-center text-xs font-bold transition ${
-                  done
-                    ? "bg-success-soft text-[oklch(0.4_0.14_155)] border border-success/30"
-                    : active
-                    ? "bg-brand text-brand-foreground shadow"
-                    : "bg-muted text-muted-foreground border border-border group-hover:border-brand/40"
-                }`}
-              >
-                {done ? <CheckCircle2 className="size-4" /> : s.n}
-              </div>
-              <div className="min-w-0 leading-tight">
-                <div className={`text-sm font-semibold truncate ${active ? "text-brand" : done ? "text-foreground" : "text-muted-foreground"}`}>
-                  {s.label}
-                </div>
-                <div className="text-[11px] text-muted-foreground truncate">{s.desc}</div>
-              </div>
-            </button>
-            {i < steps.length - 1 && (
-              <div className={`hidden md:block h-px w-6 mx-1 shrink-0 ${s.n < currentStep ? "bg-success/40" : "bg-border"}`} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 
 /* ---------------- Calculate CTA (pre-calc state) ---------------- */
