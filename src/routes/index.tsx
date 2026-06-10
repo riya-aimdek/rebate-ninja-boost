@@ -727,22 +727,45 @@ function NumInput({
   onChange,
   suffix,
   prefix,
+  format,
+  placeholder,
 }: {
   value: number;
   onChange: (n: number) => void;
   suffix?: string;
   prefix?: string;
+  format?: "number" | "currency";
+  placeholder?: string;
 }) {
+  const useCurrency = format === "currency" || prefix === "£";
+  const [focused, setFocused] = useState(false);
+  const display = focused
+    ? Number.isFinite(value) && value !== 0
+      ? String(value)
+      : ""
+    : useCurrency
+    ? Number.isFinite(value)
+      ? value.toLocaleString("en-GB", { maximumFractionDigits: 0 })
+      : "0"
+    : String(Number.isFinite(value) ? value : 0);
   return (
-    <div className="flex items-center rounded-md border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring/30">
-      {prefix && <span className="px-2.5 text-muted-foreground text-sm border-r border-input bg-muted">{prefix}</span>}
+    <div className="flex items-center rounded-md border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring/40 focus-within:border-brand/50 transition">
+      {prefix && <span className="px-2.5 text-muted-foreground text-sm border-r border-input bg-muted font-medium">{prefix}</span>}
       <input
-        type="number"
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="flex-1 min-w-0 px-3 py-2 text-sm bg-transparent focus:outline-none"
+        type="text"
+        inputMode="decimal"
+        value={display}
+        placeholder={placeholder}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => {
+          const cleaned = e.target.value.replace(/[, ]/g, "");
+          const n = parseFloat(cleaned);
+          onChange(Number.isFinite(n) ? n : 0);
+        }}
+        className="flex-1 min-w-0 px-3 py-2 text-sm bg-transparent focus:outline-none tabular-nums"
       />
-      {suffix && <span className="px-2.5 text-muted-foreground text-sm border-l border-input bg-muted">{suffix}</span>}
+      {suffix && <span className="px-2.5 text-muted-foreground text-sm border-l border-input bg-muted font-medium">{suffix}</span>}
     </div>
   );
 }
