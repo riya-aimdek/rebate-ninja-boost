@@ -109,6 +109,50 @@ function RebateModeling() {
   const [calculating, setCalculating] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // Header context
+  const [year, setYear] = useState("2026");
+  const [account, setAccount] = useState("AWEBB");
+  const [activeNav, setActiveNav] = useState("Rebate Modeling");
+  const [search, setSearch] = useState("");
+
+  // Persistence ------------------------------------------------------------
+  const STORAGE_KEY = "rebate-ninja:modeling:v1";
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || restoredRef.current) return;
+    restoredRef.current = true;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (s.fixedEW !== undefined) setFixedEW(s.fixedEW);
+      if (s.targetEW !== undefined) setTargetEW(s.targetEW);
+      if (s.nbuRebate !== undefined) setNbuRebate(s.nbuRebate);
+      if (s.socRebate !== undefined) setSocRebate(s.socRebate);
+      if (s.ewTurnover !== undefined) setEwTurnover(s.ewTurnover);
+      if (s.ewCost !== undefined) setEwCost(s.ewCost);
+      if (s.socTurnover !== undefined) setSocTurnover(s.socTurnover);
+      if (s.socCost !== undefined) setSocCost(s.socCost);
+      if (s.nbuTurnover !== undefined) setNbuTurnover(s.nbuTurnover);
+      if (s.nbuCost !== undefined) setNbuCost(s.nbuCost);
+      if (s.actual) setActual(s.actual);
+      if (Array.isArray(s.scenarios) && s.scenarios.length) setScenarios(s.scenarios);
+      if (s.year) setYear(s.year);
+      if (s.account) setAccount(s.account);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  useEffect(() => {
+    if (typeof window === "undefined" || !restoredRef.current) return;
+    const payload = {
+      fixedEW, targetEW, nbuRebate, socRebate,
+      ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost,
+      actual, scenarios, year, account,
+    };
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch { /* ignore */ }
+  }, [fixedEW, targetEW, nbuRebate, socRebate, ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost, actual, scenarios, year, account]);
+
   const updateScenario = (i: number, patch: Partial<Scenario>) => {
     setScenarios((s) => s.map((sc, idx) => (idx === i ? { ...sc, ...patch } : sc)));
     if (calculated) setStale(true);
