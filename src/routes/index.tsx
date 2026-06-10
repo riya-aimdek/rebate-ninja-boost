@@ -520,13 +520,25 @@ function RebateModeling() {
         )}
 
         <main className="flex-1 px-6 py-6 space-y-6">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFile(f);
+              e.target.value = "";
+            }}
+          />
           <PageHeader
             onCalculate={handleCalculate}
             calculating={calculating}
             calculated={calculated}
             stale={stale}
             onReset={resetAll}
-            onLoadSample={loadSample}
+            onUpload={triggerUpload}
+            onTemplate={downloadTemplate}
             onPrint={() => window.print()}
             onExport={exportCSV}
             onSave={saveSnapshot}
@@ -536,9 +548,9 @@ function RebateModeling() {
             setAccount={setAccount}
           />
 
-          <StepStrip calculated={calculated} />
+          <StepStrip currentStep={currentStep} calculated={calculated} onStepClick={goToStep} />
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div ref={baselineRef} data-step="1" className="grid grid-cols-1 xl:grid-cols-2 gap-6 scroll-mt-32">
             <BaselineInputs
               ewTurnover={ewTurnover} setEwTurnover={(n) => { setEwTurnover(n); markStale(); }}
               ewCost={ewCost} setEwCost={(n) => { setEwCost(n); markStale(); }}
@@ -547,29 +559,34 @@ function RebateModeling() {
               nbuTurnover={nbuTurnover} setNbuTurnover={(n) => { setNbuTurnover(n); markStale(); }}
               nbuCost={nbuCost} setNbuCost={(n) => { setNbuCost(n); markStale(); }}
             />
-            <GlobalConfig
-              fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
-              targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
-              nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
-              socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
-            />
+            <div ref={ratesRef} data-step="2" className="scroll-mt-32">
+              <GlobalConfig
+                fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markStale(); }}
+                targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markStale(); }}
+                nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markStale(); }}
+                socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markStale(); }}
+              />
+            </div>
           </div>
 
-          <GrowthConfig
-            actual={actual}
-            setActual={(s) => { setActual(s); markStale(); }}
-            scenarios={scenarios}
-            updateScenario={updateScenario}
-            addScenario={addScenario}
-            removeScenario={removeScenario}
-          />
+          <div ref={scenariosRef} data-step="3" className="scroll-mt-32">
+            <GrowthConfig
+              actual={actual}
+              setActual={(s) => { setActual(s); markStale(); }}
+              scenarios={scenarios}
+              updateScenario={updateScenario}
+              addScenario={addScenario}
+              removeScenario={removeScenario}
+            />
+          </div>
 
           {/* Calculate hint / CTA card — only when results not yet shown */}
           {!calculated && (
             <CalculateCTA onCalculate={handleCalculate} calculating={calculating} />
           )}
 
-          <div ref={resultsRef} className="scroll-mt-24">
+          <div ref={resultsRef} data-step="4" className="scroll-mt-32">
+
             {calculated && (
               <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <ResultsHeader
