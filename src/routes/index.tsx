@@ -514,11 +514,17 @@ function PageHeader({
   calculating,
   calculated,
   stale,
+  onReset,
+  onLoadSample,
+  onPrint,
 }: {
   onCalculate: () => void;
   calculating: boolean;
   calculated: boolean;
   stale: boolean;
+  onReset: () => void;
+  onLoadSample: () => void;
+  onPrint: () => void;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
