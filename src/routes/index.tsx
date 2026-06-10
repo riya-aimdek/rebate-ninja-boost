@@ -1096,7 +1096,7 @@ function BKpi({
   label: string;
   value: string;
   accent?: "brand" | "success";
-  chip?: React.ReactNode;
+  chip?: ReactNode;
 }) {
   const color =
     accent === "brand" ? "text-brand" : accent === "success" ? "text-[oklch(0.4_0.14_155)]" : "text-foreground";
@@ -1216,8 +1216,8 @@ function Card({
   hint?: string;
   step?: number;
   tooltip?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow">
@@ -1298,7 +1298,7 @@ function NumInput({
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
