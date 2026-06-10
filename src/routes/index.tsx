@@ -644,23 +644,32 @@ function PageHeader({
           Model a single account's rebate agreement and instantly see the impact on Gross Profit.
         </p>
         <div className="flex flex-wrap items-center gap-3 mt-3 text-sm">
-          <span className="font-semibold text-brand">AWEBB</span>
+          <div className="flex items-center gap-2">
+            <label className="text-muted-foreground">Account</label>
+            <select
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+              className="px-2 py-1 rounded-md border border-input bg-background text-sm font-semibold text-brand"
+            >
+              <option>AWEBB</option>
+              <option>BMICO</option>
+              <option>CRESTA</option>
+              <option>DELTA</option>
+            </select>
+          </div>
           <span className="px-2 py-0.5 rounded-full bg-brand-soft text-brand text-xs font-medium border border-brand/20">
-            AWB-001
+            {account === "AWEBB" ? "AWB-001" : account === "BMICO" ? "BMI-002" : account === "CRESTA" ? "CRS-003" : "DLT-004"}
           </span>
           <div className="flex items-center gap-2">
             <label className="text-muted-foreground">Year</label>
-            <select className="px-2 py-1 rounded-md border border-input bg-background text-sm">
+            <select
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              className="px-2 py-1 rounded-md border border-input bg-background text-sm"
+            >
               <option>2026</option>
               <option>2025</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-muted-foreground">Layer</label>
-            <select className="px-2 py-1 rounded-md border border-input bg-background text-sm">
-              <option>National</option>
-              <option>Regional</option>
-              <option>Branch</option>
+              <option>2024</option>
             </select>
           </div>
         </div>
@@ -681,14 +690,30 @@ function PageHeader({
           >
             <RotateCcw className="size-4" /> Reset
           </button>
+          <button
+            onClick={onSave}
+            title="Save current setup to this browser"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+          >
+            <Save className="size-4" /> Save
+          </button>
           {calculated && (
-            <button
-              onClick={onPrint}
-              title="Print or save as PDF"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
-            >
-              <Printer className="size-4" /> Print
-            </button>
+            <>
+              <button
+                onClick={onExport}
+                title="Download results as CSV"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+              >
+                <Download className="size-4" /> Export CSV
+              </button>
+              <button
+                onClick={onPrint}
+                title="Print or save as PDF"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+              >
+                <Printer className="size-4" /> Print
+              </button>
+            </>
           )}
           <button
             onClick={onCalculate}
