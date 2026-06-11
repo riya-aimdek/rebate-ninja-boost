@@ -982,7 +982,7 @@ function GlobalConfig(props: {
   socRebate: number; setSocRebate: (n: number) => void;
 }) {
   return (
-    <Card title="Global EW Configuration" hint="Set the percentage rates used across all scenarios" className="h-full flex flex-col">
+    <Card title="Global EW Configuration" hint="Set the percentage rates used across all scenarios">
       <div>
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">EW — Extended Warranty</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
