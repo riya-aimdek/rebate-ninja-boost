@@ -1511,13 +1511,15 @@ function Row({
 }
 
 function TotalSummary({
-  scenarios, totals, activeIdx,
+  scenarios, totals, activeIdx, bestIdx,
 }: {
   scenarios: Scenario[];
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   activeIdx: number;
+  bestIdx: number;
 }) {
   const activeBorder = (i: number) => i === activeIdx ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent";
+  const isBestCol = (i: number) => i === bestIdx && bestIdx > 0;
   return (
     <section className="bg-card border-2 border-brand/30 rounded-xl overflow-hidden shadow-md">
       <div className="px-5 py-3 border-b border-border bg-brand-soft/30 flex items-center justify-between flex-wrap gap-2">
@@ -1530,18 +1532,26 @@ function TotalSummary({
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
               {scenarios.map((s, i) => (
-                <th key={i} className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)}`}>
-                  {i === 0 ? "Actual 2026" : `Scenario ${i}`}
+                <th
+                  key={i}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-[oklch(0.93_0.05_155)] text-[oklch(0.27_0.14_155)]" : ""}`}
+                >
+                  <span className="inline-flex items-center gap-1.5 justify-end">
+                    {i === 0 ? "Actual 2026" : `Scenario ${i}`}
+                    {isBestCol(i) && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#27500A", color: "#FFFFFF" }}>BEST</span>
+                    )}
+                  </span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            <Row label="Total Turnover" cols={totals.map((t) => ({ value: fmtGBP(t.turnover) }))} activeIdx={activeIdx} />
-            <Row label="Total Cost" cols={totals.map((t) => ({ value: fmtGBP(t.cost) }))} activeIdx={activeIdx} />
-            <Row label="Total Rebate" accent="brand" cols={totals.map((t) => ({ value: fmtGBP(t.rebate) }))} activeIdx={activeIdx} />
-            <Row label="Net Gross Profit (£)" accent="success" cols={totals.map((t) => ({ value: fmtGBP(t.gp) }))} activeIdx={activeIdx} />
-            <Row label="GP %" accent="success" cols={totals.map((t) => ({ value: fmtPct(t.gpPct) }))} activeIdx={activeIdx} />
+            <Row label="Total Turnover" cols={totals.map((t) => ({ value: fmtGBP(t.turnover) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Total Cost" cols={totals.map((t) => ({ value: fmtGBP(t.cost) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Total Rebate" accent="brand" cols={totals.map((t) => ({ value: fmtGBP(t.rebate) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Net Gross Profit (£)" accent="success" cols={totals.map((t) => ({ value: fmtGBP(t.gp) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="GP %" accent="success" cols={totals.map((t) => ({ value: fmtPct(t.gpPct) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
           </tbody>
         </table>
       </div>
