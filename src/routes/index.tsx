@@ -1742,14 +1742,12 @@ function VarianceAnalysis({
 /* ---------------- Sticky bottom KPI bar ---------------- */
 
 function BottomKPIBar({
-  totals, account, subLabel, activeIdx, onCalculate, calculating, onViewResults,
+  totals, account, subLabel, activeIdx, onViewResults,
 }: {
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   account: string;
   subLabel: string;
   activeIdx: number;
-  onCalculate: () => void;
-  calculating: boolean;
   onViewResults?: () => void;
 }) {
   const actual = totals[0];
