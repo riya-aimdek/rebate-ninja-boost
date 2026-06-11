@@ -1538,14 +1538,59 @@ function GrowthConfig({
 
 /* ---------------- Results table ---------------- */
 
+const METRIC_HELP: Record<string, string> = {
+  "Turnover": "Total sales value for the period.",
+  "Cost": "Cost of goods sold for the period.",
+  "Fixed EW Rebate": "Guaranteed Extended Warranty rebate (paid regardless of growth).",
+  "Target EW Rebate": "Extended Warranty rebate tied to hitting the target turnover.",
+  "National Growth Rebate": "Bonus paid when national growth target is achieved (qualification required).",
+  "Branch Growth Incentive": "Additional incentive paid on branch-level growth.",
+  "Settlement Discount": "Early-payment discount.",
+  "MVHR Rebate": "Mechanical Ventilation with Heat Recovery product rebate.",
+  "SOC Rebate": "Standing Order Contract rebate (linear on turnover).",
+  "NBU Rebate": "New Build Units rebate (linear on turnover).",
+  "Total Rebate": "Sum of all rebate lines for this layer.",
+  "Gross Profit": "Turnover − Cost − Total Rebate.",
+  "GP %": "Gross Profit ÷ Turnover.",
+};
+
+function ResultsLegend() {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-xs text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-2">
+      <span className="font-medium text-foreground">How to read these tables:</span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="inline-block w-3 h-3 rounded bg-success-soft border border-[oklch(0.4_0.14_155)]/30" />
+        Highlighted column = best Gross Profit
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="font-semibold text-[oklch(0.4_0.14_155)]">▲ / ▼</span>
+        Δ vs Actual 2026
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <HelpCircle className="size-3.5" /> Hover any metric name for its definition
+      </span>
+    </div>
+  );
+}
+
+function deltaText(curr: number, base: number, asPct = false) {
+  const d = curr - base;
+  if (Math.abs(d) < 0.005) return null;
+  const arrow = d > 0 ? "▲" : "▼";
+  const val = asPct ? `${Math.abs(d).toFixed(1)} pp` : fmtGBP(Math.abs(d));
+  return { text: `${arrow} ${val}`, positive: d > 0 };
+}
+
 function ResultsTable({
   label,
+  fullName,
   scenarios,
   result,
   layer,
   bestIdx,
 }: {
   label: string;
+  fullName?: string;
   scenarios: Scenario[];
   result: { cols: ColResult[] };
   layer: "ew" | "linear";
@@ -1566,11 +1611,19 @@ function ResultsTable({
         ]
       : Object.keys(result.cols[0].lines);
 
+  const baseGP = result.cols[0]?.gp ?? 0;
+
   return (
     <section className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-      <div className="px-5 py-3 border-b border-border">
+      <div className="px-5 py-3 border-b border-border flex items-center gap-3 flex-wrap">
         <span className="inline-block text-xs font-bold uppercase tracking-wider text-brand bg-brand-soft px-2.5 py-1 rounded">
           {label}
+        </span>
+        {fullName && (
+          <span className="text-sm font-medium text-foreground">{fullName}</span>
+        )}
+        <span className="text-xs text-muted-foreground ml-auto">
+          {scenarios.length - 1} scenario{scenarios.length - 1 === 1 ? "" : "s"} vs Actual
         </span>
       </div>
       <div className="overflow-x-auto">
@@ -1578,21 +1631,32 @@ function ResultsTable({
           <thead>
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
-              {scenarios.map((s, i) => (
-                <th
-                  key={s.name}
-                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${
-                    i === bestIdx && bestIdx > 0 ? "bg-success-soft/60 text-[oklch(0.4_0.14_155)]" : ""
-                  }`}
-                >
-                  {colHeader(s, i)}
-                  {i === bestIdx && bestIdx > 0 && (
-                    <span className="ml-2 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider bg-[oklch(0.4_0.14_155)] text-white px-1.5 py-0.5 rounded-full font-bold">
-                      <TrendingUp className="size-2.5" /> Best
-                    </span>
-                  )}
-                </th>
-              ))}
+              {scenarios.map((s, i) => {
+                const isBest = i === bestIdx && bestIdx > 0;
+                const gpDelta = i > 0 ? deltaText(result.cols[i].gp, baseGP) : null;
+                return (
+                  <th
+                    key={s.name}
+                    className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${
+                      isBest ? "bg-success-soft/60 text-[oklch(0.4_0.14_155)]" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-end gap-2">
+                      <span>{colHeader(s, i)}</span>
+                      {isBest && (
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider bg-[oklch(0.4_0.14_155)] text-white px-1.5 py-0.5 rounded-full font-bold">
+                          <TrendingUp className="size-2.5" /> Best
+                        </span>
+                      )}
+                    </div>
+                    {gpDelta && (
+                      <div className={`text-[11px] font-normal mt-0.5 ${gpDelta.positive ? "text-[oklch(0.4_0.14_155)]" : "text-destructive"}`}>
+                        GP {gpDelta.text}
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -1602,7 +1666,9 @@ function ResultsTable({
               k === "National Growth Rebate" && layer === "ew"
                 ? [
                     <tr key="qual" className="border-b border-border/60">
-                      <td className="py-2.5 px-5 text-muted-foreground">National Growth — Qualification</td>
+                      <td className="py-2.5 px-5 text-muted-foreground" title="Whether the scenario qualifies for the National Growth Rebate based on target turnover.">
+                        National Growth — Qualification
+                      </td>
                       {result.cols.map((c, i) => (
                         <td key={i} className="text-right py-2.5 px-5">
                           <span
@@ -1626,10 +1692,22 @@ function ResultsTable({
             <Row
               label="Total Rebate"
               values={result.cols.map((c) => fmtGBP(c.totalRebate))}
+              deltas={result.cols.map((c, i) => i === 0 ? null : deltaText(c.totalRebate, result.cols[0].totalRebate))}
+              invertDelta
               accent="brand"
             />
-            <Row label="Gross Profit" values={result.cols.map((c) => fmtGBP(c.gp))} accent="success" />
-            <Row label="GP %" values={result.cols.map((c) => fmtPct(c.gpPct))} accent="success" />
+            <Row
+              label="Gross Profit"
+              values={result.cols.map((c) => fmtGBP(c.gp))}
+              deltas={result.cols.map((c, i) => i === 0 ? null : deltaText(c.gp, result.cols[0].gp))}
+              accent="success"
+            />
+            <Row
+              label="GP %"
+              values={result.cols.map((c) => fmtPct(c.gpPct))}
+              deltas={result.cols.map((c, i) => i === 0 ? null : deltaText(c.gpPct, result.cols[0].gpPct, true))}
+              accent="success"
+            />
           </tbody>
         </table>
       </div>
@@ -1640,10 +1718,14 @@ function ResultsTable({
 function Row({
   label,
   values,
+  deltas,
+  invertDelta,
   accent,
 }: {
   label: string;
   values: string[];
+  deltas?: (ReturnType<typeof deltaText> | null)[];
+  invertDelta?: boolean;
   accent?: "brand" | "success";
 }) {
   const colorClass =
@@ -1652,14 +1734,32 @@ function Row({
       : accent === "success"
       ? "text-[oklch(0.4_0.14_155)] font-semibold bg-success-soft/50"
       : "";
+  const help = METRIC_HELP[label];
   return (
     <tr className={`border-b border-border/60 last:border-0 ${colorClass}`}>
-      <td className="py-2.5 px-5">{label}</td>
-      {values.map((v, i) => (
-        <td key={i} className="text-right py-2.5 px-5 tabular-nums whitespace-nowrap">
-          {v}
-        </td>
-      ))}
+      <td className="py-2.5 px-5">
+        {help ? (
+          <span title={help} className="inline-flex items-center gap-1 cursor-help underline decoration-dotted decoration-muted-foreground/40 underline-offset-2">
+            {label}
+          </span>
+        ) : (
+          label
+        )}
+      </td>
+      {values.map((v, i) => {
+        const d = deltas?.[i];
+        const positive = d ? (invertDelta ? !d.positive : d.positive) : false;
+        return (
+          <td key={i} className="text-right py-2.5 px-5 tabular-nums whitespace-nowrap">
+            <div>{v}</div>
+            {d && (
+              <div className={`text-[11px] font-normal ${positive ? "text-[oklch(0.4_0.14_155)]" : "text-destructive"}`}>
+                {d.text}
+              </div>
+            )}
+          </td>
+        );
+      })}
     </tr>
   );
 }
@@ -1675,43 +1775,78 @@ function TotalSummary({
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   bestIdx: number;
 }) {
+  const base = totals[0];
   return (
     <section className="bg-card border-2 border-brand/30 rounded-xl overflow-hidden shadow-md">
-      <div className="px-5 py-3 border-b border-border bg-brand-soft/30">
-        <h3 className="font-bold text-base">Total Summary <span className="text-muted-foreground font-normal text-sm">(EW + SOC + NBU)</span></h3>
+      <div className="px-5 py-3 border-b border-border bg-brand-soft/30 flex items-center justify-between flex-wrap gap-2">
+        <h3 className="font-bold text-base">
+          Total Summary{" "}
+          <span className="text-muted-foreground font-normal text-sm">
+            (EW + SOC + NBU combined)
+          </span>
+        </h3>
+        <span className="text-xs text-muted-foreground">All layers added together</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
-              {scenarios.map((s, i) => (
-                <th
-                  key={s.name}
-                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${
-                    i === bestIdx && bestIdx > 0 ? "bg-success-soft/60 text-[oklch(0.4_0.14_155)]" : ""
-                  }`}
-                >
-                  {i === 0 ? "Actual 2026" : `${s.growth}% Growth`}
-                  {i === bestIdx && bestIdx > 0 && (
-                    <span className="ml-2 inline-flex items-center gap-1 text-[10px] uppercase tracking-wider bg-[oklch(0.4_0.14_155)] text-white px-1.5 py-0.5 rounded-full font-bold">
-                      <TrendingUp className="size-2.5" /> Best
-                    </span>
-                  )}
-                </th>
-              ))}
+              {scenarios.map((s, i) => {
+                const isBest = i === bestIdx && bestIdx > 0;
+                const gpDelta = i > 0 ? deltaText(totals[i].gp, base.gp) : null;
+                return (
+                  <th
+                    key={s.name}
+                    className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${
+                      isBest ? "bg-success-soft/60 text-[oklch(0.4_0.14_155)]" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-end gap-2">
+                      <span>{i === 0 ? "Actual 2026" : `${s.growth}% Growth`}</span>
+                      {isBest && (
+                        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider bg-[oklch(0.4_0.14_155)] text-white px-1.5 py-0.5 rounded-full font-bold">
+                          <TrendingUp className="size-2.5" /> Best
+                        </span>
+                      )}
+                    </div>
+                    {gpDelta && (
+                      <div className={`text-[11px] font-normal mt-0.5 ${gpDelta.positive ? "text-[oklch(0.4_0.14_155)]" : "text-destructive"}`}>
+                        GP {gpDelta.text}
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             <Row label="Total Turnover" values={totals.map((t) => fmtGBP(t.turnover))} />
             <Row label="Total Cost" values={totals.map((t) => fmtGBP(t.cost))} />
-            <Row label="Total Rebate" values={totals.map((t) => fmtGBP(t.rebate))} accent="brand" />
-            <Row label="Total Gross Profit" values={totals.map((t) => fmtGBP(t.gp))} accent="success" />
-            <Row label="GP %" values={totals.map((t) => fmtPct(t.gpPct))} accent="success" />
+            <Row
+              label="Total Rebate"
+              values={totals.map((t) => fmtGBP(t.rebate))}
+              deltas={totals.map((t, i) => i === 0 ? null : deltaText(t.rebate, base.rebate))}
+              invertDelta
+              accent="brand"
+            />
+            <Row
+              label="Total Gross Profit"
+              values={totals.map((t) => fmtGBP(t.gp))}
+              deltas={totals.map((t, i) => i === 0 ? null : deltaText(t.gp, base.gp))}
+              accent="success"
+            />
+            <Row
+              label="GP %"
+              values={totals.map((t) => fmtPct(t.gpPct))}
+              deltas={totals.map((t, i) => i === 0 ? null : deltaText(t.gpPct, base.gpPct, true))}
+              accent="success"
+            />
           </tbody>
         </table>
       </div>
     </section>
   );
 }
+
 
