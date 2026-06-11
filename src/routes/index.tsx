@@ -1463,13 +1463,14 @@ function ResultsTable({
 }
 
 function Row({
-  label, chip, cols, accent, activeIdx,
+  label, chip, cols, accent, activeIdx, bestIdx,
 }: {
   label: string;
   chip?: RebateType | "Settlement";
   cols: { value: string; amber?: boolean; thresholdLabel?: string; thresholdMet?: boolean; tooltip?: string }[];
   accent?: "brand" | "success";
   activeIdx: number;
+  bestIdx: number;
 }) {
   const accentClass =
     accent === "brand" ? "text-brand font-semibold bg-brand-soft/40"
@@ -1485,10 +1486,11 @@ function Row({
       </td>
       {cols.map((c, i) => {
         const active = i === activeIdx;
+        const isBest = i === bestIdx && bestIdx > 0;
         return (
           <td
             key={i}
-            className={`text-right py-2.5 px-5 tabular-nums whitespace-nowrap ${active ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent"}`}
+            className={`text-right py-2.5 px-5 tabular-nums whitespace-nowrap ${active ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent"} ${isBest ? "bg-[oklch(0.96_0.03_155)]" : ""}`}
             title={c.tooltip}
           >
             <div className={c.amber ? "text-[#854F0B]" : ""}>{c.value}</div>
