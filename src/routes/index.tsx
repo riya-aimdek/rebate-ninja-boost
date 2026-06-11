@@ -1355,7 +1355,7 @@ function deltaText(curr: number, base: number, asPct = false) {
 }
 
 function ResultsTable({
-  label, fullName, scenarios, result, layer, activeIdx,
+  label, fullName, scenarios, result, layer, activeIdx, bestIdx,
 }: {
   label: string;
   fullName: string;
@@ -1363,6 +1363,7 @@ function ResultsTable({
   result: { cols: ColResult[] };
   layer: "ew" | "linear";
   activeIdx: number;
+  bestIdx: number;
 }) {
   const lineKeys = layer === "ew"
     ? ["Fixed EW Rebate", "Target EW Rebate", "National Growth Rebate", "Branch Growth Incentive", "Settlement Discount", "MVHR Rebate"]
@@ -1370,6 +1371,7 @@ function ResultsTable({
 
   const colHeader = (s: Scenario, i: number) => i === 0 ? "Actual 2026" : `Scenario ${i}`;
   const activeBorder = (i: number) => i === activeIdx ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent";
+  const isBestCol = (i: number) => i === bestIdx && bestIdx > 0;
 
   return (
     <section className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
@@ -1383,8 +1385,16 @@ function ResultsTable({
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
               {scenarios.map((s, i) => (
-                <th key={i} className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)}`}>
-                  {colHeader(s, i)}
+                <th
+                  key={i}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-[oklch(0.93_0.05_155)] text-[oklch(0.27_0.14_155)]" : ""}`}
+                >
+                  <span className="inline-flex items-center gap-1.5 justify-end">
+                    {colHeader(s, i)}
+                    {isBestCol(i) && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#27500A", color: "#FFFFFF" }}>BEST</span>
+                    )}
+                  </span>
                 </th>
               ))}
             </tr>
