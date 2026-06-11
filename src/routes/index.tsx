@@ -26,6 +26,7 @@ import {
   Building2,
   PanelLeft,
   ShieldCheck,
+  ArrowDown,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
