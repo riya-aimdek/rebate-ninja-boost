@@ -1320,7 +1320,7 @@ function KpiCard({ label, value, delta, positiveGood, isPct }: { label: string; 
     : `${arrow} ${isPct ? `${Math.abs(delta).toFixed(1)} pts` : fmtSignedGBP(delta).replace(/^[+−]/, "")} vs actual`;
   return (
     <div className="bg-card border border-border rounded-xl p-4">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
+      <div className="text-xs text-muted-foreground font-medium">{label}</div>
       <div className="text-2xl font-bold tabular-nums mt-1">{value}</div>
       <div className={`text-xs font-medium mt-1 ${color}`}>{deltaText}</div>
     </div>
