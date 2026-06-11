@@ -26,6 +26,7 @@ import {
   Building2,
   PanelLeft,
   ShieldCheck,
+  ArrowDown,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -465,7 +466,7 @@ function RebateModeling() {
 
           {activeView === "modelling" ? (
             <>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <GlobalConfig
                   fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markEdit(); }}
                   targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markEdit(); }}
@@ -538,6 +539,7 @@ function RebateModeling() {
                 activeIdx={activeScenarioIdx}
                 onCalculate={handleCalculate}
                 calculating={calculating}
+                onViewResults={() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
               />
             </div>
           )}
@@ -917,7 +919,7 @@ function Card({
   title, hint, action, badge, children,
 }: { title: string; hint?: string; action?: ReactNode; badge?: ReactNode; children: ReactNode }) {
   return (
-    <section className="bg-card border border-border rounded-xl p-5 shadow-sm">
+    <section className="bg-card border border-border rounded-xl p-5 shadow-sm h-full flex flex-col">
       <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <h2 className="font-semibold text-base flex items-center gap-2">
@@ -1690,7 +1692,7 @@ function VarianceAnalysis({
 /* ---------------- Sticky bottom KPI bar ---------------- */
 
 function BottomKPIBar({
-  totals, account, subLabel, activeIdx, onCalculate, calculating,
+  totals, account, subLabel, activeIdx, onCalculate, calculating, onViewResults,
 }: {
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   account: string;
@@ -1698,6 +1700,7 @@ function BottomKPIBar({
   activeIdx: number;
   onCalculate: () => void;
   calculating: boolean;
+  onViewResults?: () => void;
 }) {
   const actual = totals[0];
   const active = totals[activeIdx] ?? actual;
@@ -1726,13 +1729,23 @@ function BottomKPIBar({
           />
           <BKpi label="GP %" value={fmtPct(active.gpPct)} accent="success" />
         </div>
-        <button
-          onClick={onCalculate} disabled={calculating}
-          className="ml-auto inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-brand-foreground font-semibold shadow hover:shadow-md hover:opacity-95 transition disabled:opacity-70"
-        >
-          {calculating ? <><RefreshCw className="size-4 animate-spin" /> Calculating…</>
-            : <><CalcIcon className="size-4" /> Calculate →</>}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {onViewResults && (
+            <button
+              onClick={onViewResults}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-md border border-brand/30 bg-brand-soft text-brand font-semibold hover:bg-brand/15 transition"
+            >
+              <ArrowDown className="size-4" /> View Results
+            </button>
+          )}
+          <button
+            onClick={onCalculate} disabled={calculating}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-brand-foreground font-semibold shadow hover:shadow-md hover:opacity-95 transition disabled:opacity-70"
+          >
+            {calculating ? <><RefreshCw className="size-4 animate-spin" /> Recalculating…</>
+              : <><RefreshCw className="size-4" /> Recalculate</>}
+          </button>
+        </div>
       </div>
     </div>
   );
