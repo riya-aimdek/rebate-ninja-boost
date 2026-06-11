@@ -917,7 +917,7 @@ function Card({
   title, hint, action, badge, children,
 }: { title: string; hint?: string; action?: ReactNode; badge?: ReactNode; children: ReactNode }) {
   return (
-    <section className="bg-card border border-border rounded-xl p-5 shadow-sm">
+    <section className="bg-card border border-border rounded-xl p-5 shadow-sm h-full flex flex-col">
       <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0">
           <h2 className="font-semibold text-base flex items-center gap-2">
