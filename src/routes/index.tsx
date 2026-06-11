@@ -1025,7 +1025,6 @@ function BaselineInputs(props: {
       title="Baseline Financial Inputs"
       hint="Current year actuals · pulled from Sage"
       badge={<span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-muted text-muted-foreground"><Lock className="size-3" /> Locked · from Sage</span>}
-      className="h-full flex flex-col"
     >
       <div className="space-y-5">
         <Section label="EW" fullName="Extended Warranty" t={props.ewTurnover} c={props.ewCost} />
