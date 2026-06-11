@@ -538,8 +538,6 @@ function RebateModeling() {
                 account={account}
                 subLabel={`${account} · ${activeScenarioLabel}`}
                 activeIdx={activeScenarioIdx}
-                onCalculate={handleCalculate}
-                calculating={calculating}
                 onViewResults={() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
               />
             </div>
@@ -1742,14 +1740,12 @@ function VarianceAnalysis({
 /* ---------------- Sticky bottom KPI bar ---------------- */
 
 function BottomKPIBar({
-  totals, account, subLabel, activeIdx, onCalculate, calculating, onViewResults,
+  totals, account, subLabel, activeIdx, onViewResults,
 }: {
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   account: string;
   subLabel: string;
   activeIdx: number;
-  onCalculate: () => void;
-  calculating: boolean;
   onViewResults?: () => void;
 }) {
   const actual = totals[0];
@@ -1788,13 +1784,6 @@ function BottomKPIBar({
               <ArrowDown className="size-4" /> View Results
             </button>
           )}
-          <button
-            onClick={onCalculate} disabled={calculating}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-brand-foreground font-semibold shadow hover:shadow-md hover:opacity-95 transition disabled:opacity-70"
-          >
-            {calculating ? <><RefreshCw className="size-4 animate-spin" /> Recalculating…</>
-              : <><RefreshCw className="size-4" /> Recalculate</>}
-          </button>
         </div>
       </div>
     </div>
