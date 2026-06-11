@@ -27,6 +27,7 @@ import {
   PanelLeft,
   ShieldCheck,
   ArrowDown,
+  Printer,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
