@@ -1691,7 +1691,7 @@ function VarianceAnalysis({
 /* ---------------- Sticky bottom KPI bar ---------------- */
 
 function BottomKPIBar({
-  totals, account, subLabel, activeIdx, onCalculate, calculating,
+  totals, account, subLabel, activeIdx, onCalculate, calculating, onViewResults,
 }: {
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   account: string;
@@ -1699,6 +1699,7 @@ function BottomKPIBar({
   activeIdx: number;
   onCalculate: () => void;
   calculating: boolean;
+  onViewResults?: () => void;
 }) {
   const actual = totals[0];
   const active = totals[activeIdx] ?? actual;
@@ -1727,13 +1728,23 @@ function BottomKPIBar({
           />
           <BKpi label="GP %" value={fmtPct(active.gpPct)} accent="success" />
         </div>
-        <button
-          onClick={onCalculate} disabled={calculating}
-          className="ml-auto inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-brand-foreground font-semibold shadow hover:shadow-md hover:opacity-95 transition disabled:opacity-70"
-        >
-          {calculating ? <><RefreshCw className="size-4 animate-spin" /> Calculating…</>
-            : <><CalcIcon className="size-4" /> Calculate →</>}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {onViewResults && (
+            <button
+              onClick={onViewResults}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-md border border-brand/30 bg-brand-soft text-brand font-semibold hover:bg-brand/15 transition"
+            >
+              <ArrowDown className="size-4" /> View Results
+            </button>
+          )}
+          <button
+            onClick={onCalculate} disabled={calculating}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-brand text-brand-foreground font-semibold shadow hover:shadow-md hover:opacity-95 transition disabled:opacity-70"
+          >
+            {calculating ? <><RefreshCw className="size-4 animate-spin" /> Recalculating…</>
+              : <><RefreshCw className="size-4" /> Recalculate</>}
+          </button>
+        </div>
       </div>
     </div>
   );
