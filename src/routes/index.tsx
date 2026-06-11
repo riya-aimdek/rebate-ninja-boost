@@ -873,17 +873,25 @@ function PageHeader(props: {
               <button
                 key={lvl}
                 onClick={() => props.setActiveLevel(lvl)}
-                className={`px-3 h-7 rounded-md text-sm font-medium transition flex items-center gap-1.5 ${
+                className={`px-3 h-7 rounded-md text-sm font-medium transition flex items-center gap-2 ${
                   isActive ? "bg-brand text-brand-foreground shadow-sm" : "text-foreground hover:bg-muted"
                 }`}
               >
-                {lvl}
+                <span>{lvl}</span>
                 <span
-                  className={`size-1.5 rounded-full ${
-                    isActive ? "bg-white/80" : qualifies ? "bg-[oklch(0.55_0.16_155)]" : "bg-[#C28533]"
+                  className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                    qualifies
+                      ? isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-[oklch(0.93_0.05_155)] text-[oklch(0.32_0.14_155)]"
+                      : isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-[#FAEEDA] text-[#854F0B]"
                   }`}
                   title={qualifies ? "Qualifies" : "Below threshold"}
-                />
+                >
+                  {qualifies ? "✓ Qualifies" : "✗ Below"}
+                </span>
               </button>
             );
           })}
@@ -1073,9 +1081,11 @@ function GrowthConfig({
         <button
           onClick={addScenario}
           disabled={scenarios.length >= 3}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-soft text-brand text-xs font-semibold hover:bg-brand hover:text-brand-foreground transition border border-brand/30 disabled:opacity-50"
+          title={scenarios.length >= 3 ? "Maximum 3 scenarios" : "Add another what-if scenario (up to 3)"}
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-brand text-brand-foreground text-sm font-semibold shadow-sm hover:brightness-105 hover:shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Plus className="size-3.5" /> Add scenario
+          <Plus className="size-4" /> Add scenario
+          <span className="text-[11px] font-normal opacity-80">({scenarios.length}/3)</span>
         </button>
       }
     >
@@ -1266,18 +1276,16 @@ function ResultsArea({
         {allScenarios.map((s, i) => {
           const isActive = i === activeIdx;
           const isBest = i === bestIdx && bestIdx > 0;
-          const title = i === 0 ? "Actual" : `Scenario ${i}`;
-          const sub = i === 0 ? "Baseline" : `${s.growth}% growth`;
+          const label = i === 0 ? "Actual · Baseline" : `Scenario ${i} · ${s.growth}% Growth`;
           return (
             <button
               key={i}
               onClick={() => setActiveIdx(i)}
-              className={`relative px-3 py-2 rounded-md text-sm border transition flex flex-col items-start leading-tight min-w-[110px] ${
-                isActive ? "bg-success-soft border-[oklch(0.4_0.14_155)]/40 text-[oklch(0.27_0.14_155)]" : "bg-card border-border hover:bg-muted"
+              className={`relative px-3 h-9 rounded-md text-sm border transition flex items-center whitespace-nowrap ${
+                isActive ? "bg-success-soft border-[oklch(0.4_0.14_155)]/40 text-[oklch(0.27_0.14_155)] font-semibold" : "bg-card border-border hover:bg-muted"
               }`}
             >
-              <span className="font-semibold">{title}</span>
-              <span className={`text-[11px] ${isActive ? "opacity-80" : "text-muted-foreground"}`}>{sub}</span>
+              {label}
               {isBest && (
                 <span style={{ background: "#27500A", color: "#FFFFFF" }} className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded">
                   → Best
@@ -1295,12 +1303,12 @@ function ResultsArea({
       </div>
 
       {/* d-f) Per-layer tables */}
-      <ResultsTable label="EW" fullName="Extended Warranty" scenarios={allScenarios} result={ewResults} layer="ew" activeIdx={activeIdx} />
-      <ResultsTable label="SOC" fullName="Standing Order Contract" scenarios={allScenarios} result={socResults} layer="linear" activeIdx={activeIdx} />
-      <ResultsTable label="NBU" fullName="New Build Units" scenarios={allScenarios} result={nbuResults} layer="linear" activeIdx={activeIdx} />
+      <ResultsTable label="EW" fullName="Extended Warranty" scenarios={allScenarios} result={ewResults} layer="ew" activeIdx={activeIdx} bestIdx={bestIdx} />
+      <ResultsTable label="SOC" fullName="Standing Order Contract" scenarios={allScenarios} result={socResults} layer="linear" activeIdx={activeIdx} bestIdx={bestIdx} />
+      <ResultsTable label="NBU" fullName="New Build Units" scenarios={allScenarios} result={nbuResults} layer="linear" activeIdx={activeIdx} bestIdx={bestIdx} />
 
       {/* g) Total summary */}
-      <TotalSummary scenarios={allScenarios} totals={totals} activeIdx={activeIdx} />
+      <TotalSummary scenarios={allScenarios} totals={totals} activeIdx={activeIdx} bestIdx={bestIdx} />
 
       {/* h) Formula footnote */}
       <p className="text-[11px] text-muted-foreground leading-relaxed">
@@ -1347,7 +1355,7 @@ function deltaText(curr: number, base: number, asPct = false) {
 }
 
 function ResultsTable({
-  label, fullName, scenarios, result, layer, activeIdx,
+  label, fullName, scenarios, result, layer, activeIdx, bestIdx,
 }: {
   label: string;
   fullName: string;
@@ -1355,6 +1363,7 @@ function ResultsTable({
   result: { cols: ColResult[] };
   layer: "ew" | "linear";
   activeIdx: number;
+  bestIdx: number;
 }) {
   const lineKeys = layer === "ew"
     ? ["Fixed EW Rebate", "Target EW Rebate", "National Growth Rebate", "Branch Growth Incentive", "Settlement Discount", "MVHR Rebate"]
@@ -1362,6 +1371,7 @@ function ResultsTable({
 
   const colHeader = (s: Scenario, i: number) => i === 0 ? "Actual 2026" : `Scenario ${i}`;
   const activeBorder = (i: number) => i === activeIdx ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent";
+  const isBestCol = (i: number) => i === bestIdx && bestIdx > 0;
 
   return (
     <section className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
@@ -1375,15 +1385,23 @@ function ResultsTable({
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
               {scenarios.map((s, i) => (
-                <th key={i} className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)}`}>
-                  {colHeader(s, i)}
+                <th
+                  key={i}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-[oklch(0.93_0.05_155)] text-[oklch(0.27_0.14_155)]" : ""}`}
+                >
+                  <span className="inline-flex items-center gap-1.5 justify-end">
+                    {colHeader(s, i)}
+                    {isBestCol(i) && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#27500A", color: "#FFFFFF" }}>BEST</span>
+                    )}
+                  </span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            <Row label="Turnover" cols={result.cols.map((c) => ({ value: fmtGBP(c.turnover) }))} activeIdx={activeIdx} />
-            <Row label="Cost" cols={result.cols.map((c) => ({ value: fmtGBP(c.cost) }))} activeIdx={activeIdx} />
+            <Row label="Turnover" cols={result.cols.map((c) => ({ value: fmtGBP(c.turnover) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Cost" cols={result.cols.map((c) => ({ value: fmtGBP(c.cost) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
 
             {lineKeys.flatMap((k) => {
               const isNatGrowth = k === "National Growth Rebate" && layer === "ew";
@@ -1393,7 +1411,7 @@ function ResultsTable({
                   <tr key={`${k}-qual`} className="border-b border-border/60">
                     <td className="py-2.5 px-5 text-muted-foreground text-xs">National Growth — Qualification</td>
                     {result.cols.map((c, i) => (
-                      <td key={i} className={`text-right py-2.5 px-5 ${activeBorder(i)}`}>
+                      <td key={i} className={`text-right py-2.5 px-5 ${activeBorder(i)} ${isBestCol(i) ? "bg-[oklch(0.96_0.03_155)]" : ""}`}>
                         {c.qualified ? (
                           <StatusLabel kind="qualified">✓ {scenarios[i].nationalGrowthRebate}% · ≥ {fmtGBP(scenarios[i].targetTurnover)}</StatusLabel>
                         ) : (
@@ -1428,14 +1446,15 @@ function ResultsTable({
                     };
                   })}
                   activeIdx={activeIdx}
+                  bestIdx={bestIdx}
                 />
               );
               return elems;
             })}
 
-            <Row label="Total Rebate" accent="brand" cols={result.cols.map((c) => ({ value: fmtGBP(c.totalRebate) }))} activeIdx={activeIdx} />
-            <Row label="Gross Profit" accent="success" cols={result.cols.map((c) => ({ value: fmtGBP(c.gp) }))} activeIdx={activeIdx} />
-            <Row label="GP %" accent="success" cols={result.cols.map((c) => ({ value: fmtPct(c.gpPct) }))} activeIdx={activeIdx} />
+            <Row label="Total Rebate" accent="brand" cols={result.cols.map((c) => ({ value: fmtGBP(c.totalRebate) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Gross Profit" accent="success" cols={result.cols.map((c) => ({ value: fmtGBP(c.gp) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="GP %" accent="success" cols={result.cols.map((c) => ({ value: fmtPct(c.gpPct) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
           </tbody>
         </table>
       </div>
@@ -1444,13 +1463,14 @@ function ResultsTable({
 }
 
 function Row({
-  label, chip, cols, accent, activeIdx,
+  label, chip, cols, accent, activeIdx, bestIdx,
 }: {
   label: string;
   chip?: RebateType | "Settlement";
   cols: { value: string; amber?: boolean; thresholdLabel?: string; thresholdMet?: boolean; tooltip?: string }[];
   accent?: "brand" | "success";
   activeIdx: number;
+  bestIdx: number;
 }) {
   const accentClass =
     accent === "brand" ? "text-brand font-semibold bg-brand-soft/40"
@@ -1466,10 +1486,11 @@ function Row({
       </td>
       {cols.map((c, i) => {
         const active = i === activeIdx;
+        const isBest = i === bestIdx && bestIdx > 0;
         return (
           <td
             key={i}
-            className={`text-right py-2.5 px-5 tabular-nums whitespace-nowrap ${active ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent"}`}
+            className={`text-right py-2.5 px-5 tabular-nums whitespace-nowrap ${active ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent"} ${isBest ? "bg-[oklch(0.96_0.03_155)]" : ""}`}
             title={c.tooltip}
           >
             <div className={c.amber ? "text-[#854F0B]" : ""}>{c.value}</div>
@@ -1490,13 +1511,15 @@ function Row({
 }
 
 function TotalSummary({
-  scenarios, totals, activeIdx,
+  scenarios, totals, activeIdx, bestIdx,
 }: {
   scenarios: Scenario[];
   totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
   activeIdx: number;
+  bestIdx: number;
 }) {
   const activeBorder = (i: number) => i === activeIdx ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent";
+  const isBestCol = (i: number) => i === bestIdx && bestIdx > 0;
   return (
     <section className="bg-card border-2 border-brand/30 rounded-xl overflow-hidden shadow-md">
       <div className="px-5 py-3 border-b border-border bg-brand-soft/30 flex items-center justify-between flex-wrap gap-2">
@@ -1509,18 +1532,26 @@ function TotalSummary({
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
               {scenarios.map((s, i) => (
-                <th key={i} className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)}`}>
-                  {i === 0 ? "Actual 2026" : `Scenario ${i}`}
+                <th
+                  key={i}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-[oklch(0.93_0.05_155)] text-[oklch(0.27_0.14_155)]" : ""}`}
+                >
+                  <span className="inline-flex items-center gap-1.5 justify-end">
+                    {i === 0 ? "Actual 2026" : `Scenario ${i}`}
+                    {isBestCol(i) && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#27500A", color: "#FFFFFF" }}>BEST</span>
+                    )}
+                  </span>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            <Row label="Total Turnover" cols={totals.map((t) => ({ value: fmtGBP(t.turnover) }))} activeIdx={activeIdx} />
-            <Row label="Total Cost" cols={totals.map((t) => ({ value: fmtGBP(t.cost) }))} activeIdx={activeIdx} />
-            <Row label="Total Rebate" accent="brand" cols={totals.map((t) => ({ value: fmtGBP(t.rebate) }))} activeIdx={activeIdx} />
-            <Row label="Net Gross Profit (£)" accent="success" cols={totals.map((t) => ({ value: fmtGBP(t.gp) }))} activeIdx={activeIdx} />
-            <Row label="GP %" accent="success" cols={totals.map((t) => ({ value: fmtPct(t.gpPct) }))} activeIdx={activeIdx} />
+            <Row label="Total Turnover" cols={totals.map((t) => ({ value: fmtGBP(t.turnover) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Total Cost" cols={totals.map((t) => ({ value: fmtGBP(t.cost) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Total Rebate" accent="brand" cols={totals.map((t) => ({ value: fmtGBP(t.rebate) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Net Gross Profit (£)" accent="success" cols={totals.map((t) => ({ value: fmtGBP(t.gp) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="GP %" accent="success" cols={totals.map((t) => ({ value: fmtPct(t.gpPct) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
           </tbody>
         </table>
       </div>
