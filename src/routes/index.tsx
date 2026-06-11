@@ -752,56 +752,45 @@ function PageHeader(props: {
   const maxed = props.savedCount >= 5;
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">Rebate Modeling Calculator</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-2 text-sm">
-            <select
-              value={props.account}
-              onChange={(e) => props.setAccount(e.target.value)}
-              className="px-2 py-1 rounded-md border border-input bg-background text-sm font-semibold text-brand"
-            >
-              {Object.keys(ACCOUNT_NAMES).map((k) => <option key={k} value={k}>{k}</option>)}
-            </select>
-            <span className="text-muted-foreground">— {acc.full} ·</span>
-            <span className="px-2 py-0.5 rounded-full bg-brand-soft text-brand text-xs font-medium border border-brand/20">{acc.code}</span>
-            <span className="text-muted-foreground ml-2">Year</span>
-            <select
-              value={props.year}
-              onChange={(e) => props.setYear(e.target.value)}
-              className="px-2 py-1 rounded-md border border-input bg-background text-sm"
-            >
-              <option>2026</option><option>2025</option><option>2024</option>
-            </select>
+    <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+      {/* Row 1 — Title + primary actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-border">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="size-10 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0">
+            <CalcIcon className="size-5" />
           </div>
-          <div className="flex flex-wrap items-center gap-2 mt-2">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full bg-success-soft text-[oklch(0.4_0.14_155)]">
-              <span className="size-1.5 rounded-full bg-[oklch(0.4_0.14_155)]" /> Sage synced · Today 06:14
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-full bg-brand-soft text-brand">
-              <span className="size-1.5 rounded-full bg-brand animate-pulse" /> Live · auto-recalculated
-            </span>
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold tracking-tight leading-tight">Rebate Modeling Calculator</h1>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5 text-[12px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-[oklch(0.55_0.16_155)]" />
+                Sage synced · Today 06:14
+              </span>
+              <span className="text-border">|</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="size-1.5 rounded-full bg-brand animate-pulse" />
+                Live · auto-recalculated
+              </span>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
-          <div className="relative">
-            <button
-              onClick={props.onOpenSave}
-              disabled={maxed}
-              title={maxed ? "Maximum 5 scenarios reached. Delete an existing scenario to save a new one." : "Save current scenario"}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Bookmark className="size-4" /> Save Scenario
-            </button>
-          </div>
+          <button
+            onClick={props.onOpenSave}
+            disabled={maxed}
+            title={maxed ? "Maximum 5 scenarios reached." : "Save current scenario"}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-background text-sm font-medium hover:bg-muted transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Bookmark className="size-4" /> Save
+          </button>
           <div className="relative">
             <button
               onClick={() => props.setSavedOpen(!props.savedOpen)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-background text-sm font-medium hover:bg-muted transition"
             >
-              Saved ({props.savedCount}/5) {props.savedOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              Saved <span className="text-muted-foreground">({props.savedCount}/5)</span>
+              {props.savedOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
             </button>
             {props.savedOpen && (
               <div className="absolute right-0 top-full mt-1.5 w-[420px] bg-card border border-border rounded-lg shadow-lg z-20 max-h-80 overflow-auto">
@@ -826,14 +815,15 @@ function PageHeader(props: {
           </div>
           <button
             onClick={props.onExport}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-background text-sm font-medium hover:bg-muted transition"
           >
-            <Download className="size-4" /> Export Proposal
+            <Download className="size-4" /> Export
           </button>
+          <div className="h-6 w-px bg-border mx-1" />
           <button
             onClick={props.onCalculate}
             disabled={props.calculating}
-            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md font-semibold shadow-md bg-brand text-brand-foreground hover:shadow-lg hover:-translate-y-0.5 transition disabled:opacity-70"
+            className="inline-flex items-center gap-2 h-9 px-5 rounded-md font-semibold shadow-sm bg-brand text-brand-foreground hover:shadow-md hover:brightness-105 transition disabled:opacity-70"
           >
             {props.calculating ? <><RefreshCw className="size-4 animate-spin" /> Calculating…</>
               : props.calculated ? <><RefreshCw className="size-4" /> Recalculate</>
@@ -842,26 +832,57 @@ function PageHeader(props: {
         </div>
       </div>
 
-      {/* Level tabs */}
-      <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg w-fit" title="Rebate layers operate simultaneously at all three levels. Switch tabs to model each level separately.">
-        {(["National", "Regional", "Branch"] as LayerScope[]).map((lvl) => {
-          const qualifies = props.levelQualifies(lvl);
-          const isActive = lvl === props.activeLevel;
-          return (
-            <button
-              key={lvl}
-              onClick={() => props.setActiveLevel(lvl)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-2 ${
-                isActive ? "bg-brand text-brand-foreground shadow-sm" : "text-foreground hover:bg-card"
-              }`}
-            >
-              {lvl}
-              <span className={`text-[10px] font-semibold ${isActive ? "opacity-90" : qualifies ? "text-[oklch(0.4_0.14_155)]" : "text-[#854F0B]"}`}>
-                {qualifies ? "✓ Qualifies" : "✗ Below threshold"}
-              </span>
-            </button>
-          );
-        })}
+      {/* Row 2 — Context selectors + level segmented control */}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 bg-muted/30">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <label className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Account</label>
+          <select
+            value={props.account}
+            onChange={(e) => props.setAccount(e.target.value)}
+            className="h-8 px-2 rounded-md border border-input bg-background text-sm font-semibold text-brand"
+          >
+            {Object.keys(ACCOUNT_NAMES).map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
+          <span className="text-foreground font-medium">{acc.full}</span>
+          <span className="px-2 py-0.5 rounded-full bg-brand-soft text-brand text-[11px] font-semibold border border-brand/20">{acc.code}</span>
+          <span className="mx-2 h-5 w-px bg-border" />
+          <label className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Year</label>
+          <select
+            value={props.year}
+            onChange={(e) => props.setYear(e.target.value)}
+            className="h-8 px-2 rounded-md border border-input bg-background text-sm font-medium"
+          >
+            <option>2026</option><option>2025</option><option>2024</option>
+          </select>
+        </div>
+
+        <div
+          className="flex items-center gap-1 bg-background border border-border p-1 rounded-lg"
+          title="Rebate layers operate simultaneously at all three levels. Switch tabs to model each level separately."
+        >
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold pl-2 pr-1">Level</span>
+          {(["National", "Regional", "Branch"] as LayerScope[]).map((lvl) => {
+            const qualifies = props.levelQualifies(lvl);
+            const isActive = lvl === props.activeLevel;
+            return (
+              <button
+                key={lvl}
+                onClick={() => props.setActiveLevel(lvl)}
+                className={`px-3 h-7 rounded-md text-sm font-medium transition flex items-center gap-1.5 ${
+                  isActive ? "bg-brand text-brand-foreground shadow-sm" : "text-foreground hover:bg-muted"
+                }`}
+              >
+                {lvl}
+                <span
+                  className={`size-1.5 rounded-full ${
+                    isActive ? "bg-white/80" : qualifies ? "bg-[oklch(0.55_0.16_155)]" : "bg-[#C28533]"
+                  }`}
+                  title={qualifies ? "Qualifies" : "Below threshold"}
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
