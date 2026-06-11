@@ -1303,12 +1303,12 @@ function ResultsArea({
       </div>
 
       {/* d-f) Per-layer tables */}
-      <ResultsTable label="EW" fullName="Extended Warranty" scenarios={allScenarios} result={ewResults} layer="ew" activeIdx={activeIdx} />
-      <ResultsTable label="SOC" fullName="Standing Order Contract" scenarios={allScenarios} result={socResults} layer="linear" activeIdx={activeIdx} />
-      <ResultsTable label="NBU" fullName="New Build Units" scenarios={allScenarios} result={nbuResults} layer="linear" activeIdx={activeIdx} />
+      <ResultsTable label="EW" fullName="Extended Warranty" scenarios={allScenarios} result={ewResults} layer="ew" activeIdx={activeIdx} bestIdx={bestIdx} />
+      <ResultsTable label="SOC" fullName="Standing Order Contract" scenarios={allScenarios} result={socResults} layer="linear" activeIdx={activeIdx} bestIdx={bestIdx} />
+      <ResultsTable label="NBU" fullName="New Build Units" scenarios={allScenarios} result={nbuResults} layer="linear" activeIdx={activeIdx} bestIdx={bestIdx} />
 
       {/* g) Total summary */}
-      <TotalSummary scenarios={allScenarios} totals={totals} activeIdx={activeIdx} />
+      <TotalSummary scenarios={allScenarios} totals={totals} activeIdx={activeIdx} bestIdx={bestIdx} />
 
       {/* h) Formula footnote */}
       <p className="text-[11px] text-muted-foreground leading-relaxed">
