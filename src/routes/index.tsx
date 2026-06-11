@@ -566,9 +566,10 @@ function RebateModeling() {
                   calculating={calculating}
                   onPrint={() => window.print()}
                 />
-                <ResultsTable label="EW" scenarios={[actual, ...scenarios]} result={ewResults} layer="ew" bestIdx={bestScenarioIdx} />
-                <ResultsTable label="SOC" scenarios={[actual, ...scenarios]} result={socResults} layer="linear" bestIdx={bestScenarioIdx} />
-                <ResultsTable label="NBU" scenarios={[actual, ...scenarios]} result={nbuResults} layer="linear" bestIdx={bestScenarioIdx} />
+                <ResultsLegend />
+                <ResultsTable label="EW" fullName="Extended Warranty" scenarios={[actual, ...scenarios]} result={ewResults} layer="ew" bestIdx={bestScenarioIdx} />
+                <ResultsTable label="SOC" fullName="Standing Order Contract" scenarios={[actual, ...scenarios]} result={socResults} layer="linear" bestIdx={bestScenarioIdx} />
+                <ResultsTable label="NBU" fullName="New Build Units" scenarios={[actual, ...scenarios]} result={nbuResults} layer="linear" bestIdx={bestScenarioIdx} />
                 <TotalSummary scenarios={[actual, ...scenarios]} totals={totals} bestIdx={bestScenarioIdx} />
               </div>
             )}
