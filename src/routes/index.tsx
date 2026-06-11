@@ -1400,8 +1400,8 @@ function ResultsTable({
             </tr>
           </thead>
           <tbody>
-            <Row label="Turnover" cols={result.cols.map((c) => ({ value: fmtGBP(c.turnover) }))} activeIdx={activeIdx} />
-            <Row label="Cost" cols={result.cols.map((c) => ({ value: fmtGBP(c.cost) }))} activeIdx={activeIdx} />
+            <Row label="Turnover" cols={result.cols.map((c) => ({ value: fmtGBP(c.turnover) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Cost" cols={result.cols.map((c) => ({ value: fmtGBP(c.cost) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
 
             {lineKeys.flatMap((k) => {
               const isNatGrowth = k === "National Growth Rebate" && layer === "ew";
@@ -1411,7 +1411,7 @@ function ResultsTable({
                   <tr key={`${k}-qual`} className="border-b border-border/60">
                     <td className="py-2.5 px-5 text-muted-foreground text-xs">National Growth — Qualification</td>
                     {result.cols.map((c, i) => (
-                      <td key={i} className={`text-right py-2.5 px-5 ${activeBorder(i)}`}>
+                      <td key={i} className={`text-right py-2.5 px-5 ${activeBorder(i)} ${isBestCol(i) ? "bg-[oklch(0.96_0.03_155)]" : ""}`}>
                         {c.qualified ? (
                           <StatusLabel kind="qualified">✓ {scenarios[i].nationalGrowthRebate}% · ≥ {fmtGBP(scenarios[i].targetTurnover)}</StatusLabel>
                         ) : (
@@ -1446,14 +1446,15 @@ function ResultsTable({
                     };
                   })}
                   activeIdx={activeIdx}
+                  bestIdx={bestIdx}
                 />
               );
               return elems;
             })}
 
-            <Row label="Total Rebate" accent="brand" cols={result.cols.map((c) => ({ value: fmtGBP(c.totalRebate) }))} activeIdx={activeIdx} />
-            <Row label="Gross Profit" accent="success" cols={result.cols.map((c) => ({ value: fmtGBP(c.gp) }))} activeIdx={activeIdx} />
-            <Row label="GP %" accent="success" cols={result.cols.map((c) => ({ value: fmtPct(c.gpPct) }))} activeIdx={activeIdx} />
+            <Row label="Total Rebate" accent="brand" cols={result.cols.map((c) => ({ value: fmtGBP(c.totalRebate) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Gross Profit" accent="success" cols={result.cols.map((c) => ({ value: fmtGBP(c.gp) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="GP %" accent="success" cols={result.cols.map((c) => ({ value: fmtPct(c.gpPct) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
           </tbody>
         </table>
       </div>
