@@ -873,17 +873,25 @@ function PageHeader(props: {
               <button
                 key={lvl}
                 onClick={() => props.setActiveLevel(lvl)}
-                className={`px-3 h-7 rounded-md text-sm font-medium transition flex items-center gap-1.5 ${
+                className={`px-3 h-7 rounded-md text-sm font-medium transition flex items-center gap-2 ${
                   isActive ? "bg-brand text-brand-foreground shadow-sm" : "text-foreground hover:bg-muted"
                 }`}
               >
-                {lvl}
+                <span>{lvl}</span>
                 <span
-                  className={`size-1.5 rounded-full ${
-                    isActive ? "bg-white/80" : qualifies ? "bg-[oklch(0.55_0.16_155)]" : "bg-[#C28533]"
+                  className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                    qualifies
+                      ? isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-[oklch(0.93_0.05_155)] text-[oklch(0.32_0.14_155)]"
+                      : isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-[#FAEEDA] text-[#854F0B]"
                   }`}
                   title={qualifies ? "Qualifies" : "Below threshold"}
-                />
+                >
+                  {qualifies ? "✓ Qualifies" : "✗ Below"}
+                </span>
               </button>
             );
           })}
