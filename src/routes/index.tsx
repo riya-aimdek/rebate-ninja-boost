@@ -465,7 +465,7 @@ function RebateModeling() {
 
           {activeView === "modelling" ? (
             <>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <GlobalConfig
                   fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markEdit(); }}
                   targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markEdit(); }}
