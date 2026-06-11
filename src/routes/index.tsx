@@ -1276,18 +1276,16 @@ function ResultsArea({
         {allScenarios.map((s, i) => {
           const isActive = i === activeIdx;
           const isBest = i === bestIdx && bestIdx > 0;
-          const title = i === 0 ? "Actual" : `Scenario ${i}`;
-          const sub = i === 0 ? "Baseline" : `${s.growth}% growth`;
+          const label = i === 0 ? "Actual · Baseline" : `Scenario ${i} · ${s.growth}% Growth`;
           return (
             <button
               key={i}
               onClick={() => setActiveIdx(i)}
-              className={`relative px-3 py-2 rounded-md text-sm border transition flex flex-col items-start leading-tight min-w-[110px] ${
-                isActive ? "bg-success-soft border-[oklch(0.4_0.14_155)]/40 text-[oklch(0.27_0.14_155)]" : "bg-card border-border hover:bg-muted"
+              className={`relative px-3 h-9 rounded-md text-sm border transition flex items-center whitespace-nowrap ${
+                isActive ? "bg-success-soft border-[oklch(0.4_0.14_155)]/40 text-[oklch(0.27_0.14_155)] font-semibold" : "bg-card border-border hover:bg-muted"
               }`}
             >
-              <span className="font-semibold">{title}</span>
-              <span className={`text-[11px] ${isActive ? "opacity-80" : "text-muted-foreground"}`}>{sub}</span>
+              {label}
               {isBest && (
                 <span style={{ background: "#27500A", color: "#FFFFFF" }} className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded">
                   → Best
