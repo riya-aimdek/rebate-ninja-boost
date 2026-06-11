@@ -27,6 +27,7 @@ import {
   PanelLeft,
   ShieldCheck,
   ArrowDown,
+  Printer,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -1216,33 +1217,48 @@ function ResultsArea({
 
   const gpDelta = active.gp - actualTotal.gp;
   const gpPctDelta = active.gpPct - actualTotal.gpPct;
-  const insight =
-    activeIdx === 0
-      ? "Showing Actual baseline results."
-      : `${gpDelta >= 0 ? "↗" : "↘"} Gross Profit (£) ${gpDelta >= 0 ? "increased" : "decreased"} by ${fmtGBP(Math.abs(gpDelta))} under ${scenarios[activeIdx - 1]?.growth ?? 0}% Growth, ${
-          gpPctDelta < 0 ? "even though" : "and"
-        } GP % ${gpPctDelta >= 0 ? "increased" : "decreased"} by ${Math.abs(gpPctDelta).toFixed(1)} pts${
-          gpDelta > 0 && gpPctDelta < 0 ? " — the expected effect of higher rebate payouts on a larger turnover base." : "."
-        }`;
+  const gpDir = gpDelta >= 0 ? "increased" : "decreased";
+  const gpPctDir = gpPctDelta >= 0 ? "increased" : "decreased";
+  const conj = gpPctDelta < 0 ? "even though" : "and";
+  const tail = gpDelta > 0 && gpPctDelta < 0
+    ? " — the expected effect of higher rebate payouts on a larger turnover base."
+    : ".";
+  const insightNode =
+    activeIdx === 0 ? (
+      <span>Showing Actual baseline results.</span>
+    ) : (
+      <span>
+        <strong className="font-bold">Gross Profit (£) {gpDir}</strong> by {fmtGBP(Math.abs(gpDelta))} under Scenario {activeIdx} ({scenarios[activeIdx - 1]?.growth ?? 0}% Growth), {conj}{" "}
+        <strong className="font-bold">GP % {gpPctDir}</strong> by {Math.abs(gpPctDelta).toFixed(1)} pts{tail}
+      </span>
+    );
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-lg font-bold">Results</h2>
-        <button
-          onClick={onExport}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
-        >
-          <Download className="size-4" /> Export Proposal
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onExport}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+          >
+            <Download className="size-4" /> Export Proposal
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-border bg-card text-sm font-medium hover:bg-muted transition"
+          >
+            <Printer className="size-4" /> Print / Export
+          </button>
+        </div>
       </div>
 
       {/* a) 4 KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Projected Turnover" value={fmtGBP(active.turnover)} delta={active.turnover - actualTotal.turnover} positiveGood />
         <KpiCard label="Total Rebate Payout" value={fmtGBP(active.rebate)} delta={active.rebate - actualTotal.rebate} positiveGood={false} />
-        <KpiCard label="Net GP (£)" value={fmtGBP(active.gp)} delta={active.gp - actualTotal.gp} positiveGood />
-        <KpiCard label="GP %" value={fmtPct(active.gpPct)} delta={active.gpPct - actualTotal.gpPct} positiveGood isPct />
+        <KpiCard label="Net Gross Profit (£)" value={fmtGBP(active.gp)} delta={active.gp - actualTotal.gp} positiveGood />
+        <KpiCard label="Gross Profit (%)" value={fmtPct(active.gpPct)} delta={active.gpPct - actualTotal.gpPct} positiveGood isPct />
       </div>
 
       {/* b) Scenario tab strip */}
@@ -1250,18 +1266,20 @@ function ResultsArea({
         {allScenarios.map((s, i) => {
           const isActive = i === activeIdx;
           const isBest = i === bestIdx && bestIdx > 0;
-          const label = i === 0 ? "Actual" : `Scenario ${i} · ${s.growth}% Growth`;
+          const title = i === 0 ? "Actual" : `Scenario ${i}`;
+          const sub = i === 0 ? "Baseline" : `${s.growth}% growth`;
           return (
             <button
               key={i}
               onClick={() => setActiveIdx(i)}
-              className={`px-3 py-2 rounded-md text-sm font-medium border transition flex items-center gap-2 ${
+              className={`relative px-3 py-2 rounded-md text-sm border transition flex flex-col items-start leading-tight min-w-[110px] ${
                 isActive ? "bg-success-soft border-[oklch(0.4_0.14_155)]/40 text-[oklch(0.27_0.14_155)]" : "bg-card border-border hover:bg-muted"
               }`}
             >
-              {label}
+              <span className="font-semibold">{title}</span>
+              <span className={`text-[11px] ${isActive ? "opacity-80" : "text-muted-foreground"}`}>{sub}</span>
               {isBest && (
-                <span style={{ background: "#EAF3DE", color: "#27500A" }} className="text-[10px] font-bold px-1.5 py-0.5 rounded">
+                <span style={{ background: "#27500A", color: "#FFFFFF" }} className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] font-bold px-1.5 py-0.5 rounded">
                   → Best
                 </span>
               )}
@@ -1273,7 +1291,7 @@ function ResultsArea({
       {/* c) Insight callout */}
       <div className="rounded-lg px-4 py-3 text-sm flex items-start gap-2" style={{ background: "#EAF3DE", color: "#27500A" }}>
         <Sparkles className="size-4 mt-0.5 shrink-0" />
-        <span>{insight}</span>
+        {insightNode}
       </div>
 
       {/* d-f) Per-layer tables */}
@@ -1302,7 +1320,7 @@ function KpiCard({ label, value, delta, positiveGood, isPct }: { label: string; 
     : `${arrow} ${isPct ? `${Math.abs(delta).toFixed(1)} pts` : fmtSignedGBP(delta).replace(/^[+−]/, "")} vs actual`;
   return (
     <div className="bg-card border border-border rounded-xl p-4">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{label}</div>
+      <div className="text-xs text-muted-foreground font-medium">{label}</div>
       <div className="text-2xl font-bold tabular-nums mt-1">{value}</div>
       <div className={`text-xs font-medium mt-1 ${color}`}>{deltaText}</div>
     </div>
