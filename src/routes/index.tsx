@@ -465,18 +465,20 @@ function RebateModeling() {
 
           {activeView === "modelling" ? (
             <>
-              <GlobalConfig
-                fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markEdit(); }}
-                targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markEdit(); }}
-                nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markEdit(); }}
-                socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markEdit(); }}
-              />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                <GlobalConfig
+                  fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markEdit(); }}
+                  targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markEdit(); }}
+                  nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markEdit(); }}
+                  socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markEdit(); }}
+                />
 
-              <BaselineInputs
-                ewTurnover={ewTurnover} ewCost={ewCost}
-                socTurnover={socTurnover} socCost={socCost}
-                nbuTurnover={nbuTurnover} nbuCost={nbuCost}
-              />
+                <BaselineInputs
+                  ewTurnover={ewTurnover} ewCost={ewCost}
+                  socTurnover={socTurnover} socCost={socCost}
+                  nbuTurnover={nbuTurnover} nbuCost={nbuCost}
+                />
+              </div>
 
               <GrowthConfig
                 actual={actual}
