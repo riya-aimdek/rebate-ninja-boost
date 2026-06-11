@@ -1081,9 +1081,11 @@ function GrowthConfig({
         <button
           onClick={addScenario}
           disabled={scenarios.length >= 3}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-soft text-brand text-xs font-semibold hover:bg-brand hover:text-brand-foreground transition border border-brand/30 disabled:opacity-50"
+          title={scenarios.length >= 3 ? "Maximum 3 scenarios" : "Add another what-if scenario (up to 3)"}
+          className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-brand text-brand-foreground text-sm font-semibold shadow-sm hover:brightness-105 hover:shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Plus className="size-3.5" /> Add scenario
+          <Plus className="size-4" /> Add scenario
+          <span className="text-[11px] font-normal opacity-80">({scenarios.length}/3)</span>
         </button>
       }
     >
