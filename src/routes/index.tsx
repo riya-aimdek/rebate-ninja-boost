@@ -539,6 +539,7 @@ function RebateModeling() {
                 activeIdx={activeScenarioIdx}
                 onCalculate={handleCalculate}
                 calculating={calculating}
+                onViewResults={() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
               />
             </div>
           )}
