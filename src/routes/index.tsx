@@ -1387,7 +1387,7 @@ function ResultsTable({
               {scenarios.map((s, i) => (
                 <th
                   key={i}
-                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/60 text-[oklch(0.27_0.14_155)]" : ""}`}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/40 text-[oklch(0.27_0.14_155)]" : ""}`}
                 >
                   <span className="inline-flex items-center gap-1.5 justify-end">
                     {colHeader(s, i)}
@@ -1411,7 +1411,7 @@ function ResultsTable({
                   <tr key={`${k}-qual`} className="border-b border-border/60">
                     <td className="py-2.5 px-5 text-muted-foreground text-xs">National Growth — Qualification</td>
                     {result.cols.map((c, i) => (
-                      <td key={i} className={`text-right py-2.5 px-5 ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/40" : ""}`}>
+                      <td key={i} className={`text-right py-2.5 px-5 ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/25" : ""}`}>
                         {c.qualified ? (
                           <StatusLabel kind="qualified">✓ {scenarios[i].nationalGrowthRebate}% · ≥ {fmtGBP(scenarios[i].targetTurnover)}</StatusLabel>
                         ) : (
@@ -1490,7 +1490,7 @@ function Row({
         return (
           <td
             key={i}
-            className={`text-right py-2.5 px-5 tabular-nums whitespace-nowrap ${active ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent"} ${isBest ? "bg-success-soft/40" : ""}`}
+            className={`text-right py-2.5 px-5 tabular-nums whitespace-nowrap ${active ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent"} ${isBest ? "bg-success-soft/25" : ""}`}
             title={c.tooltip}
           >
             <div className={c.amber ? "text-[#854F0B]" : ""}>{c.value}</div>
@@ -1534,7 +1534,7 @@ function TotalSummary({
               {scenarios.map((s, i) => (
                 <th
                   key={i}
-                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/60 text-[oklch(0.27_0.14_155)]" : ""}`}
+                  className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/40 text-[oklch(0.27_0.14_155)]" : ""}`}
                 >
                   <span className="inline-flex items-center gap-1.5 justify-end">
                     {i === 0 ? "Actual 2026" : `Scenario ${i}`}
