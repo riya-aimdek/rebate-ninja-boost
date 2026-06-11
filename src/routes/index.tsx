@@ -466,7 +466,7 @@ function RebateModeling() {
 
           {activeView === "modelling" ? (
             <>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                 <GlobalConfig
                   fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markEdit(); }}
                   targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markEdit(); }}
@@ -982,7 +982,7 @@ function GlobalConfig(props: {
   socRebate: number; setSocRebate: (n: number) => void;
 }) {
   return (
-    <Card title="Global EW Configuration" hint="Set the percentage rates used across all scenarios" className="h-full flex flex-col">
+    <Card title="Global EW Configuration" hint="Set the percentage rates used across all scenarios">
       <div>
         <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">EW — Extended Warranty</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1025,7 +1025,6 @@ function BaselineInputs(props: {
       title="Baseline Financial Inputs"
       hint="Current year actuals · pulled from Sage"
       badge={<span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-muted text-muted-foreground"><Lock className="size-3" /> Locked · from Sage</span>}
-      className="h-full flex flex-col"
     >
       <div className="space-y-5">
         <Section label="EW" fullName="Extended Warranty" t={props.ewTurnover} c={props.ewCost} />
