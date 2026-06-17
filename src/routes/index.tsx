@@ -467,47 +467,59 @@ function RebateModeling() {
 
           {activeView === "modelling" ? (
             <>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <GlobalConfig
-                  fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markEdit(); }}
-                  targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markEdit(); }}
-                  nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markEdit(); }}
-                  socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markEdit(); }}
-                />
-
-                <BaselineInputs
-                  ewTurnover={ewTurnover} ewCost={ewCost}
-                  socTurnover={socTurnover} socCost={socCost}
-                  nbuTurnover={nbuTurnover} nbuCost={nbuCost}
-                />
-              </div>
-
-              <GrowthConfig
-                actual={actual}
-                setActual={(s) => { setActual(s); markEdit(); }}
-                scenarios={scenarios}
-                updateScenario={updateScenario}
-                addScenario={addScenario}
-                removeScenario={removeScenario}
-              />
-
-              <div ref={resultsRef} className="scroll-mt-32">
-                {!calculated ? (
-                  <ReadyToCalculate onCalculate={handleCalculate} calculating={calculating} />
-                ) : (
-                  <ResultsArea
-                    actual={actual}
-                    scenarios={scenarios}
-                    ewResults={ewResults}
-                    socResults={socResults}
-                    nbuResults={nbuResults}
-                    totals={totals}
-                    bestIdx={bestScenarioIdx}
-                    activeIdx={activeScenarioIdx}
-                    setActiveIdx={setActiveScenarioIdx}
-                    onExport={() => setShowExportModal(true)}
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] gap-6 items-start">
+                {/* Left: Inputs */}
+                <div className="space-y-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1">
+                  <GlobalConfig
+                    fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markEdit(); }}
+                    targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markEdit(); }}
+                    nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markEdit(); }}
+                    socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markEdit(); }}
                   />
-                )}
+
+                  <BaselineInputs
+                    ewTurnover={ewTurnover} ewCost={ewCost}
+                    socTurnover={socTurnover} socCost={socCost}
+                    nbuTurnover={nbuTurnover} nbuCost={nbuCost}
+                  />
+
+                  <GrowthConfig
+                    actual={actual}
+                    setActual={(s) => { setActual(s); markEdit(); }}
+                    scenarios={scenarios}
+                    updateScenario={updateScenario}
+                    addScenario={addScenario}
+                    removeScenario={removeScenario}
+                  />
+
+                  <button
+                    onClick={handleCalculate}
+                    disabled={calculating}
+                    className="w-full rounded-lg bg-primary text-primary-foreground font-semibold py-3 hover:opacity-90 disabled:opacity-50 transition"
+                  >
+                    {calculating ? "Calculating…" : "Run Simulation"}
+                  </button>
+                </div>
+
+                {/* Right: Outputs */}
+                <div ref={resultsRef} className="scroll-mt-32 min-w-0">
+                  {!calculated ? (
+                    <ReadyToCalculate onCalculate={handleCalculate} calculating={calculating} />
+                  ) : (
+                    <ResultsArea
+                      actual={actual}
+                      scenarios={scenarios}
+                      ewResults={ewResults}
+                      socResults={socResults}
+                      nbuResults={nbuResults}
+                      totals={totals}
+                      bestIdx={bestScenarioIdx}
+                      activeIdx={activeScenarioIdx}
+                      setActiveIdx={setActiveScenarioIdx}
+                      onExport={() => setShowExportModal(true)}
+                    />
+                  )}
+                </div>
               </div>
             </>
           ) : (
