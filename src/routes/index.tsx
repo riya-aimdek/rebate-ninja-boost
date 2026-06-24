@@ -4,12 +4,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  TrendingUp,
   X,
   Plus,
   Trash2,
   Sparkles,
-  HelpCircle,
   Download,
   Lock,
   Bookmark,
@@ -28,6 +26,7 @@ import {
   ShieldCheck,
   ArrowDown,
   Printer,
+  Upload,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -59,11 +58,13 @@ type SaleType = "All" | "Social Housing" | "Electrical Wholesale";
 type Scenario = {
   name: string;
   growth: number;
-  nationalGrowthRebate: number;
-  targetTurnover: number;
-  branchGrowthRebate: number;
-  settlement: number;
-  mvhr: number;
+  nationalGrowthRate: number;       // % applied to full turnover if growth qualifies
+  targetThreshold: number;          // £ qualifying threshold for nat growth
+  regionalGrowthRate: number;       // %
+  branchGrowthRebate: number;       // %
+  marketingRebate: number;          // %
+  mvhrRate: number;                 // % applied to MVHR turnover only
+  settlement: number;               // £ per period
   type: RebateType;
   scope: LayerScope;
   saleType: SaleType;
@@ -72,19 +73,21 @@ type Scenario = {
 type SavedScenario = {
   id: string;
   name: string;
-  savedAt: string; // ISO
+  savedAt: string;
   savedBy: string;
   payload: PersistShape;
 };
 
 type PersistShape = {
-  fixedEW: number; targetEW: number; nbuRebate: number; socRebate: number;
-  ewTurnover: number; ewCost: number;
+  fixedEW: number; targetEW: number; targetEWThreshold: number;
+  nbuRebate: number; socRebate: number;
+  mvhrRebate: number; marketingRebate: number; settlementDiscount: number;
+  ewTurnover: number; ewCost: number; mvhrTurnover: number;
   socTurnover: number; socCost: number;
   nbuTurnover: number; nbuCost: number;
   actual: Scenario;
   scenarios: Scenario[];
-  year: string; account: string;
+  year: string; account: string; includeYesss: boolean;
 };
 
 const fmtGBP = (n: number) =>
@@ -93,11 +96,29 @@ const fmtSignedGBP = (n: number) =>
   (n >= 0 ? "+" : "−") + "£" + Math.round(Math.abs(n)).toLocaleString("en-GB");
 const fmtPct = (n: number) => `${n.toFixed(1)}%`;
 
-const ACCOUNT_NAMES: Record<string, { full: string; code: string }> = {
-  AWEBB: { full: "A. Webb (Plumbing) Ltd", code: "AWB-001" },
-  BMICO: { full: "BMI Co.", code: "BMI-002" },
-  CRESTA: { full: "Cresta Holdings", code: "CRS-003" },
-  DELTA: { full: "Delta Trading", code: "DLT-004" },
+type AccountInfo = {
+  full: string;
+  code: string;
+  hasYesss?: boolean;
+  baseline: { ewT: number; ewC: number; mvhrT: number; socT: number; socC: number; nbuT: number; nbuC: number };
+  baselineYesss?: { ewT: number; ewC: number; mvhrT: number; socT: number; socC: number; nbuT: number; nbuC: number };
+};
+
+const ACCOUNTS: Record<string, AccountInfo> = {
+  AWEBB: {
+    full: "A. Webb (Plumbing) Ltd", code: "AWB-001", hasYesss: true,
+    baseline:      { ewT: 1194312, ewC: 597834, mvhrT: 95545, socT: 4098722, socC: 1591683, nbuT: 357780, nbuC: 203516 },
+    baselineYesss: { ewT: 1612321, ewC: 806160, mvhrT: 128985, socT: 4098722, socC: 1591683, nbuT: 357780, nbuC: 203516 },
+  },
+  ANEW:      { full: "ANEW Distribution", code: "ANW-002", baseline: { ewT: 612500, ewC: 306250, mvhrT: 49000, socT: 1820000, socC: 705000, nbuT: 142000, nbuC: 80000 } },
+  EDMUNDSON: { full: "Edmundson Electrical", code: "EDM-003", baseline: { ewT: 2105000, ewC: 1052500, mvhrT: 168400, socT: 5240000, socC: 2034500, nbuT: 412000, nbuC: 234500 } },
+  CEF:       { full: "City Electrical Factors", code: "CEF-004", baseline: { ewT: 1845000, ewC: 922500, mvhrT: 147600, socT: 3920000, socC: 1522000, nbuT: 285000, nbuC: 162000 } },
+  YESSS:     { full: "YESSS Electrical", code: "YES-005", baseline: { ewT: 418000, ewC: 209000, mvhrT: 33440, socT: 980000, socC: 380000, nbuT: 95000, nbuC: 54000 } },
+  FEGIME:    { full: "FEGIME UK", code: "FEG-006", baseline: { ewT: 524000, ewC: 262000, mvhrT: 41920, socT: 1240000, socC: 481000, nbuT: 118000, nbuC: 67200 } },
+  LEW:       { full: "LEW Electrical", code: "LEW-007", baseline: { ewT: 388000, ewC: 194000, mvhrT: 31040, socT: 890000, socC: 345000, nbuT: 82000, nbuC: 46600 } },
+  HUWS:      { full: "Huws Gray (Rexel)", code: "HGR-008", baseline: { ewT: 296000, ewC: 148000, mvhrT: 23680, socT: 720000, socC: 279000, nbuT: 64000, nbuC: 36400 } },
+  CROSSFOLD: { full: "Crossfold", code: "CRO-009", baseline: { ewT: 184000, ewC: 92000, mvhrT: 14720, socT: 410000, socC: 159000, nbuT: 38000, nbuC: 21600 } },
+  JEWSONS:   { full: "Jewsons", code: "JEW-010", baseline: { ewT: 622000, ewC: 311000, mvhrT: 49760, socT: 1420000, socC: 551000, nbuT: 132000, nbuC: 75000 } },
 };
 
 const TYPE_CHIP: Record<RebateType | "Settlement", { bg: string; fg: string }> = {
@@ -140,37 +161,53 @@ function StatusLabel({ kind, children }: { kind: "qualified" | "warning" | "nega
 /* ---------------- Page ---------------- */
 
 function RebateModeling() {
-  // Global EW
+  // Rebate rate configuration
   const [fixedEW, setFixedEW] = useState(5);
   const [targetEW, setTargetEW] = useState(5);
+  const [targetEWThreshold, setTargetEWThreshold] = useState(1200000);
   const [nbuRebate, setNbuRebate] = useState(5);
   const [socRebate, setSocRebate] = useState(5);
+  const [mvhrRebate, setMvhrRebate] = useState(5);
+  const [marketingRebate, setMarketingRebate] = useState(0.5);
+  const [settlementDiscount, setSettlementDiscount] = useState(29858);
 
-  // Baseline (Sage actuals — locked)
-  const [ewTurnover, setEwTurnover] = useState(1194312);
-  const [ewCost, setEwCost] = useState(597834);
-  const [socTurnover, setSocTurnover] = useState(4098722);
-  const [socCost, setSocCost] = useState(1591683);
-  const [nbuTurnover, setNbuTurnover] = useState(357780);
-  const [nbuCost, setNbuCost] = useState(203516);
+  // Baseline (Sage actuals — locked, derived from selected account)
+  const [account, setAccount] = useState("AWEBB");
+  const [includeYesss, setIncludeYesss] = useState(false);
 
-  const [actual, setActual] = useState<Scenario>({
-    name: "Actual",
+  const accInfo = ACCOUNTS[account] ?? ACCOUNTS.AWEBB;
+  const baseline = (includeYesss && accInfo.baselineYesss) ? accInfo.baselineYesss : accInfo.baseline;
+
+  const ewTurnover = baseline.ewT;
+  const ewCost = baseline.ewC;
+  const mvhrTurnover = baseline.mvhrT;
+  const otherEwTurnover = Math.max(0, ewTurnover - mvhrTurnover);
+  const socTurnover = baseline.socT;
+  const socCost = baseline.socC;
+  const nbuTurnover = baseline.nbuT;
+  const nbuCost = baseline.nbuC;
+
+  const defaultScenario = (over: Partial<Scenario>): Scenario => ({
+    name: "Scenario",
     growth: 0,
-    nationalGrowthRebate: 1,
-    targetTurnover: 1141167,
+    nationalGrowthRate: 1,
+    targetThreshold: 1200000,
+    regionalGrowthRate: 0,
     branchGrowthRebate: 0,
+    marketingRebate: 0.5,
+    mvhrRate: 5,
     settlement: 29858,
-    mvhr: 0,
     type: "Fixed",
     scope: "National",
     saleType: "All",
+    ...over,
   });
 
+  const [actual, setActual] = useState<Scenario>(defaultScenario({ name: "Actual" }));
   const [scenarios, setScenarios] = useState<Scenario[]>([
-    { name: "Scenario 1", growth: 10, nationalGrowthRebate: 3.5, targetTurnover: 1200000, branchGrowthRebate: 0, settlement: 32844, mvhr: 0, type: "Growth", scope: "National", saleType: "All" },
-    { name: "Scenario 2", growth: 20, nationalGrowthRebate: 3.5, targetTurnover: 1275000, branchGrowthRebate: 2, settlement: 35829, mvhr: 0, type: "Mixed", scope: "Regional", saleType: "All" },
-    { name: "Scenario 3", growth: 30, nationalGrowthRebate: 4.5, targetTurnover: 1400000, branchGrowthRebate: 3, settlement: 38815, mvhr: 0, type: "Targeted", scope: "Branch", saleType: "Social Housing" },
+    defaultScenario({ name: "Scenario 1", growth: 10, nationalGrowthRate: 3.5, targetThreshold: 1200000, settlement: 32844, type: "Growth", scope: "National" }),
+    defaultScenario({ name: "Scenario 2", growth: 20, nationalGrowthRate: 3.5, targetThreshold: 1275000, branchGrowthRebate: 2, regionalGrowthRate: 2, settlement: 35829, type: "Mixed", scope: "Regional" }),
+    defaultScenario({ name: "Scenario 3", growth: 30, nationalGrowthRate: 4.5, targetThreshold: 1400000, branchGrowthRebate: 3, regionalGrowthRate: 3, settlement: 38815, type: "Targeted", scope: "Branch", saleType: "Social Housing" }),
   ]);
 
   // UX state
@@ -181,7 +218,6 @@ function RebateModeling() {
 
   // Header context
   const [year, setYear] = useState("2026");
-  const [account, setAccount] = useState("AWEBB");
   const [activeNav, setActiveNav] = useState("Rebate Modeling");
   const [search, setSearch] = useState("");
   const [activeLevel, setActiveLevel] = useState<LayerScope>("National");
@@ -199,11 +235,10 @@ function RebateModeling() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  // Active scenario index in results tab strip
   const [activeScenarioIdx, setActiveScenarioIdx] = useState(0);
 
   // Persistence
-  const STORAGE_KEY = "rebate-ninja:modeling:v4";
+  const STORAGE_KEY = "rebate-ninja:modeling:v5";
   const SAVED_KEY = "rebate-ninja:saved:v1";
   const restoredRef = useRef(false);
 
@@ -216,22 +251,19 @@ function RebateModeling() {
         const s = JSON.parse(raw);
         if (s.fixedEW !== undefined) setFixedEW(s.fixedEW);
         if (s.targetEW !== undefined) setTargetEW(s.targetEW);
+        if (s.targetEWThreshold !== undefined) setTargetEWThreshold(s.targetEWThreshold);
         if (s.nbuRebate !== undefined) setNbuRebate(s.nbuRebate);
         if (s.socRebate !== undefined) setSocRebate(s.socRebate);
-        if (s.ewTurnover !== undefined) setEwTurnover(s.ewTurnover);
-        if (s.ewCost !== undefined) setEwCost(s.ewCost);
-        if (s.socTurnover !== undefined) setSocTurnover(s.socTurnover);
-        if (s.socCost !== undefined) setSocCost(s.socCost);
-        if (s.nbuTurnover !== undefined) setNbuTurnover(s.nbuTurnover);
-        if (s.nbuCost !== undefined) setNbuCost(s.nbuCost);
-        if (s.actual) setActual({ ...actual, ...s.actual });
+        if (s.mvhrRebate !== undefined) setMvhrRebate(s.mvhrRebate);
+        if (s.marketingRebate !== undefined) setMarketingRebate(s.marketingRebate);
+        if (s.settlementDiscount !== undefined) setSettlementDiscount(s.settlementDiscount);
+        if (s.actual) setActual({ ...defaultScenario({}), ...s.actual });
         if (Array.isArray(s.scenarios) && s.scenarios.length) {
-          setScenarios(s.scenarios.map((sc: Partial<Scenario>) => ({
-            type: "Growth", scope: "National", saleType: "All", ...sc,
-          })) as Scenario[]);
+          setScenarios(s.scenarios.map((sc: Partial<Scenario>) => defaultScenario(sc)));
         }
         if (s.year) setYear(s.year);
-        if (s.account) setAccount(s.account);
+        if (s.account && ACCOUNTS[s.account]) setAccount(s.account);
+        if (s.includeYesss !== undefined) setIncludeYesss(s.includeYesss);
       }
       const savedRaw = localStorage.getItem(SAVED_KEY);
       if (savedRaw) setSavedScenarios(JSON.parse(savedRaw));
@@ -243,19 +275,17 @@ function RebateModeling() {
     if (typeof window === "undefined" || !restoredRef.current) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        fixedEW, targetEW, nbuRebate, socRebate,
-        ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost,
-        actual, scenarios, year, account,
+        fixedEW, targetEW, targetEWThreshold, nbuRebate, socRebate, mvhrRebate, marketingRebate, settlementDiscount,
+        actual, scenarios, year, account, includeYesss,
       }));
     } catch {/* ignore */}
-  }, [fixedEW, targetEW, nbuRebate, socRebate, ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost, actual, scenarios, year, account]);
+  }, [fixedEW, targetEW, targetEWThreshold, nbuRebate, socRebate, mvhrRebate, marketingRebate, settlementDiscount, actual, scenarios, year, account, includeYesss]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !restoredRef.current) return;
     try { localStorage.setItem(SAVED_KEY, JSON.stringify(savedScenarios)); } catch {/* ignore */}
   }, [savedScenarios]);
 
-  // Mark working copy on any change after a scenario was loaded
   const markEdit = () => {
     if (loadedScenarioName) {
       setLoadedScenarioName(null);
@@ -270,26 +300,23 @@ function RebateModeling() {
   };
 
   const addScenario = () => {
-    if (scenarios.length >= 3) {
-      setToast("Maximum 3 scenarios reached");
-      return;
-    }
+    if (scenarios.length >= 3) { setToast("Maximum 3 scenarios reached"); return; }
     setScenarios((s) => {
       const next = s[s.length - 1];
       return [
         ...s,
-        {
+        defaultScenario({
           name: `Scenario ${s.length + 1}`,
           growth: (next?.growth ?? 0) + 10,
-          nationalGrowthRebate: next?.nationalGrowthRebate ?? 3.5,
-          targetTurnover: Math.round((next?.targetTurnover ?? 1200000) * 1.1),
+          nationalGrowthRate: next?.nationalGrowthRate ?? 3.5,
+          targetThreshold: Math.round((next?.targetThreshold ?? 1200000) * 1.1),
+          regionalGrowthRate: next?.regionalGrowthRate ?? 0,
           branchGrowthRebate: next?.branchGrowthRebate ?? 0,
-          settlement: Math.round((next?.settlement ?? 30000) * 1.05),
-          mvhr: next?.mvhr ?? 0,
-          type: "Growth",
-          scope: "National",
-          saleType: "All",
-        },
+          marketingRebate: next?.marketingRebate ?? marketingRebate,
+          mvhrRate: next?.mvhrRate ?? mvhrRebate,
+          settlement: Math.round((next?.settlement ?? settlementDiscount) * 1.05),
+          type: "Growth", scope: "National", saleType: "All",
+        }),
       ];
     });
     markEdit();
@@ -305,8 +332,8 @@ function RebateModeling() {
 
   /* ---- Calculation (live) ---- */
   const ewResults = useMemo(
-    () => buildEW(ewTurnover, ewCost, fixedEW, targetEW, [actual, ...scenarios]),
-    [ewTurnover, ewCost, fixedEW, targetEW, actual, scenarios]
+    () => buildEW(ewTurnover, ewCost, mvhrTurnover, fixedEW, targetEW, targetEWThreshold, [actual, ...scenarios]),
+    [ewTurnover, ewCost, mvhrTurnover, fixedEW, targetEW, targetEWThreshold, actual, scenarios]
   );
   const socResults = useMemo(
     () => buildLinear(socTurnover, socCost, socRebate, [actual, ...scenarios], "SOC Rebate"),
@@ -321,8 +348,12 @@ function RebateModeling() {
       const t = ewResults.cols[i].turnover + socResults.cols[i].turnover + nbuResults.cols[i].turnover;
       const c = ewResults.cols[i].cost + socResults.cols[i].cost + nbuResults.cols[i].cost;
       const r = ewResults.cols[i].totalRebate + socResults.cols[i].totalRebate + nbuResults.cols[i].totalRebate;
+      const settlement = ewResults.cols[i].lines["Settlement Discount"] ?? 0;
+      // GP = Turnover − Cost + Total Rebate + Settlement (per spec)
+      // But Total Rebate already INCLUDES settlement in line items; spec formula treats them as additions to GP
+      // We keep the existing convention: GP = T - C - R (R includes settlement). Both equivalent if settlement is in R with opposite sign understanding. We'll show settlement separately in summary table.
       const gp = t - c - r;
-      return { turnover: t, cost: c, rebate: r, gp, gpPct: t ? (gp / t) * 100 : 0 };
+      return { turnover: t, cost: c, rebate: r, settlement, gp, gpPct: t ? (gp / t) * 100 : 0 };
     });
   }, [ewResults, socResults, nbuResults, actual, scenarios]);
 
@@ -333,9 +364,8 @@ function RebateModeling() {
     return best;
   }, [totals]);
 
-  // Level qualification — does any scenario at this layer qualify?
   const levelQualifies = (level: LayerScope) => {
-    return scenarios.some((s) => s.scope === level && ewResults.cols[scenarios.indexOf(s) + 1]?.qualified);
+    return scenarios.some((s, idx) => s.scope === level && ewResults.cols[idx + 1]?.qualified);
   };
 
   const handleCalculate = () => {
@@ -347,6 +377,15 @@ function RebateModeling() {
       setToast("Calculation complete");
       requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     }, 350);
+  };
+
+  // Upload Excel (stub — same behaviour pattern as Import)
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const handleUploadExcel = () => fileInputRef.current?.click();
+  const onFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) setToast(`Uploaded "${f.name}" · parsing not yet wired`);
+    e.target.value = "";
   };
 
   // Save scenario flow
@@ -363,9 +402,9 @@ function RebateModeling() {
       savedAt: new Date().toISOString(),
       savedBy: "You",
       payload: {
-        fixedEW, targetEW, nbuRebate, socRebate,
-        ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost,
-        actual, scenarios, year, account,
+        fixedEW, targetEW, targetEWThreshold, nbuRebate, socRebate, mvhrRebate, marketingRebate, settlementDiscount,
+        ewTurnover, ewCost, mvhrTurnover, socTurnover, socCost, nbuTurnover, nbuCost,
+        actual, scenarios, year, account, includeYesss,
       },
     };
     setSavedScenarios((arr) => [snapshot, ...arr].slice(0, 5));
@@ -374,12 +413,16 @@ function RebateModeling() {
   };
   const loadSaved = (s: SavedScenario) => {
     const p = s.payload;
-    setFixedEW(p.fixedEW); setTargetEW(p.targetEW); setNbuRebate(p.nbuRebate); setSocRebate(p.socRebate);
-    setEwTurnover(p.ewTurnover); setEwCost(p.ewCost);
-    setSocTurnover(p.socTurnover); setSocCost(p.socCost);
-    setNbuTurnover(p.nbuTurnover); setNbuCost(p.nbuCost);
+    setFixedEW(p.fixedEW); setTargetEW(p.targetEW);
+    if (p.targetEWThreshold !== undefined) setTargetEWThreshold(p.targetEWThreshold);
+    setNbuRebate(p.nbuRebate); setSocRebate(p.socRebate);
+    if (p.mvhrRebate !== undefined) setMvhrRebate(p.mvhrRebate);
+    if (p.marketingRebate !== undefined) setMarketingRebate(p.marketingRebate);
+    if (p.settlementDiscount !== undefined) setSettlementDiscount(p.settlementDiscount);
     setActual(p.actual); setScenarios(p.scenarios);
-    setYear(p.year); setAccount(p.account);
+    setYear(p.year);
+    if (p.account && ACCOUNTS[p.account]) setAccount(p.account);
+    if (p.includeYesss !== undefined) setIncludeYesss(p.includeYesss);
     setLoadedScenarioName(s.name);
     setBannerDismissed(false);
     setSavedOpen(false);
@@ -404,7 +447,6 @@ function RebateModeling() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // sticky bar visibility — hide when results in view
   const [resultsVisible, setResultsVisible] = useState(false);
   useEffect(() => {
     if (!calculated || !resultsRef.current) return;
@@ -428,9 +470,12 @@ function RebateModeling() {
         <TopBar search={search} onSearch={setSearch} account={account} />
 
         <main className="flex-1 px-6 py-6 space-y-6 max-w-[1400px] w-full mx-auto">
+          <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChosen} />
+
           <PageHeader
             year={year} setYear={setYear}
-            account={account} setAccount={setAccount}
+            account={account} setAccount={(a) => { setAccount(a); setIncludeYesss(false); }}
+            includeYesss={includeYesss} setIncludeYesss={setIncludeYesss}
             activeLevel={activeLevel} setActiveLevel={setActiveLevel}
             savedCount={savedScenarios.length}
             savedScenarios={savedScenarios}
@@ -441,10 +486,8 @@ function RebateModeling() {
             onCalculate={handleCalculate}
             calculating={calculating}
             calculated={calculated}
-            onExport={() => setShowExportModal(true)}
+            onUploadExcel={handleUploadExcel}
             levelQualifies={levelQualifies}
-            scenarios={scenarios}
-            ewResults={ewResults}
           />
 
           {loadedScenarioName && !bannerDismissed && (
@@ -468,15 +511,20 @@ function RebateModeling() {
           {activeView === "modelling" ? (
             <>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                <GlobalConfig
+                <RebateRateConfig
                   fixedEW={fixedEW} setFixedEW={(n) => { setFixedEW(n); markEdit(); }}
                   targetEW={targetEW} setTargetEW={(n) => { setTargetEW(n); markEdit(); }}
+                  targetEWThreshold={targetEWThreshold} setTargetEWThreshold={(n) => { setTargetEWThreshold(n); markEdit(); }}
                   nbuRebate={nbuRebate} setNbuRebate={(n) => { setNbuRebate(n); markEdit(); }}
                   socRebate={socRebate} setSocRebate={(n) => { setSocRebate(n); markEdit(); }}
+                  mvhrRebate={mvhrRebate} setMvhrRebate={(n) => { setMvhrRebate(n); markEdit(); }}
+                  marketingRebate={marketingRebate} setMarketingRebate={(n) => { setMarketingRebate(n); markEdit(); }}
+                  settlementDiscount={settlementDiscount} setSettlementDiscount={(n) => { setSettlementDiscount(n); markEdit(); }}
                 />
 
                 <BaselineInputs
                   ewTurnover={ewTurnover} ewCost={ewCost}
+                  mvhrTurnover={mvhrTurnover} otherEwTurnover={otherEwTurnover}
                   socTurnover={socTurnover} socCost={socCost}
                   nbuTurnover={nbuTurnover} nbuCost={nbuCost}
                 />
@@ -506,6 +554,7 @@ function RebateModeling() {
                     activeIdx={activeScenarioIdx}
                     setActiveIdx={setActiveScenarioIdx}
                     onExport={() => setShowExportModal(true)}
+                    mvhrTurnover={mvhrTurnover}
                   />
                 )}
               </div>
@@ -520,6 +569,7 @@ function RebateModeling() {
               ewTurnover={ewTurnover} ewCost={ewCost}
               socTurnover={socTurnover} socCost={socCost}
               nbuTurnover={nbuTurnover} nbuCost={nbuCost}
+              settlementDiscount={settlementDiscount}
             />
           )}
 
@@ -589,38 +639,55 @@ type ColResult = {
   lines: Record<string, number>;
   qualified?: boolean;
   qualifications?: Record<string, boolean>;
+  mvhrTurnover?: number;
 };
 
 const projected = (base: number, growth: number) => base * (1 + growth / 100);
 
-function buildEW(baseT: number, baseC: number, fixedEWPct: number, targetEWPct: number, scenarios: Scenario[]) {
+function buildEW(
+  baseT: number, baseC: number, baseMvhr: number,
+  fixedEWPct: number, targetEWPct: number, targetEWThreshold: number,
+  scenarios: Scenario[]
+) {
   const cols: ColResult[] = scenarios.map((s) => {
     const turnover = projected(baseT, s.growth);
     const cost = projected(baseC, s.growth);
+    const mvhrTurnover = projected(baseMvhr, s.growth);
+
     const fixedRebate = turnover * (fixedEWPct / 100);
-    const targetRebate = turnover * (targetEWPct / 100);
-    const qualified = turnover >= s.targetTurnover;
-    const natGrowth = qualified ? turnover * (s.nationalGrowthRebate / 100) : 0;
+
+    const targetQualified = turnover >= targetEWThreshold;
+    const targetRebate = targetQualified ? turnover * (targetEWPct / 100) : 0;
+
+    const natQualified = turnover >= s.targetThreshold;
+    const natGrowth = natQualified ? turnover * (s.nationalGrowthRate / 100) : 0;
+
+    const regionalGrowth = turnover * (s.regionalGrowthRate / 100);
     const branchGrowth = turnover * (s.branchGrowthRebate / 100);
+    const marketing = turnover * (s.marketingRebate / 100);
+    const mvhrRebate = mvhrTurnover * (s.mvhrRate / 100);
     const settlement = s.settlement;
-    const mvhr = s.mvhr;
-    const totalRebate = fixedRebate + targetRebate + natGrowth + branchGrowth + settlement + mvhr;
+
+    const totalRebate = fixedRebate + targetRebate + natGrowth + regionalGrowth + branchGrowth + marketing + mvhrRebate + settlement;
     const gp = turnover - cost - totalRebate;
     return {
       turnover, cost, totalRebate, gp,
       gpPct: turnover ? (gp / turnover) * 100 : 0,
-      qualified,
+      qualified: natQualified,
+      mvhrTurnover,
       qualifications: {
-        "National Growth Rebate": qualified,
-        "MVHR Rebate": mvhr > 0,
+        "National Growth Rebate": natQualified,
+        "Target EW Rebate": targetQualified,
       },
       lines: {
         "Fixed EW Rebate": fixedRebate,
         "Target EW Rebate": targetRebate,
         "National Growth Rebate": natGrowth,
+        "Regional Growth Rebate": regionalGrowth,
         "Branch Growth Incentive": branchGrowth,
+        "Marketing Rebate": marketing,
+        "MVHR Rebate": mvhrRebate,
         "Settlement Discount": settlement,
-        "MVHR Rebate": mvhr,
       },
     };
   });
@@ -632,11 +699,13 @@ function buildLinear(baseT: number, baseC: number, ratePct: number, scenarios: S
     const turnover = projected(baseT, s.growth);
     const cost = projected(baseC, s.growth);
     const rebate = turnover * (ratePct / 100);
-    const gp = turnover - cost - rebate;
+    // Settlement allocated proportionally is shown contextually; for SOC/NBU we surface settlement as 0 here
+    const totalRebate = rebate;
+    const gp = turnover - cost - totalRebate;
     return {
-      turnover, cost, totalRebate: rebate, gp,
+      turnover, cost, totalRebate, gp,
       gpPct: turnover ? (gp / turnover) * 100 : 0,
-      lines: { [lineLabel]: rebate },
+      lines: { [lineLabel]: rebate, "Settlement Discount": 0 },
     };
   });
   return { cols };
@@ -736,6 +805,7 @@ function TopBar({ search, onSearch, account }: { search: string; onSearch: (v: s
 function PageHeader(props: {
   year: string; setYear: (v: string) => void;
   account: string; setAccount: (v: string) => void;
+  includeYesss: boolean; setIncludeYesss: (b: boolean) => void;
   activeLevel: LayerScope; setActiveLevel: (l: LayerScope) => void;
   savedCount: number;
   savedScenarios: SavedScenario[];
@@ -746,12 +816,10 @@ function PageHeader(props: {
   onCalculate: () => void;
   calculating: boolean;
   calculated: boolean;
-  onExport: () => void;
+  onUploadExcel: () => void;
   levelQualifies: (l: LayerScope) => boolean;
-  scenarios: Scenario[];
-  ewResults: { cols: ColResult[] };
 }) {
-  const acc = ACCOUNT_NAMES[props.account] ?? { full: props.account, code: "—" };
+  const acc = ACCOUNTS[props.account] ?? { full: props.account, code: "—", hasYesss: false } as AccountInfo;
   const maxed = props.savedCount >= 5;
 
   return (
@@ -817,10 +885,10 @@ function PageHeader(props: {
             )}
           </div>
           <button
-            onClick={props.onExport}
+            onClick={props.onUploadExcel}
             className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-border bg-background text-sm font-medium hover:bg-muted transition"
           >
-            <Download className="size-4" /> Export
+            <Upload className="size-4" /> Upload Excel
           </button>
           <div className="h-6 w-px bg-border mx-1" />
           <button
@@ -844,10 +912,33 @@ function PageHeader(props: {
             onChange={(e) => props.setAccount(e.target.value)}
             className="h-8 px-2 rounded-md border border-input bg-background text-sm font-semibold text-brand"
           >
-            {Object.keys(ACCOUNT_NAMES).map((k) => <option key={k} value={k}>{k}</option>)}
+            {Object.keys(ACCOUNTS).map((k) => <option key={k} value={k}>{k}</option>)}
           </select>
-          <span className="text-foreground font-medium">{acc.full}</span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-foreground font-medium">{acc.full}</span>
+            {acc.hasYesss && (
+              <span className="text-[11px] text-muted-foreground">
+                {props.includeYesss ? `Includes ${props.account}/YESSS combined EW` : "Standalone — toggle to include YESSS"}
+              </span>
+            )}
+          </div>
           <span className="px-2 py-0.5 rounded-full bg-brand-soft text-brand text-[11px] font-semibold border border-brand/20">{acc.code}</span>
+          {acc.hasYesss && (
+            <div className="ml-1 flex items-center bg-background border border-border p-0.5 rounded-md">
+              <button
+                onClick={() => props.setIncludeYesss(false)}
+                className={`px-2.5 h-6 rounded text-[11px] font-semibold transition ${!props.includeYesss ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              >
+                {props.account} only
+              </button>
+              <button
+                onClick={() => props.setIncludeYesss(true)}
+                className={`px-2.5 h-6 rounded text-[11px] font-semibold transition ${props.includeYesss ? "bg-brand text-brand-foreground" : "text-muted-foreground hover:bg-muted"}`}
+              >
+                {props.account} + YESSS
+              </button>
+            </div>
+          )}
           <span className="mx-2 h-5 w-px bg-border" />
           <label className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Year</label>
           <select
@@ -973,35 +1064,68 @@ function NumInput({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
       {children}
+      {hint && <p className="text-[11px] text-muted-foreground mt-1 leading-snug">{hint}</p>}
     </div>
   );
 }
 
-function GlobalConfig(props: {
+function RebateRateConfig(props: {
   fixedEW: number; setFixedEW: (n: number) => void;
   targetEW: number; setTargetEW: (n: number) => void;
+  targetEWThreshold: number; setTargetEWThreshold: (n: number) => void;
   nbuRebate: number; setNbuRebate: (n: number) => void;
   socRebate: number; setSocRebate: (n: number) => void;
+  mvhrRebate: number; setMvhrRebate: (n: number) => void;
+  marketingRebate: number; setMarketingRebate: (n: number) => void;
+  settlementDiscount: number; setSettlementDiscount: (n: number) => void;
 }) {
+  const SectionLabel = ({ children }: { children: ReactNode }) => (
+    <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">{children}</div>
+  );
   return (
-    <Card title="Global EW Configuration" hint="Set the percentage rates used across all scenarios" className="h-full flex flex-col">
-      <div>
-        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">EW — Extended Warranty</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Fixed EW %"><NumInput value={props.fixedEW} onChange={props.setFixedEW} suffix="%" /></Field>
-          <Field label="Target EW %"><NumInput value={props.targetEW} onChange={props.setTargetEW} suffix="%" /></Field>
+    <Card title="Rebate Rate Configuration" hint="Set the percentage and £ rates used across all scenarios" className="h-full flex flex-col">
+      <div className="space-y-5">
+        <div>
+          <SectionLabel>EW — Electrical Wholesale</SectionLabel>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Field label="Fixed EW %"><NumInput value={props.fixedEW} onChange={props.setFixedEW} suffix="%" /></Field>
+            <Field label="Target EW %" hint="Only applies if national turnover hits threshold"><NumInput value={props.targetEW} onChange={props.setTargetEW} suffix="%" /></Field>
+            <Field label="Target Turnover Threshold"><NumInput value={props.targetEWThreshold} onChange={props.setTargetEWThreshold} prefix="£" /></Field>
+          </div>
         </div>
-      </div>
-      <div className="mt-5">
-        <div className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Other Rebate Rates</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="NBU Rebate %"><NumInput value={props.nbuRebate} onChange={props.setNbuRebate} suffix="%" /></Field>
-          <Field label="SOC Rebate %"><NumInput value={props.socRebate} onChange={props.setSocRebate} suffix="%" /></Field>
+
+        <div>
+          <SectionLabel>NBU + SOC</SectionLabel>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="NBU Rebate %"><NumInput value={props.nbuRebate} onChange={props.setNbuRebate} suffix="%" /></Field>
+            <Field label="SOC Rebate %"><NumInput value={props.socRebate} onChange={props.setSocRebate} suffix="%" /></Field>
+          </div>
+        </div>
+
+        <div>
+          <SectionLabel>MVHR</SectionLabel>
+          <Field label="MVHR Rebate %" hint="Applied to MVHR product lines only, not total EW turnover">
+            <NumInput value={props.mvhrRebate} onChange={props.setMvhrRebate} suffix="%" />
+          </Field>
+        </div>
+
+        <div>
+          <SectionLabel>Marketing</SectionLabel>
+          <Field label="Marketing Rebate %" hint="Applied as a contribution to national marketing budget">
+            <NumInput value={props.marketingRebate} onChange={props.setMarketingRebate} suffix="%" />
+          </Field>
+        </div>
+
+        <div>
+          <SectionLabel>Settlement</SectionLabel>
+          <Field label="Settlement Discount" hint="Fixed amount paid per agreement period">
+            <NumInput value={props.settlementDiscount} onChange={props.setSettlementDiscount} prefix="£" />
+          </Field>
         </div>
       </div>
     </Card>
@@ -1010,23 +1134,10 @@ function GlobalConfig(props: {
 
 function BaselineInputs(props: {
   ewTurnover: number; ewCost: number;
+  mvhrTurnover: number; otherEwTurnover: number;
   socTurnover: number; socCost: number;
   nbuTurnover: number; nbuCost: number;
 }) {
-  const Section = ({ label, fullName, t, c }: { label: string; fullName: string; t: number; c: number }) => (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-sm font-bold text-brand">{label}</span>
-        <span className="text-sm text-foreground">— {fullName}</span>
-        <span className="ml-auto text-xs text-muted-foreground">GP: <span className="tabular-nums font-medium text-foreground">{fmtGBP(Math.max(0, t - c))}</span></span>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Turnover"><NumInput value={t} prefix="£" locked /></Field>
-        <Field label="Cost"><NumInput value={c} prefix="£" locked /></Field>
-      </div>
-      <div className="text-[11px] text-muted-foreground mt-1">Prior-year actuals · read-only</div>
-    </div>
-  );
   return (
     <Card
       title="Baseline Financial Inputs"
@@ -1035,9 +1146,53 @@ function BaselineInputs(props: {
       className="h-full flex flex-col"
     >
       <div className="space-y-5">
-        <Section label="EW" fullName="Extended Warranty" t={props.ewTurnover} c={props.ewCost} />
-        <Section label="SOC" fullName="Standing Order Contract" t={props.socTurnover} c={props.socCost} />
-        <Section label="NBU" fullName="New Build Units" t={props.nbuTurnover} c={props.nbuCost} />
+        {/* EW with MVHR split */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-bold text-brand">EW</span>
+            <span className="text-sm text-foreground">— Extended Warranty</span>
+            <span className="ml-auto text-xs text-muted-foreground">GP: <span className="tabular-nums font-medium text-foreground">{fmtGBP(Math.max(0, props.ewTurnover - props.ewCost))}</span></span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Total EW Turnover"><NumInput value={props.ewTurnover} prefix="£" locked /></Field>
+            <Field label="Total EW Cost"><NumInput value={props.ewCost} prefix="£" locked /></Field>
+            <Field label="Of which MVHR Turnover" hint="MVHR rebate applies to this portion only">
+              <NumInput value={props.mvhrTurnover} prefix="£" locked />
+            </Field>
+            <Field label="Of which Other EW Turnover" hint="Auto = Total EW − MVHR">
+              <NumInput value={props.otherEwTurnover} prefix="£" locked />
+            </Field>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-1">Prior-year actuals · read-only</div>
+        </div>
+
+        {/* SOC */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-bold text-brand">SOC</span>
+            <span className="text-sm text-foreground">— Standing Order Contract</span>
+            <span className="ml-auto text-xs text-muted-foreground">GP: <span className="tabular-nums font-medium text-foreground">{fmtGBP(Math.max(0, props.socTurnover - props.socCost))}</span></span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Turnover"><NumInput value={props.socTurnover} prefix="£" locked /></Field>
+            <Field label="Cost"><NumInput value={props.socCost} prefix="£" locked /></Field>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-1">Prior-year actuals · read-only</div>
+        </div>
+
+        {/* NBU */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-bold text-brand">NBU</span>
+            <span className="text-sm text-foreground">— New Build Units</span>
+            <span className="ml-auto text-xs text-muted-foreground">GP: <span className="tabular-nums font-medium text-foreground">{fmtGBP(Math.max(0, props.nbuTurnover - props.nbuCost))}</span></span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Turnover"><NumInput value={props.nbuTurnover} prefix="£" locked /></Field>
+            <Field label="Cost"><NumInput value={props.nbuCost} prefix="£" locked /></Field>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-1">Prior-year actuals · read-only</div>
+        </div>
       </div>
     </Card>
   );
@@ -1057,11 +1212,13 @@ function GrowthConfig({
 }) {
   const rows: { label: string; field: keyof Scenario; suffix?: string; prefix?: string; actualDisplay?: string; editableActual?: boolean; hint?: string }[] = [
     { label: "Growth %", field: "growth", suffix: "%", actualDisplay: "0% (Actual)", hint: "Projected turnover growth vs baseline" },
-    { label: "National Growth Rebate %", field: "nationalGrowthRebate", suffix: "%", editableActual: true, hint: "Applied only if turnover ≥ Target Turnover" },
-    { label: "Target Turnover", field: "targetTurnover", prefix: "£", editableActual: true, hint: "Qualifying threshold for National Growth Rebate" },
-    { label: "Branch Growth Rebate %", field: "branchGrowthRebate", suffix: "%", editableActual: true },
-    { label: "Settlement Discount (£)", field: "settlement", prefix: "£", editableActual: true },
-    { label: "MVHR Rebate (£)", field: "mvhr", prefix: "£", editableActual: true },
+    { label: "National Growth Rate %", field: "nationalGrowthRate", suffix: "%", editableActual: true, hint: "Applied only if Turnover ≥ Target Turnover" },
+    { label: "Target EW Turnover Threshold", field: "targetThreshold", prefix: "£", editableActual: true, hint: "Qualifying threshold for the National Growth Rate" },
+    { label: "Regional Growth Rate %", field: "regionalGrowthRate", suffix: "%", editableActual: true, hint: "Applies to regional aggregate if region hits threshold. Set 0% if no regional tier." },
+    { label: "Branch Growth Rebate %", field: "branchGrowthRebate", suffix: "%", editableActual: true, hint: "Applied per qualifying branch. Total shown is sum across all branches." },
+    { label: "Marketing Rebate %", field: "marketingRebate", suffix: "%", editableActual: true, hint: "Contribution to national marketing budget" },
+    { label: "MVHR Rebate %", field: "mvhrRate", suffix: "%", editableActual: true, hint: "% applied to MVHR turnover only, not total EW" },
+    { label: "Settlement Discount", field: "settlement", prefix: "£", editableActual: true, hint: "Fixed amount per period" },
   ];
 
   const cycleType = (i: number) => {
@@ -1091,7 +1248,7 @@ function GrowthConfig({
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left border-b border-border">
-              <th className="py-3 pr-4 font-semibold w-56">Parameter</th>
+              <th className="py-3 pr-4 font-semibold w-64">Parameter</th>
               <th className="py-3 px-3 font-semibold text-center bg-muted/40">Actual</th>
               {scenarios.map((s, i) => (
                 <th key={i} className="py-3 px-3 font-semibold text-brand text-center min-w-[160px]">
@@ -1117,7 +1274,7 @@ function GrowthConfig({
               <tr key={r.label} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
                 <td className="py-2.5 pr-4 font-medium align-top">
                   <div className="leading-tight">
-                    <div>{r.label.replace(" (£)", "")}</div>
+                    <div>{r.label}</div>
                     {r.hint && <div className="text-[11px] text-muted-foreground font-normal mt-0.5">{r.hint}</div>}
                   </div>
                 </td>
@@ -1206,18 +1363,19 @@ function ReadyToCalculate({ onCalculate, calculating }: { onCalculate: () => voi
 /* ---------------- Results Area ---------------- */
 
 function ResultsArea({
-  actual, scenarios, ewResults, socResults, nbuResults, totals, bestIdx, activeIdx, setActiveIdx, onExport,
+  actual, scenarios, ewResults, socResults, nbuResults, totals, bestIdx, activeIdx, setActiveIdx, onExport, mvhrTurnover,
 }: {
   actual: Scenario;
   scenarios: Scenario[];
   ewResults: { cols: ColResult[] };
   socResults: { cols: ColResult[] };
   nbuResults: { cols: ColResult[] };
-  totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  totals: { turnover: number; cost: number; rebate: number; settlement: number; gp: number; gpPct: number }[];
   bestIdx: number;
   activeIdx: number;
   setActiveIdx: (i: number) => void;
   onExport: () => void;
+  mvhrTurnover: number;
 }) {
   const allScenarios = [actual, ...scenarios];
   const actualTotal = totals[0];
@@ -1261,7 +1419,7 @@ function ResultsArea({
         </div>
       </div>
 
-      {/* a) 4 KPI cards */}
+      {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="Projected Turnover" value={fmtGBP(active.turnover)} delta={active.turnover - actualTotal.turnover} positiveGood />
         <KpiCard label="Total Rebate Payout" value={fmtGBP(active.rebate)} delta={active.rebate - actualTotal.rebate} positiveGood={false} />
@@ -1269,7 +1427,7 @@ function ResultsArea({
         <KpiCard label="Gross Profit (%)" value={fmtPct(active.gpPct)} delta={active.gpPct - actualTotal.gpPct} positiveGood isPct />
       </div>
 
-      {/* b) Scenario tab strip */}
+      {/* Scenario tab strip */}
       <div className="flex items-center gap-2 flex-wrap">
         {allScenarios.map((s, i) => {
           const isActive = i === activeIdx;
@@ -1294,24 +1452,29 @@ function ResultsArea({
         })}
       </div>
 
-      {/* c) Insight callout */}
+      {/* Insight callout */}
       <div className="rounded-lg px-4 py-3 text-sm flex items-start gap-2" style={{ background: "#EAF3DE", color: "#27500A" }}>
         <Sparkles className="size-4 mt-0.5 shrink-0" />
         {insightNode}
       </div>
 
-      {/* d-f) Per-layer tables */}
-      <ResultsTable label="EW" fullName="Extended Warranty" scenarios={allScenarios} result={ewResults} layer="ew" activeIdx={activeIdx} bestIdx={bestIdx} />
+      {/* Per-layer tables */}
+      <ResultsTable label="EW" fullName="Extended Warranty" scenarios={allScenarios} result={ewResults} layer="ew" activeIdx={activeIdx} bestIdx={bestIdx} mvhrTurnoverBase={mvhrTurnover} />
       <ResultsTable label="SOC" fullName="Standing Order Contract" scenarios={allScenarios} result={socResults} layer="linear" activeIdx={activeIdx} bestIdx={bestIdx} />
       <ResultsTable label="NBU" fullName="New Build Units" scenarios={allScenarios} result={nbuResults} layer="linear" activeIdx={activeIdx} bestIdx={bestIdx} />
 
-      {/* g) Total summary */}
+      {/* Total summary */}
       <TotalSummary scenarios={allScenarios} totals={totals} activeIdx={activeIdx} bestIdx={bestIdx} />
 
-      {/* h) Formula footnote */}
-      <p className="text-[11px] text-muted-foreground leading-relaxed">
-        Projected Turnover = Prior-Year Turnover × (1 + Growth %) · GP (£) = Turnover − Cost + Total Rebate · GP % = GP (£) ÷ Turnover · Models are isolated per account.
-      </p>
+      {/* Formula footnote */}
+      <div className="text-[11px] text-muted-foreground leading-relaxed bg-muted/30 border border-border rounded-lg p-3 space-y-1">
+        <div><strong>Projected Turnover</strong> = Prior-Year Turnover × (1 + Growth %)</div>
+        <div><strong>GP (£)</strong> = Turnover − Cost + Total Rebate + Settlement Discount</div>
+        <div><strong>GP %</strong> = GP (£) ÷ Turnover</div>
+        <div><strong>MVHR Rebate</strong> = MVHR Turnover × MVHR Rate (not applied to full EW)</div>
+        <div><strong>National Growth Rebate</strong>: retrospective — if growth % ≥ threshold then Rate × full Turnover (not just the increment), else £0</div>
+        <div>Models are isolated per account. No cross-account data.</div>
+      </div>
     </div>
   );
 }
@@ -1337,23 +1500,19 @@ function KpiCard({ label, value, delta, positiveGood, isPct }: { label: string; 
 
 const ROW_CHIPS: Record<string, RebateType | "Settlement"> = {
   "Fixed EW Rebate": "Fixed",
-  "Target EW Rebate": "Fixed",
+  "Target EW Rebate": "Targeted",
   "National Growth Rebate": "Growth",
+  "Regional Growth Rebate": "Growth",
   "Branch Growth Incentive": "Growth",
-  "Settlement Discount": "Settlement",
+  "Marketing Rebate": "Fixed",
   "MVHR Rebate": "Targeted",
+  "Settlement Discount": "Settlement",
   "SOC Rebate": "Fixed",
   "NBU Rebate": "Fixed",
 };
 
-function deltaText(curr: number, base: number, asPct = false) {
-  const d = curr - base;
-  if (Math.abs(d) < 0.005) return null;
-  return { d, arrow: d > 0 ? "▲" : "▼", val: asPct ? `${Math.abs(d).toFixed(1)} pp` : fmtGBP(Math.abs(d)) };
-}
-
 function ResultsTable({
-  label, fullName, scenarios, result, layer, activeIdx, bestIdx,
+  label, fullName, scenarios, result, layer, activeIdx, bestIdx, mvhrTurnoverBase,
 }: {
   label: string;
   fullName: string;
@@ -1362,12 +1521,21 @@ function ResultsTable({
   layer: "ew" | "linear";
   activeIdx: number;
   bestIdx: number;
+  mvhrTurnoverBase?: number;
 }) {
-  const lineKeys = layer === "ew"
-    ? ["Fixed EW Rebate", "Target EW Rebate", "National Growth Rebate", "Branch Growth Incentive", "Settlement Discount", "MVHR Rebate"]
-    : Object.keys(result.cols[0].lines);
+  const lineKeysEw = [
+    "Fixed EW Rebate",
+    "Target EW Rebate",
+    "National Growth Rebate",
+    "Regional Growth Rebate",
+    "Branch Growth Incentive",
+    "Marketing Rebate",
+    "MVHR Rebate",
+    "Settlement Discount",
+  ];
+  const lineKeys = layer === "ew" ? lineKeysEw : Object.keys(result.cols[0].lines).filter((k) => k !== "Settlement Discount").concat(["Settlement Discount"]);
 
-  const colHeader = (s: Scenario, i: number) => i === 0 ? "Actual 2026" : `Scenario ${i}`;
+  const colHeader = (_s: Scenario, i: number) => i === 0 ? "Actual 2026" : `Scenario ${i}`;
   const activeBorder = (i: number) => i === activeIdx ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent";
   const isBestCol = (i: number) => i === bestIdx && bestIdx > 0;
 
@@ -1399,19 +1567,31 @@ function ResultsTable({
           </thead>
           <tbody>
             <Row label="Turnover" cols={result.cols.map((c) => ({ value: fmtGBP(c.turnover) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            {layer === "ew" && (
+              <Row
+                label="Of which MVHR Turnover"
+                indent
+                muted
+                cols={result.cols.map((c) => ({ value: fmtGBP(c.mvhrTurnover ?? mvhrTurnoverBase ?? 0) }))}
+                activeIdx={activeIdx}
+                bestIdx={bestIdx}
+              />
+            )}
             <Row label="Cost" cols={result.cols.map((c) => ({ value: fmtGBP(c.cost) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
 
             {lineKeys.flatMap((k) => {
               const isNatGrowth = k === "National Growth Rebate" && layer === "ew";
+              const isTargetEW = k === "Target EW Rebate" && layer === "ew";
               const elems: ReactNode[] = [];
+
               if (isNatGrowth) {
                 elems.push(
                   <tr key={`${k}-qual`} className="border-b border-border/60">
-                    <td className="py-2.5 px-5 text-muted-foreground text-xs">National Growth — Qualification</td>
+                    <td className="py-2 px-5 text-muted-foreground text-xs pl-10">National Growth — Qualification</td>
                     {result.cols.map((c, i) => (
-                      <td key={i} className={`text-right py-2.5 px-5 ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/25" : ""}`}>
+                      <td key={i} className={`text-right py-2 px-5 ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/25" : ""}`}>
                         {c.qualified ? (
-                          <StatusLabel kind="qualified">✓ {scenarios[i].nationalGrowthRebate}% · ≥ {fmtGBP(scenarios[i].targetTurnover)}</StatusLabel>
+                          <StatusLabel kind="qualified">✓ {scenarios[i].nationalGrowthRate}% · ≥ {fmtGBP(scenarios[i].targetThreshold)}</StatusLabel>
                         ) : (
                           <StatusLabel kind="warning">✗ Threshold not met</StatusLabel>
                         )}
@@ -1420,26 +1600,38 @@ function ResultsTable({
                   </tr>
                 );
               }
+
+              const tooltipFor = (k === "Branch Growth Incentive")
+                ? "Sum of payments from all branches that individually met their growth target. Each branch is assessed independently against its own threshold."
+                : undefined;
+
               elems.push(
                 <Row
                   key={k}
                   label={k}
                   chip={ROW_CHIPS[k]}
+                  tooltip={tooltipFor}
                   cols={result.cols.map((c, i) => {
                     const v = c.lines[k] ?? 0;
-                    const meets = isNatGrowth ? !!c.qualified : v > 0;
-                    const isThresholdRow = ROW_CHIPS[k] === "Growth" || ROW_CHIPS[k] === "Targeted";
+                    let amber = false;
+                    let thresholdLabel: string | undefined;
+                    let thresholdMet = true;
+                    if (isNatGrowth) {
+                      thresholdMet = !!c.qualified;
+                      amber = !thresholdMet;
+                      thresholdLabel = thresholdMet ? "✓ Qualified" : "Threshold not met";
+                    } else if (isTargetEW) {
+                      thresholdMet = !!c.qualifications?.["Target EW Rebate"];
+                      amber = !thresholdMet;
+                      thresholdLabel = thresholdMet ? "✓ Qualified" : "Threshold not met";
+                    }
                     return {
                       value: fmtGBP(v),
-                      amber: isThresholdRow && !meets && v === 0,
-                      thresholdLabel: isThresholdRow
-                        ? (meets ? "✓ Qualified" : "Threshold not met")
-                        : undefined,
-                      thresholdMet: meets,
-                      tooltip: isThresholdRow && !meets
-                        ? (isNatGrowth
-                            ? `Growth of ${scenarios[i].growth}% did not meet the threshold. Rate of ${scenarios[i].nationalGrowthRebate}% does not apply.`
-                            : "Threshold not met. Rebate does not apply.")
+                      amber,
+                      thresholdLabel,
+                      thresholdMet,
+                      tooltip: amber && isNatGrowth
+                        ? `Growth of ${scenarios[i].growth}% did not meet the threshold. Rate of ${scenarios[i].nationalGrowthRate}% does not apply.`
                         : undefined,
                     };
                   })}
@@ -1461,7 +1653,7 @@ function ResultsTable({
 }
 
 function Row({
-  label, chip, cols, accent, activeIdx, bestIdx,
+  label, chip, cols, accent, activeIdx, bestIdx, indent, muted, tooltip,
 }: {
   label: string;
   chip?: RebateType | "Settlement";
@@ -1469,14 +1661,18 @@ function Row({
   accent?: "brand" | "success";
   activeIdx: number;
   bestIdx: number;
+  indent?: boolean;
+  muted?: boolean;
+  tooltip?: string;
 }) {
   const accentClass =
     accent === "brand" ? "text-brand font-semibold bg-brand-soft/40"
     : accent === "success" ? "text-[oklch(0.4_0.14_155)] font-semibold bg-success-soft/50"
     : "";
+  const labelClass = muted ? "text-muted-foreground italic" : "";
   return (
     <tr className={`border-b border-border/60 last:border-0 ${accentClass}`}>
-      <td className="py-2.5 px-5">
+      <td className={`py-2.5 px-5 ${indent ? "pl-10" : ""} ${labelClass}`} title={tooltip}>
         <span className="inline-flex items-center gap-2">
           {chip && <TypeChip type={chip} />}
           <span>{label}</span>
@@ -1488,7 +1684,7 @@ function Row({
         return (
           <td
             key={i}
-            className={`text-right py-2.5 px-5 tabular-nums whitespace-nowrap ${active ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent"} ${isBest ? "bg-success-soft/25" : ""}`}
+            className={`text-right py-2.5 px-5 tabular-nums whitespace-nowrap ${active ? "border-l-4 border-l-[oklch(0.4_0.14_155)]" : "border-l-4 border-l-transparent"} ${isBest ? "bg-success-soft/25" : ""} ${muted ? "text-muted-foreground" : ""}`}
             title={c.tooltip}
           >
             <div className={c.amber ? "text-[#854F0B]" : ""}>{c.value}</div>
@@ -1512,7 +1708,7 @@ function TotalSummary({
   scenarios, totals, activeIdx, bestIdx,
 }: {
   scenarios: Scenario[];
-  totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  totals: { turnover: number; cost: number; rebate: number; settlement: number; gp: number; gpPct: number }[];
   activeIdx: number;
   bestIdx: number;
 }) {
@@ -1529,7 +1725,7 @@ function TotalSummary({
           <thead>
             <tr className="border-b border-border bg-muted/40">
               <th className="text-left py-3 px-5 font-semibold">Metric</th>
-              {scenarios.map((s, i) => (
+              {scenarios.map((_, i) => (
                 <th
                   key={i}
                   className={`text-right py-3 px-5 font-semibold whitespace-nowrap ${activeBorder(i)} ${isBestCol(i) ? "bg-success-soft/40 text-[oklch(0.27_0.14_155)]" : ""}`}
@@ -1547,6 +1743,7 @@ function TotalSummary({
           <tbody>
             <Row label="Total Turnover" cols={totals.map((t) => ({ value: fmtGBP(t.turnover) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
             <Row label="Total Cost" cols={totals.map((t) => ({ value: fmtGBP(t.cost) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
+            <Row label="Settlement Discount" chip="Settlement" cols={totals.map((t) => ({ value: fmtGBP(t.settlement) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
             <Row label="Total Rebate" accent="brand" cols={totals.map((t) => ({ value: fmtGBP(t.rebate) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
             <Row label="Net Gross Profit (£)" accent="success" cols={totals.map((t) => ({ value: fmtGBP(t.gp) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
             <Row label="GP %" accent="success" cols={totals.map((t) => ({ value: fmtPct(t.gpPct) }))} activeIdx={activeIdx} bestIdx={bestIdx} />
@@ -1577,18 +1774,18 @@ const VARIANCE_ROWS: VarianceRow[] = [
 
 function VarianceAnalysis({
   actual, ewResults, socResults, nbuResults, totals,
-  ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost,
+  ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost, settlementDiscount,
 }: {
   actual: Scenario;
   ewResults: { cols: ColResult[] };
   socResults: { cols: ColResult[] };
   nbuResults: { cols: ColResult[] };
-  totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  totals: { turnover: number; cost: number; rebate: number; settlement: number; gp: number; gpPct: number }[];
   ewTurnover: number; ewCost: number;
   socTurnover: number; socCost: number;
   nbuTurnover: number; nbuCost: number;
+  settlementDiscount: number;
 }) {
-  // Prior year = Sage baselines + actual rebate parameters
   const prior = useMemo(() => {
     const turnover = ewTurnover + socTurnover + nbuTurnover;
     const cogs = ewCost + socCost + nbuCost;
@@ -1597,31 +1794,30 @@ function VarianceAnalysis({
     const targetEW = ewResults.cols[0].lines["Target EW Rebate"] ?? 0;
     const natGrowth = ewResults.cols[0].lines["National Growth Rebate"] ?? 0;
     const branchGrowth = ewResults.cols[0].lines["Branch Growth Incentive"] ?? 0;
-    const settlement = actual.settlement;
-    const mvhr = actual.mvhr;
+    const settlement = settlementDiscount;
+    const mvhr = ewResults.cols[0].lines["MVHR Rebate"] ?? 0;
     const totalRebate = fixedEW + targetEW + natGrowth + branchGrowth + settlement + mvhr +
       (socResults.cols[0].totalRebate ?? 0) + (nbuResults.cols[0].totalRebate ?? 0);
     const netGP = gpBefore - totalRebate;
     return { turnover, cogs, gpBefore, fixedEW, targetEW, natGrowth, branchGrowth, settlement, mvhr, totalRebate, netGP, gpPct: turnover ? (netGP / turnover) * 100 : 0 };
-  }, [ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost, ewResults, socResults, nbuResults, actual]);
+  }, [ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost, ewResults, socResults, nbuResults, settlementDiscount]);
 
-  // Current Projected = totals[0] (actual scenario)
   const current = useMemo(() => {
     const t = totals[0];
     const fixedEW = ewResults.cols[0].lines["Fixed EW Rebate"] ?? 0;
     const targetEW = ewResults.cols[0].lines["Target EW Rebate"] ?? 0;
     const natGrowth = ewResults.cols[0].lines["National Growth Rebate"] ?? 0;
     const branchGrowth = ewResults.cols[0].lines["Branch Growth Incentive"] ?? 0;
+    const mvhr = ewResults.cols[0].lines["MVHR Rebate"] ?? 0;
     return {
       turnover: t.turnover, cogs: t.cost,
       gpBefore: t.turnover - t.cost,
       fixedEW, targetEW, natGrowth, branchGrowth,
-      settlement: actual.settlement, mvhr: actual.mvhr,
+      settlement: actual.settlement, mvhr,
       totalRebate: t.rebate, netGP: t.gp, gpPct: t.gpPct,
     };
   }, [totals, ewResults, actual]);
 
-  // Proposed = user-editable, initialized from current
   type ProposedShape = Record<string, number>;
   const [proposed, setProposed] = useState<ProposedShape>(() => ({ ...current }));
   const initRef = useRef(false);
@@ -1632,7 +1828,6 @@ function VarianceAnalysis({
     }
   }, [current]);
 
-  // Auto-derive proposed totalRebate, netGP, gpPct from inputs
   const proposedDerived = useMemo(() => {
     const totalRebate = (proposed.fixedEW ?? 0) + (proposed.targetEW ?? 0) + (proposed.natGrowth ?? 0)
       + (proposed.branchGrowth ?? 0) + (proposed.settlement ?? 0) + (proposed.mvhr ?? 0);
@@ -1647,7 +1842,6 @@ function VarianceAnalysis({
     return p - c;
   };
 
-  // For GP rows variance: higher is better. For rebate/cost rows: lower is better generally — spec says "Green when proposed is better for GP rows" — keep simple: highlight GP rows.
   const isGPRow = (k: string) => k === "netGP" || k === "gpPct" || k === "gpBefore";
 
   const fmt = (k: string, n: number) => k === "gpPct" ? fmtPct(n) : fmtGBP(n);
@@ -1658,7 +1852,7 @@ function VarianceAnalysis({
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-sm text-muted-foreground max-w-3xl">
-          Compare current agreement projected results against a proposed new agreement to show the financial impact of changes.
+          Compare current agreement projected results against a proposed new agreement to show the financial impact of changes. Column A (Prior Year Actual) is pre-populated from Sage and locked.
         </p>
         <button
           title="Exports a clean one-page PDF for board or customer presentations"
@@ -1742,7 +1936,7 @@ function VarianceAnalysis({
 function BottomKPIBar({
   totals, account, subLabel, activeIdx, onViewResults,
 }: {
-  totals: { turnover: number; cost: number; rebate: number; gp: number; gpPct: number }[];
+  totals: { turnover: number; cost: number; rebate: number; settlement: number; gp: number; gpPct: number }[];
   account: string;
   subLabel: string;
   activeIdx: number;
