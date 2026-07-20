@@ -28,6 +28,7 @@ import {
   Printer,
   Upload,
 } from "lucide-react";
+import { Sidebar, TopBar } from "@/components/AppShell";
 
 export const Route = createFileRoute("/")({
   head: () => ({
