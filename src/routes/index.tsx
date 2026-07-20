@@ -465,9 +465,9 @@ function RebateModeling() {
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar active={activeNav} onSelect={setActiveNav} />
+      <Sidebar activeLabel={activeNav} />
       <div className="flex-1 min-w-0 flex flex-col">
-        <TopBar search={search} onSearch={setSearch} account={account} />
+        <TopBar search={search} onSearch={setSearch} account={account} placeholder="Search accounts, programs, scenarios…" />
 
         <main className="flex-1 px-6 py-6 space-y-6 max-w-[1400px] w-full mx-auto">
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onFileChosen} />
