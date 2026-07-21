@@ -11,6 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ReportsProgramRegisterRouteImport } from './routes/reports.program-register'
+import { Route as ReportsProductPerformanceRouteImport } from './routes/reports.product-performance'
+import { Route as ReportsNewProductPurchaseRouteImport } from './routes/reports.new-product-purchase'
+import { Route as ReportsCustomRouteImport } from './routes/reports.custom'
+import { Route as ReportsAccrualSummaryRouteImport } from './routes/reports.accrual-summary'
 
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
@@ -22,31 +27,95 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportsProgramRegisterRoute = ReportsProgramRegisterRouteImport.update({
+  id: '/program-register',
+  path: '/program-register',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsProductPerformanceRoute =
+  ReportsProductPerformanceRouteImport.update({
+    id: '/product-performance',
+    path: '/product-performance',
+    getParentRoute: () => ReportsRoute,
+  } as any)
+const ReportsNewProductPurchaseRoute =
+  ReportsNewProductPurchaseRouteImport.update({
+    id: '/new-product-purchase',
+    path: '/new-product-purchase',
+    getParentRoute: () => ReportsRoute,
+  } as any)
+const ReportsCustomRoute = ReportsCustomRouteImport.update({
+  id: '/custom',
+  path: '/custom',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsAccrualSummaryRoute = ReportsAccrualSummaryRouteImport.update({
+  id: '/accrual-summary',
+  path: '/accrual-summary',
+  getParentRoute: () => ReportsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/reports': typeof ReportsRoute
+  '/reports': typeof ReportsRouteWithChildren
+  '/reports/accrual-summary': typeof ReportsAccrualSummaryRoute
+  '/reports/custom': typeof ReportsCustomRoute
+  '/reports/new-product-purchase': typeof ReportsNewProductPurchaseRoute
+  '/reports/product-performance': typeof ReportsProductPerformanceRoute
+  '/reports/program-register': typeof ReportsProgramRegisterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/reports': typeof ReportsRoute
+  '/reports': typeof ReportsRouteWithChildren
+  '/reports/accrual-summary': typeof ReportsAccrualSummaryRoute
+  '/reports/custom': typeof ReportsCustomRoute
+  '/reports/new-product-purchase': typeof ReportsNewProductPurchaseRoute
+  '/reports/product-performance': typeof ReportsProductPerformanceRoute
+  '/reports/program-register': typeof ReportsProgramRegisterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/reports': typeof ReportsRoute
+  '/reports': typeof ReportsRouteWithChildren
+  '/reports/accrual-summary': typeof ReportsAccrualSummaryRoute
+  '/reports/custom': typeof ReportsCustomRoute
+  '/reports/new-product-purchase': typeof ReportsNewProductPurchaseRoute
+  '/reports/product-performance': typeof ReportsProductPerformanceRoute
+  '/reports/program-register': typeof ReportsProgramRegisterRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/reports'
+  fullPaths:
+    | '/'
+    | '/reports'
+    | '/reports/accrual-summary'
+    | '/reports/custom'
+    | '/reports/new-product-purchase'
+    | '/reports/product-performance'
+    | '/reports/program-register'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/reports'
-  id: '__root__' | '/' | '/reports'
+  to:
+    | '/'
+    | '/reports'
+    | '/reports/accrual-summary'
+    | '/reports/custom'
+    | '/reports/new-product-purchase'
+    | '/reports/product-performance'
+    | '/reports/program-register'
+  id:
+    | '__root__'
+    | '/'
+    | '/reports'
+    | '/reports/accrual-summary'
+    | '/reports/custom'
+    | '/reports/new-product-purchase'
+    | '/reports/product-performance'
+    | '/reports/program-register'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ReportsRoute: typeof ReportsRoute
+  ReportsRoute: typeof ReportsRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -65,13 +134,77 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reports/program-register': {
+      id: '/reports/program-register'
+      path: '/program-register'
+      fullPath: '/reports/program-register'
+      preLoaderRoute: typeof ReportsProgramRegisterRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/product-performance': {
+      id: '/reports/product-performance'
+      path: '/product-performance'
+      fullPath: '/reports/product-performance'
+      preLoaderRoute: typeof ReportsProductPerformanceRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/new-product-purchase': {
+      id: '/reports/new-product-purchase'
+      path: '/new-product-purchase'
+      fullPath: '/reports/new-product-purchase'
+      preLoaderRoute: typeof ReportsNewProductPurchaseRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/custom': {
+      id: '/reports/custom'
+      path: '/custom'
+      fullPath: '/reports/custom'
+      preLoaderRoute: typeof ReportsCustomRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/accrual-summary': {
+      id: '/reports/accrual-summary'
+      path: '/accrual-summary'
+      fullPath: '/reports/accrual-summary'
+      preLoaderRoute: typeof ReportsAccrualSummaryRouteImport
+      parentRoute: typeof ReportsRoute
+    }
   }
 }
 
+interface ReportsRouteChildren {
+  ReportsAccrualSummaryRoute: typeof ReportsAccrualSummaryRoute
+  ReportsCustomRoute: typeof ReportsCustomRoute
+  ReportsNewProductPurchaseRoute: typeof ReportsNewProductPurchaseRoute
+  ReportsProductPerformanceRoute: typeof ReportsProductPerformanceRoute
+  ReportsProgramRegisterRoute: typeof ReportsProgramRegisterRoute
+}
+
+const ReportsRouteChildren: ReportsRouteChildren = {
+  ReportsAccrualSummaryRoute: ReportsAccrualSummaryRoute,
+  ReportsCustomRoute: ReportsCustomRoute,
+  ReportsNewProductPurchaseRoute: ReportsNewProductPurchaseRoute,
+  ReportsProductPerformanceRoute: ReportsProductPerformanceRoute,
+  ReportsProgramRegisterRoute: ReportsProgramRegisterRoute,
+}
+
+const ReportsRouteWithChildren =
+  ReportsRoute._addFileChildren(ReportsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ReportsRoute: ReportsRoute,
+  ReportsRoute: ReportsRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
