@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
   SlidersHorizontal,
@@ -44,6 +44,7 @@ type Report = {
   desc: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: string;
+  to?: string;
 };
 
 type Category = {
@@ -68,18 +69,21 @@ const CATEGORIES: Category[] = [
         title: "Program Register",
         desc: "Deal & agreement performance — program-level KPIs with revenue, accrued rebate, paid, and outstanding settlement by program.",
         icon: ClipboardList,
+        to: "/reports/program-register",
       },
       {
         key: "product-performance",
         title: "Product Performance Report",
         desc: "Ranked view of qty sold, eligible purchase amount, and attributed rebate per product for a selected program.",
         icon: BarChart3,
+        to: "/reports/product-performance",
       },
       {
         key: "new-product-purchase",
         title: "New Product Purchase Report",
         desc: "Identify products purchased for the first time in a period — useful for new product incentive tracking.",
         icon: Tag,
+        to: "/reports/new-product-purchase",
       },
     ],
   },
@@ -95,6 +99,7 @@ const CATEGORIES: Category[] = [
         title: "Accrual Summary by Period",
         desc: "Total revenue, eligible revenue, accrual amount and rate % per payout period and program, with per-account drill-down.",
         icon: PieChart,
+        to: "/reports/accrual-summary",
       },
       {
         key: "payout-summary",
@@ -147,6 +152,7 @@ const CATEGORIES: Category[] = [
         title: "Custom Report",
         desc: "Build your own report with flexible date ranges, account filters, and rebate program criteria.",
         icon: SlidersHorizontal,
+        to: "/reports/custom",
       },
       {
         key: "saved-views",
@@ -250,15 +256,11 @@ function ReportsPage() {
                       {cat.reports.map((r) => {
                         const Icon = r.icon;
                         const disabled = !!r.badge;
-                        return (
-                          <article
-                            key={r.key}
-                            className={`group relative bg-card border border-border rounded-2xl p-5 flex flex-col shadow-sm transition-all ${
-                              disabled
-                                ? "opacity-70"
-                                : "hover:shadow-md hover:border-brand/40 hover:-translate-y-0.5"
-                            }`}
-                          >
+                        const cardCls = `group relative bg-card border border-border rounded-2xl p-5 flex flex-col shadow-sm transition-all ${
+                          disabled ? "opacity-70" : "hover:shadow-md hover:border-brand/40 hover:-translate-y-0.5"
+                        }`;
+                        const inner = (
+                          <>
                             {r.badge && (
                               <span className="absolute top-3 right-3 text-[10px] uppercase tracking-wide font-bold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                                 {r.badge}
@@ -268,19 +270,30 @@ function ReportsPage() {
                               <Icon className="size-5" />
                             </div>
                             <h3 className="font-semibold text-base leading-tight mb-2">{r.title}</h3>
-                            <p className="text-sm text-muted-foreground leading-relaxed flex-1">
-                              {r.desc}
-                            </p>
+                            <p className="text-sm text-muted-foreground leading-relaxed flex-1">{r.desc}</p>
                             <div className="mt-5 pt-4 border-t border-border">
-                              <button
-                                type="button"
-                                disabled={disabled}
-                                className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand hover:gap-2.5 transition-all disabled:text-muted-foreground disabled:cursor-not-allowed disabled:hover:gap-1.5"
-                              >
-                                {disabled ? "Not available yet" : "View Report"}
-                                {!disabled && <ArrowRight className="size-4" />}
-                              </button>
+                              <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand group-hover:gap-2.5 transition-all">
+                                {disabled ? (
+                                  <span className="text-muted-foreground">Not available yet</span>
+                                ) : (
+                                  <>
+                                    View Report <ArrowRight className="size-4" />
+                                  </>
+                                )}
+                              </span>
                             </div>
+                          </>
+                        );
+                        if (r.to && !disabled) {
+                          return (
+                            <Link key={r.key} to={r.to} className={cardCls}>
+                              {inner}
+                            </Link>
+                          );
+                        }
+                        return (
+                          <article key={r.key} className={cardCls}>
+                            {inner}
                           </article>
                         );
                       })}
