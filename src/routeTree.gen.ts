@@ -11,11 +11,16 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ReportsSettlementStatusRouteImport } from './routes/reports.settlement-status'
+import { Route as ReportsSavedViewsRouteImport } from './routes/reports.saved-views'
 import { Route as ReportsProgramRegisterRouteImport } from './routes/reports.program-register'
 import { Route as ReportsProductPerformanceRouteImport } from './routes/reports.product-performance'
+import { Route as ReportsPayoutSummaryRouteImport } from './routes/reports.payout-summary'
 import { Route as ReportsNewProductPurchaseRouteImport } from './routes/reports.new-product-purchase'
+import { Route as ReportsMemberEligibilityRouteImport } from './routes/reports.member-eligibility'
 import { Route as ReportsCustomRouteImport } from './routes/reports.custom'
 import { Route as ReportsAccrualSummaryRouteImport } from './routes/reports.accrual-summary'
+import { Route as ReportsAccountActivityRouteImport } from './routes/reports.account-activity'
 
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
@@ -26,6 +31,16 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsSettlementStatusRoute = ReportsSettlementStatusRouteImport.update({
+  id: '/settlement-status',
+  path: '/settlement-status',
+  getParentRoute: () => ReportsRoute,
+} as any)
+const ReportsSavedViewsRoute = ReportsSavedViewsRouteImport.update({
+  id: '/saved-views',
+  path: '/saved-views',
+  getParentRoute: () => ReportsRoute,
 } as any)
 const ReportsProgramRegisterRoute = ReportsProgramRegisterRouteImport.update({
   id: '/program-register',
@@ -38,10 +53,21 @@ const ReportsProductPerformanceRoute =
     path: '/product-performance',
     getParentRoute: () => ReportsRoute,
   } as any)
+const ReportsPayoutSummaryRoute = ReportsPayoutSummaryRouteImport.update({
+  id: '/payout-summary',
+  path: '/payout-summary',
+  getParentRoute: () => ReportsRoute,
+} as any)
 const ReportsNewProductPurchaseRoute =
   ReportsNewProductPurchaseRouteImport.update({
     id: '/new-product-purchase',
     path: '/new-product-purchase',
+    getParentRoute: () => ReportsRoute,
+  } as any)
+const ReportsMemberEligibilityRoute =
+  ReportsMemberEligibilityRouteImport.update({
+    id: '/member-eligibility',
+    path: '/member-eligibility',
     getParentRoute: () => ReportsRoute,
   } as any)
 const ReportsCustomRoute = ReportsCustomRouteImport.update({
@@ -54,63 +80,98 @@ const ReportsAccrualSummaryRoute = ReportsAccrualSummaryRouteImport.update({
   path: '/accrual-summary',
   getParentRoute: () => ReportsRoute,
 } as any)
+const ReportsAccountActivityRoute = ReportsAccountActivityRouteImport.update({
+  id: '/account-activity',
+  path: '/account-activity',
+  getParentRoute: () => ReportsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/reports/account-activity': typeof ReportsAccountActivityRoute
   '/reports/accrual-summary': typeof ReportsAccrualSummaryRoute
   '/reports/custom': typeof ReportsCustomRoute
+  '/reports/member-eligibility': typeof ReportsMemberEligibilityRoute
   '/reports/new-product-purchase': typeof ReportsNewProductPurchaseRoute
+  '/reports/payout-summary': typeof ReportsPayoutSummaryRoute
   '/reports/product-performance': typeof ReportsProductPerformanceRoute
   '/reports/program-register': typeof ReportsProgramRegisterRoute
+  '/reports/saved-views': typeof ReportsSavedViewsRoute
+  '/reports/settlement-status': typeof ReportsSettlementStatusRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/reports/account-activity': typeof ReportsAccountActivityRoute
   '/reports/accrual-summary': typeof ReportsAccrualSummaryRoute
   '/reports/custom': typeof ReportsCustomRoute
+  '/reports/member-eligibility': typeof ReportsMemberEligibilityRoute
   '/reports/new-product-purchase': typeof ReportsNewProductPurchaseRoute
+  '/reports/payout-summary': typeof ReportsPayoutSummaryRoute
   '/reports/product-performance': typeof ReportsProductPerformanceRoute
   '/reports/program-register': typeof ReportsProgramRegisterRoute
+  '/reports/saved-views': typeof ReportsSavedViewsRoute
+  '/reports/settlement-status': typeof ReportsSettlementStatusRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/reports/account-activity': typeof ReportsAccountActivityRoute
   '/reports/accrual-summary': typeof ReportsAccrualSummaryRoute
   '/reports/custom': typeof ReportsCustomRoute
+  '/reports/member-eligibility': typeof ReportsMemberEligibilityRoute
   '/reports/new-product-purchase': typeof ReportsNewProductPurchaseRoute
+  '/reports/payout-summary': typeof ReportsPayoutSummaryRoute
   '/reports/product-performance': typeof ReportsProductPerformanceRoute
   '/reports/program-register': typeof ReportsProgramRegisterRoute
+  '/reports/saved-views': typeof ReportsSavedViewsRoute
+  '/reports/settlement-status': typeof ReportsSettlementStatusRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/reports'
+    | '/reports/account-activity'
     | '/reports/accrual-summary'
     | '/reports/custom'
+    | '/reports/member-eligibility'
     | '/reports/new-product-purchase'
+    | '/reports/payout-summary'
     | '/reports/product-performance'
     | '/reports/program-register'
+    | '/reports/saved-views'
+    | '/reports/settlement-status'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/reports'
+    | '/reports/account-activity'
     | '/reports/accrual-summary'
     | '/reports/custom'
+    | '/reports/member-eligibility'
     | '/reports/new-product-purchase'
+    | '/reports/payout-summary'
     | '/reports/product-performance'
     | '/reports/program-register'
+    | '/reports/saved-views'
+    | '/reports/settlement-status'
   id:
     | '__root__'
     | '/'
     | '/reports'
+    | '/reports/account-activity'
     | '/reports/accrual-summary'
     | '/reports/custom'
+    | '/reports/member-eligibility'
     | '/reports/new-product-purchase'
+    | '/reports/payout-summary'
     | '/reports/product-performance'
     | '/reports/program-register'
+    | '/reports/saved-views'
+    | '/reports/settlement-status'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -134,6 +195,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reports/settlement-status': {
+      id: '/reports/settlement-status'
+      path: '/settlement-status'
+      fullPath: '/reports/settlement-status'
+      preLoaderRoute: typeof ReportsSettlementStatusRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/saved-views': {
+      id: '/reports/saved-views'
+      path: '/saved-views'
+      fullPath: '/reports/saved-views'
+      preLoaderRoute: typeof ReportsSavedViewsRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/program-register': {
       id: '/reports/program-register'
       path: '/program-register'
@@ -148,11 +223,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsProductPerformanceRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/payout-summary': {
+      id: '/reports/payout-summary'
+      path: '/payout-summary'
+      fullPath: '/reports/payout-summary'
+      preLoaderRoute: typeof ReportsPayoutSummaryRouteImport
+      parentRoute: typeof ReportsRoute
+    }
     '/reports/new-product-purchase': {
       id: '/reports/new-product-purchase'
       path: '/new-product-purchase'
       fullPath: '/reports/new-product-purchase'
       preLoaderRoute: typeof ReportsNewProductPurchaseRouteImport
+      parentRoute: typeof ReportsRoute
+    }
+    '/reports/member-eligibility': {
+      id: '/reports/member-eligibility'
+      path: '/member-eligibility'
+      fullPath: '/reports/member-eligibility'
+      preLoaderRoute: typeof ReportsMemberEligibilityRouteImport
       parentRoute: typeof ReportsRoute
     }
     '/reports/custom': {
@@ -169,23 +258,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReportsAccrualSummaryRouteImport
       parentRoute: typeof ReportsRoute
     }
+    '/reports/account-activity': {
+      id: '/reports/account-activity'
+      path: '/account-activity'
+      fullPath: '/reports/account-activity'
+      preLoaderRoute: typeof ReportsAccountActivityRouteImport
+      parentRoute: typeof ReportsRoute
+    }
   }
 }
 
 interface ReportsRouteChildren {
+  ReportsAccountActivityRoute: typeof ReportsAccountActivityRoute
   ReportsAccrualSummaryRoute: typeof ReportsAccrualSummaryRoute
   ReportsCustomRoute: typeof ReportsCustomRoute
+  ReportsMemberEligibilityRoute: typeof ReportsMemberEligibilityRoute
   ReportsNewProductPurchaseRoute: typeof ReportsNewProductPurchaseRoute
+  ReportsPayoutSummaryRoute: typeof ReportsPayoutSummaryRoute
   ReportsProductPerformanceRoute: typeof ReportsProductPerformanceRoute
   ReportsProgramRegisterRoute: typeof ReportsProgramRegisterRoute
+  ReportsSavedViewsRoute: typeof ReportsSavedViewsRoute
+  ReportsSettlementStatusRoute: typeof ReportsSettlementStatusRoute
 }
 
 const ReportsRouteChildren: ReportsRouteChildren = {
+  ReportsAccountActivityRoute: ReportsAccountActivityRoute,
   ReportsAccrualSummaryRoute: ReportsAccrualSummaryRoute,
   ReportsCustomRoute: ReportsCustomRoute,
+  ReportsMemberEligibilityRoute: ReportsMemberEligibilityRoute,
   ReportsNewProductPurchaseRoute: ReportsNewProductPurchaseRoute,
+  ReportsPayoutSummaryRoute: ReportsPayoutSummaryRoute,
   ReportsProductPerformanceRoute: ReportsProductPerformanceRoute,
   ReportsProgramRegisterRoute: ReportsProgramRegisterRoute,
+  ReportsSavedViewsRoute: ReportsSavedViewsRoute,
+  ReportsSettlementStatusRoute: ReportsSettlementStatusRoute,
 }
 
 const ReportsRouteWithChildren =
@@ -198,13 +304,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
