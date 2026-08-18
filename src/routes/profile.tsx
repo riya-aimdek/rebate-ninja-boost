@@ -51,11 +51,14 @@ function ProfilePage() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<TabKey>("personal");
   const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const save = () => {
+    setEditing(false);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2000);
   };
+
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -86,30 +89,43 @@ function ProfilePage() {
                     Rebate Manager · EnviroVent Ltd
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <Badge tone="success" icon={ShieldCheck}>
-                      Verified account
-                    </Badge>
                     <Badge tone="brand">Admin</Badge>
                     <Badge tone="muted">Member since Jan 2024</Badge>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium hover:bg-muted transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={save}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90 transition"
-                >
-                  {saved ? <Check className="size-4" /> : null}
-                  {saved ? "Saved" : "Save changes"}
-                </button>
-              </div>
+              {tab === "personal" && (
+                <div className="flex items-center gap-2">
+                  {editing ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(false)}
+                        className="px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium hover:bg-muted transition"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={save}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90 transition"
+                      >
+                        Save changes
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90 transition"
+                    >
+                      {saved ? <Check className="size-4" /> : <Pencil className="size-4" />}
+                      {saved ? "Saved" : "Edit profile"}
+                    </button>
+                  )}
+                </div>
+              )}
+
             </div>
 
             {/* Quick facts */}
@@ -208,37 +224,7 @@ function PersonalTab() {
       </div>
 
       <div className="space-y-6">
-        <Card title="Profile completeness" desc="Complete your profile for a smoother experience.">
-          <div className="flex items-center justify-between text-sm font-semibold mb-2">
-            <span>80% complete</span>
-            <span className="text-muted-foreground font-normal">4 of 5</span>
-          </div>
-          <div className="h-2 rounded-full bg-muted overflow-hidden">
-            <div className="h-full bg-brand" style={{ width: "80%" }} />
-          </div>
-          <ul className="mt-4 space-y-2 text-sm">
-            {[
-              ["Basic information", true],
-              ["Contact details", true],
-              ["Regional preferences", true],
-              ["Two-factor authentication", true],
-              ["Profile photo", false],
-            ].map(([label, done]) => (
-              <li key={label as string} className="flex items-center gap-2">
-                <span
-                  className={`size-4 rounded-full grid place-items-center text-[10px] ${
-                    done ? "bg-success-soft text-success" : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {done ? "✓" : "•"}
-                </span>
-                <span className={done ? "text-foreground" : "text-muted-foreground"}>
-                  {label as string}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
+
 
         <Card title="Recent activity" desc="Your last actions in the platform.">
           <ul className="space-y-3 text-sm">
