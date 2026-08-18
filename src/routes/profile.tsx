@@ -208,37 +208,7 @@ function PersonalTab() {
       </div>
 
       <div className="space-y-6">
-        <Card title="Profile completeness" desc="Complete your profile for a smoother experience.">
-          <div className="flex items-center justify-between text-sm font-semibold mb-2">
-            <span>80% complete</span>
-            <span className="text-muted-foreground font-normal">4 of 5</span>
-          </div>
-          <div className="h-2 rounded-full bg-muted overflow-hidden">
-            <div className="h-full bg-brand" style={{ width: "80%" }} />
-          </div>
-          <ul className="mt-4 space-y-2 text-sm">
-            {[
-              ["Basic information", true],
-              ["Contact details", true],
-              ["Regional preferences", true],
-              ["Two-factor authentication", true],
-              ["Profile photo", false],
-            ].map(([label, done]) => (
-              <li key={label as string} className="flex items-center gap-2">
-                <span
-                  className={`size-4 rounded-full grid place-items-center text-[10px] ${
-                    done ? "bg-success-soft text-success" : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {done ? "✓" : "•"}
-                </span>
-                <span className={done ? "text-foreground" : "text-muted-foreground"}>
-                  {label as string}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
+
 
         <Card title="Recent activity" desc="Your last actions in the platform.">
           <ul className="space-y-3 text-sm">
