@@ -89,30 +89,43 @@ function ProfilePage() {
                     Rebate Manager · EnviroVent Ltd
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <Badge tone="success" icon={ShieldCheck}>
-                      Verified account
-                    </Badge>
                     <Badge tone="brand">Admin</Badge>
                     <Badge tone="muted">Member since Jan 2024</Badge>
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium hover:bg-muted transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={save}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90 transition"
-                >
-                  {saved ? <Check className="size-4" /> : null}
-                  {saved ? "Saved" : "Save changes"}
-                </button>
-              </div>
+              {tab === "personal" && (
+                <div className="flex items-center gap-2">
+                  {editing ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEditing(false)}
+                        className="px-4 py-2 rounded-lg border border-border bg-background text-sm font-medium hover:bg-muted transition"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={save}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90 transition"
+                      >
+                        Save changes
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setEditing(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90 transition"
+                    >
+                      {saved ? <Check className="size-4" /> : <Pencil className="size-4" />}
+                      {saved ? "Saved" : "Edit profile"}
+                    </button>
+                  )}
+                </div>
+              )}
+
             </div>
 
             {/* Quick facts */}
