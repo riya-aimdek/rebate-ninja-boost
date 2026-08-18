@@ -123,12 +123,13 @@ export function TopBar({
           99+
         </span>
       </button>
-      <div
-        className="size-9 rounded-full bg-gradient-to-br from-brand to-amber-500 grid place-items-center text-brand-foreground font-semibold text-sm"
-        title={account}
+      <Link
+        to="/profile"
+        className="size-9 rounded-full bg-gradient-to-br from-brand to-amber-500 grid place-items-center text-brand-foreground font-semibold text-sm hover:opacity-90 transition"
+        title={`${account} — My profile`}
       >
         {initials}
-      </div>
+      </Link>
     </header>
   );
 }
