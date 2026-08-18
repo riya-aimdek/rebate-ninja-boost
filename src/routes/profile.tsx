@@ -51,11 +51,14 @@ function ProfilePage() {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<TabKey>("personal");
   const [saved, setSaved] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const save = () => {
+    setEditing(false);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2000);
   };
+
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
