@@ -7,9 +7,9 @@ import {
   KeyRound,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   Shield,
-  ShieldCheck,
   Upload,
   User,
 } from "lucide-react";
