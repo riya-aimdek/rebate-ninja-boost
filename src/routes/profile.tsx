@@ -10,6 +10,7 @@ import {
   Pencil,
   Phone,
   Shield,
+  ShieldCheck,
   Upload,
   User,
 } from "lucide-react";
