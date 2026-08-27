@@ -7,7 +7,6 @@ import {
   KeyRound,
   Mail,
   MapPin,
-  Pencil,
   Phone,
   Shield,
   ShieldCheck,
