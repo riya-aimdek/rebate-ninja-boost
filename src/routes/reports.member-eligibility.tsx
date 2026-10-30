@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Package, Filter, Download } from "lucide-react";
-import { ReportShell, FilterBar, Field, inputCls } from "@/components/ReportShell";
+import { SearchX, X } from "lucide-react";
+import { toast } from "sonner";
+import { ReportShell, FilterBar, FilterBarEnd, Field, inputCls, usd } from "@/components/ReportShell";
+import { Btn, DataTable, EmptyState, FilterPills, StatusPill, notifySuccess, type Column, type Tone } from "@/components/pricing/kit";
+import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 export const Route = createFileRoute("/reports/member-eligibility")({
   head: () => ({
     meta: [
-      { title: "Member Eligibility · Rebate Ninja" },
+      { title: "Member eligibility · Rebate Ninja" },
       { name: "description", content: "Which program members qualify, are near threshold, or have fallen below qualifying targets." },
     ],
   }),
@@ -33,10 +36,12 @@ const ROWS: Row[] = [
   { member: "Cascade Circuits", program: "Growth Rebate 2026", target: 300000, achieved: 210000, status: "Below" },
 ];
 
-const statusStyle: Record<Status, string> = {
-  Qualified: "bg-success-soft text-success",
-  "Near threshold": "bg-warning-soft text-warning",
-  Below: "bg-destructive/10 text-destructive",
+const STATUSES: Status[] = ["Qualified", "Near threshold", "Below"];
+
+const statusTone: Record<Status, Tone> = {
+  Qualified: "success",
+  "Near threshold": "warning",
+  Below: "danger",
 };
 
 function MemberEligibilityPage() {
@@ -46,92 +51,137 @@ function MemberEligibilityPage() {
     () => ROWS.filter((r) => (status === "all" || r.status === status) && (program === "all" || r.program === program)),
     [status, program],
   );
+  const inProgram = ROWS.filter((r) => program === "all" || r.program === program);
   const counts = ROWS.reduce(
     (a, r) => ({ ...a, [r.status]: (a[r.status] ?? 0) + 1 }),
     {} as Record<string, number>,
   );
-  const fmt = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 0 })}`;
+  const fmt = (n: number) => usd(n, 0);
   const programs = Array.from(new Set(ROWS.map((r) => r.program)));
+
+  const activeCount = [program !== "all", status !== "all"].filter(Boolean).length;
+  const clearFilters = () => {
+    setProgram("all");
+    setStatus("all");
+  };
+
+  const exportCsv = () => {
+    if (filtered.length === 0) {
+      toast.error("Nothing to export", { description: "No members match the current filters. Clear filters and try again." });
+      return;
+    }
+    downloadCsv(
+      `member-eligibility-${TODAY}.csv`,
+      filtered.map((r) => ({
+        Member: r.member,
+        Program: r.program,
+        Target: r.target,
+        Achieved: r.achieved,
+        "Progress %": Math.round((r.achieved / r.target) * 100),
+        Status: r.status,
+      })),
+    );
+    notifySuccess("CSV exported", `${filtered.length} ${filtered.length === 1 ? "member" : "members"} downloaded`);
+  };
+
+  const columns: Column<Row>[] = [
+    { key: "member", header: "Member", className: "font-semibold", cell: (r) => r.member },
+    {
+      key: "program",
+      header: "Program",
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setProgram(r.program)}
+          className="text-brand font-medium hover:underline text-left"
+          aria-label={`Filter by program ${r.program}`}
+          title="Filter by this program"
+        >
+          {r.program}
+        </button>
+      ),
+    },
+    { key: "target", header: "Target", align: "right", className: "tabular-nums text-muted-foreground", cell: (r) => fmt(r.target) },
+    { key: "achieved", header: "Achieved", align: "right", className: "tabular-nums font-semibold", cell: (r) => fmt(r.achieved) },
+    {
+      key: "progress",
+      header: "Progress",
+      width: "16rem",
+      cell: (r) => {
+        const pct = Math.min((r.achieved / r.target) * 100, 130);
+        const barTone = r.status === "Qualified" ? "from-success/60 to-success" : r.status === "Near threshold" ? "from-warning/60 to-warning" : "from-destructive/60 to-destructive";
+        return (
+          <div className="flex items-center gap-3 min-w-[10rem]">
+            <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden" aria-hidden>
+              <div className={`h-full bg-gradient-to-r ${barTone} rounded-full`} style={{ width: `${Math.min(pct, 100)}%` }} />
+            </div>
+            <span className="tabular-nums text-xs text-muted-foreground w-12 text-right">
+              {pct.toFixed(0)}%<span className="sr-only"> of target</span>
+            </span>
+          </div>
+        );
+      },
+    },
+    { key: "status", header: "Status", cell: (r) => <StatusPill status={r.status} label={r.status} tone={statusTone[r.status]} /> },
+  ];
 
   return (
     <ReportShell
-      title="Member Eligibility"
-      subtitle="Which program members qualify, are near threshold, or have fallen below qualifying targets."
-      icon={Package}
-      accent="bg-info-soft text-info"
+      title="Member eligibility"
+      subtitle="Which program members qualify, are near the threshold, or have fallen below their qualifying target."
+      onExport={exportCsv}
       kpis={[
-        { label: "Total Members", value: `${ROWS.length}`, tone: "brand" },
+        { label: "Total members", value: `${ROWS.length}` },
         { label: "Qualified", value: `${counts.Qualified ?? 0}`, tone: "success" },
-        { label: "Near threshold", value: `${counts["Near threshold"] ?? 0}`, hint: "≥ 90% of target", tone: "warning" },
-        { label: "Below target", value: `${counts.Below ?? 0}`, tone: "info" },
+        { label: "Near threshold", value: `${counts["Near threshold"] ?? 0}`, hint: "90% of target or more", tone: "warning" },
+        { label: "Below target", value: `${counts.Below ?? 0}`, tone: "danger" },
       ]}
     >
       <FilterBar>
         <Field label="Program">
           <select value={program} onChange={(e) => setProgram(e.target.value)} className={inputCls}>
-            <option value="all">All Programs</option>
+            <option value="all">All programs</option>
             {programs.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </Field>
-        <Field label="Eligibility">
-          <select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className={inputCls}>
-            <option value="all">All</option>
-            <option value="Qualified">Qualified</option>
-            <option value="Near threshold">Near threshold</option>
-            <option value="Below">Below</option>
-          </select>
-        </Field>
-        <Field label="As of"><input type="date" className={inputCls} /></Field>
-        <div className="flex-1" />
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90" type="button">
-          <Filter className="size-4" /> Apply Filter
-        </button>
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted" type="button">
-          <Download className="size-4" /> Export
-        </button>
+        <FilterBarEnd>
+          <span role="status" className="text-sm text-muted-foreground">
+            Showing {filtered.length} of {ROWS.length} members
+          </span>
+          <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={activeCount === 0}>
+            Clear filters{activeCount > 0 && ` (${activeCount})`}
+          </Btn>
+        </FilterBarEnd>
       </FilterBar>
 
-      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="text-left px-5 py-3 font-semibold">Member</th>
-                <th className="text-left px-5 py-3 font-semibold">Program</th>
-                <th className="text-right px-5 py-3 font-semibold">Target</th>
-                <th className="text-right px-5 py-3 font-semibold">Achieved</th>
-                <th className="text-left px-5 py-3 font-semibold w-64">Progress</th>
-                <th className="text-left px-5 py-3 font-semibold">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map((r, i) => {
-                const pct = Math.min((r.achieved / r.target) * 100, 130);
-                const barTone = r.status === "Qualified" ? "from-success/60 to-success" : r.status === "Near threshold" ? "from-warning/60 to-warning" : "from-destructive/60 to-destructive";
-                return (
-                  <tr key={i} className="hover:bg-muted/40">
-                    <td className="px-5 py-3 font-semibold">{r.member}</td>
-                    <td className="px-5 py-3 text-brand hover:underline cursor-pointer">{r.program}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{fmt(r.target)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums font-semibold">{fmt(r.achieved)}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                          <div className={`h-full bg-gradient-to-r ${barTone} rounded-full`} style={{ width: `${Math.min(pct, 100)}%` }} />
-                        </div>
-                        <span className="tabular-nums text-xs text-muted-foreground w-12 text-right">{pct.toFixed(0)}%</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${statusStyle[r.status]}`}>{r.status}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <FilterPills<Status>
+        label="Eligibility"
+        multiple={false}
+        selected={status === "all" ? [] : [status]}
+        onChange={(next) => setStatus(next[0] ?? "all")}
+        options={STATUSES.map((s) => ({ key: s, label: s, count: inProgram.filter((r) => r.status === s).length }))}
+      />
+
+      <DataTable
+        caption="Member eligibility"
+        columns={columns}
+        rows={filtered}
+        rowKey={(r) => `${r.member}|${r.program}`}
+        numbered={false}
+        empty={
+          <EmptyState
+            icon={SearchX}
+            title="No members match these filters"
+            action={
+              <Btn variant="subtle" icon={X} onClick={clearFilters}>
+                Clear filters
+              </Btn>
+            }
+          >
+            Try a different program or eligibility status.
+          </EmptyState>
+        }
+      />
     </ReportShell>
   );
 }

@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Tag, Play, FileDown, Search } from "lucide-react";
-import { ReportShell, FilterBar, Field, inputCls } from "@/components/ReportShell";
+import { Play, SearchX, X } from "lucide-react";
+import { toast } from "sonner";
+import { ReportShell, FilterBar, FilterBarEnd, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
+import { Btn, Card, DataTable, EmptyState, SearchInput, Tag, notifySuccess, type Column } from "@/components/pricing/kit";
+import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 export const Route = createFileRoute("/reports/new-product-purchase")({
   head: () => ({
     meta: [
-      { title: "New Product Purchase Report · Rebate Ninja" },
+      { title: "New product purchases · Rebate Ninja" },
       { name: "description", content: "Products purchased in the selected range that were not purchased before that period." },
     ],
   }),
@@ -32,11 +35,30 @@ const ROWS: Row[] = [
   { account: "Account ACC-ROC-ARROW-SURAT-001", region: "West", product: "ATSAMV71 Cortex-M7 MCU", invoice: "e30a8833-ef1d-2693-d866-a247e82ad266", date: "2026-07-08", qty: 60, price: 22, total: 19925 },
 ];
 
+type Criteria = { from: string; to: string; region: string };
+const DEFAULT_CRITERIA: Criteria = { from: "2026-07-01", to: "2026-07-21", region: "all" };
+const REGIONS = ["North", "West", "South", "East"];
+
 function NewProductPurchasePage() {
-  const [generated, setGenerated] = useState(true);
+  // Draft criteria are edited in the filter bar; "Generate report" applies them.
+  const [draft, setDraft] = useState<Criteria>(DEFAULT_CRITERIA);
+  const [applied, setApplied] = useState<Criteria>(DEFAULT_CRITERIA);
+  const [generating, setGenerating] = useState(false);
+  const [touched, setTouched] = useState(false);
   const [q, setQ] = useState("");
-  const filtered = ROWS.filter(
-    (r) => !q || r.product.toLowerCase().includes(q.toLowerCase()) || r.account.toLowerCase().includes(q.toLowerCase()),
+
+  const fromError = !draft.from ? "Enter a start date to find first-time purchases" : undefined;
+  const toError = draft.from && draft.to && draft.to < draft.from ? "End date must be on or after the start date" : undefined;
+  const dirty = draft.from !== applied.from || draft.to !== applied.to || draft.region !== applied.region;
+
+  const inRange = ROWS.filter(
+    (r) =>
+      (!applied.from || r.date >= applied.from) &&
+      (!applied.to || r.date <= applied.to) &&
+      (applied.region === "all" || r.region === applied.region),
+  );
+  const filtered = inRange.filter(
+    (r) => !q || r.product.toLowerCase().includes(q.toLowerCase()) || r.account.toLowerCase().includes(q.toLowerCase()) || r.invoice.includes(q),
   );
   const totalAmount = filtered.reduce((a, r) => a + r.total, 0);
   const uniqueAccounts = new Set(filtered.map((r) => r.account)).size;
@@ -49,139 +71,195 @@ function NewProductPurchasePage() {
     }, {}),
   ).sort((a, b) => b[1] - a[1]);
   const max = Math.max(...byAccount.map(([, v]) => v), 1);
+  const topAccount = byAccount[0]?.[0];
+  const topRows = topAccount ? filtered.filter((r) => r.account === topAccount) : [];
+  const topTotal = topRows.reduce((a, r) => a + r.total, 0);
+
+  const generate = () => {
+    setTouched(true);
+    if (fromError || toError) return;
+    setGenerating(true);
+    window.setTimeout(() => {
+      setApplied(draft);
+      setGenerating(false);
+      notifySuccess("Report generated", `${fmtDate(draft.from)} to ${draft.to ? fmtDate(draft.to) : "today"}${draft.region !== "all" ? ` · ${draft.region}` : ""}`);
+    }, 400);
+  };
+
+  const isDefault = (c: Criteria) => c.from === DEFAULT_CRITERIA.from && c.to === DEFAULT_CRITERIA.to && c.region === DEFAULT_CRITERIA.region;
+  const activeCount = [applied.region !== "all", q.trim() !== ""].filter(Boolean).length;
+  const clearFilters = () => {
+    setDraft(DEFAULT_CRITERIA);
+    setApplied(DEFAULT_CRITERIA);
+    setTouched(false);
+    setQ("");
+  };
+
+  const exportCsv = () => {
+    if (filtered.length === 0) {
+      toast.error("Nothing to export", { description: "No purchases match the current criteria. Clear filters and try again." });
+      return;
+    }
+    downloadCsv(
+      `new-product-purchases-${TODAY}.csv`,
+      filtered.map((r) => ({
+        Account: r.account,
+        Region: r.region,
+        Product: r.product,
+        Invoice: r.invoice,
+        Date: r.date,
+        Qty: r.qty,
+        "Unit price": r.price,
+        Total: r.total,
+      })),
+    );
+    notifySuccess("CSV exported", `${filtered.length} ${filtered.length === 1 ? "row" : "rows"} downloaded`);
+  };
+
+  const columns: Column<Row>[] = [
+    { key: "account", header: "Account", className: "font-medium whitespace-nowrap", cell: (r) => r.account },
+    { key: "region", header: "Region", cell: (r) => <Tag tone="info">{r.region}</Tag> },
+    { key: "product", header: "Product", className: "min-w-[13rem]", cell: (r) => r.product },
+    {
+      key: "invoice",
+      header: "Invoice",
+      className: "font-mono text-xs text-muted-foreground",
+      cell: (r) => (
+        <span className="block truncate max-w-[10rem]" title={r.invoice}>
+          {r.invoice}
+        </span>
+      ),
+    },
+    { key: "date", header: "Date", className: "text-muted-foreground whitespace-nowrap", cell: (r) => fmtDate(r.date) },
+    { key: "qty", header: "Qty", align: "right", className: "tabular-nums", cell: (r) => r.qty.toLocaleString("en-GB") },
+    { key: "price", header: "Unit price", align: "right", className: "tabular-nums", cell: (r) => usd(r.price) },
+    {
+      key: "total",
+      header: "Total",
+      align: "right",
+      className: "tabular-nums font-semibold",
+      cell: (r) => usd(r.total),
+    },
+  ];
 
   return (
     <ReportShell
-      title="New Product Purchase Report"
-      subtitle="Products purchased in the selected range that were not purchased before that period — useful for new-product incentive tracking."
-      icon={Tag}
-      accent="bg-brand/10 text-brand"
+      title="New product purchases"
+      subtitle="Products bought in the selected range that the account had not bought before — use it to track new-product incentives."
+      onExport={exportCsv}
       kpis={[
-        { label: "Rows", value: `${filtered.length}`, tone: "brand" },
-        { label: "Unique Accounts", value: `${uniqueAccounts}`, tone: "info" },
-        { label: "Total New Purchase", value: `$${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, tone: "success" },
-        { label: "Distinct Products", value: `${new Set(filtered.map((r) => r.product)).size}`, tone: "warning" },
+        { label: "Purchase lines", value: `${filtered.length}` },
+        { label: "Accounts", value: `${uniqueAccounts}` },
+        { label: "Distinct products", value: `${new Set(filtered.map((r) => r.product)).size}` },
+        { label: "New purchase value", value: usd(totalAmount), tone: "success" },
       ]}
     >
       <FilterBar>
-        <Field label="From Date" hint="required">
-          <input type="date" defaultValue="2026-07-01" className={inputCls} />
+        <Field label="From date" required error={touched ? fromError : undefined}>
+          <input
+            type="date"
+            required
+            value={draft.from}
+            onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+            onBlur={() => setTouched(true)}
+            className={inputCls}
+          />
         </Field>
-        <Field label="To Date">
-          <input type="date" defaultValue="2026-07-21" className={inputCls} />
+        <Field label="To date" error={toError}>
+          <input type="date" value={draft.to} min={draft.from || undefined} onChange={(e) => setDraft({ ...draft, to: e.target.value })} className={inputCls} />
         </Field>
         <Field label="Region">
-          <select className={inputCls}>
-            <option>All Regions</option>
-            <option>North</option>
-            <option>West</option>
-            <option>South</option>
-            <option>East</option>
+          <select value={draft.region} onChange={(e) => setDraft({ ...draft, region: e.target.value })} className={inputCls}>
+            <option value="all">All regions</option>
+            {REGIONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
           </select>
         </Field>
-        <div className="flex-1" />
-        <button
-          onClick={() => setGenerated(true)}
-          type="button"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90"
-        >
-          <Play className="size-4" /> Generate Report
-        </button>
+        <FilterBarEnd>
+          {dirty && (
+            <span role="status" className="text-sm text-warning-foreground">
+              Criteria changed — generate to update
+            </span>
+          )}
+          <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={isDefault(draft) && isDefault(applied) && !q}>
+            Clear filters
+          </Btn>
+          <Btn icon={Play} onClick={generate} loading={generating}>
+            Generate report
+          </Btn>
+        </FilterBarEnd>
       </FilterBar>
 
-      {generated && (
-        <>
-          {/* Insight strip */}
-          <div className="grid gap-4 lg:grid-cols-2 mb-6">
-            <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
-              <div className="text-xs uppercase tracking-wide font-semibold text-muted-foreground mb-4">
-                Top Accounts by Purchase Amount
-              </div>
-              <div className="space-y-3">
-                {byAccount.map(([name, val]) => (
-                  <div key={name}>
-                    <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                      <span className="truncate max-w-[60%]">{name}</span>
-                      <span className="tabular-nums font-semibold text-foreground">${val.toLocaleString()}</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full bg-brand rounded-full" style={{ width: `${(val / max) * 100}%` }} />
-                    </div>
+      <div className="grid gap-6 lg:grid-cols-2 mb-6">
+        <Card title="Top accounts by purchase value">
+          {byAccount.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No purchases in the selected range.</p>
+          ) : (
+            <ul className="space-y-4">
+              {byAccount.map(([name, val]) => (
+                <li key={name}>
+                  <div className="flex justify-between gap-3 text-sm mb-1.5">
+                    <span className="truncate" title={name}>
+                      {name}
+                    </span>
+                    <span className="tabular-nums font-semibold whitespace-nowrap">{usd(val)}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-            <div className="bg-card border border-border rounded-2xl p-5 shadow-sm">
-              <div className="text-xs uppercase tracking-wide font-semibold text-muted-foreground mb-4">
-                Product Mix (Top Account)
-              </div>
-              <div className="space-y-2">
-                {ROWS.filter((r) => r.account.includes("GKA-ARROW-001")).map((r) => {
-                  const total = ROWS.filter((x) => x.account === r.account).reduce((a, x) => a + x.total, 0);
-                  const pct = (r.total / total) * 100;
-                  return (
-                    <div key={r.product} className="flex items-center gap-3">
-                      <div className="size-2.5 rounded-full bg-brand shrink-0" />
-                      <div className="text-sm flex-1 truncate">{r.product}</div>
-                      <div className="text-xs text-muted-foreground tabular-nums">{pct.toFixed(1)}%</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden" aria-hidden>
+                    <div className="h-full bg-brand rounded-full" style={{ width: `${(val / max) * 100}%` }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card title="Product mix" subtitle={topAccount ? `Top account: ${topAccount}` : undefined}>
+          {topRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No purchases in the selected range.</p>
+          ) : (
+            <ul className="space-y-3">
+              {topRows.map((r) => (
+                <li key={r.product} className="flex items-center gap-3 text-sm">
+                  <span className="size-2.5 rounded-full bg-brand shrink-0" aria-hidden />
+                  <span className="flex-1 truncate">{r.product}</span>
+                  <span className="text-muted-foreground tabular-nums">{topTotal ? ((r.total / topTotal) * 100).toFixed(1) : "0.0"}%</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
 
-          <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <input
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search products, invoices…"
-                  className={`${inputCls} pl-8 w-full`}
-                />
-              </div>
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-muted" type="button">
-                <FileDown className="size-4" /> CSV
-              </button>
-              <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-muted" type="button">
-                <FileDown className="size-4" /> PDF
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="text-left px-5 py-3 font-semibold">Account</th>
-                    <th className="text-left px-5 py-3 font-semibold">Region</th>
-                    <th className="text-left px-5 py-3 font-semibold">Product</th>
-                    <th className="text-left px-5 py-3 font-semibold">Invoice</th>
-                    <th className="text-left px-5 py-3 font-semibold">Date</th>
-                    <th className="text-right px-5 py-3 font-semibold">Qty</th>
-                    <th className="text-right px-5 py-3 font-semibold">Unit Price</th>
-                    <th className="text-right px-5 py-3 font-semibold">Total</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filtered.map((r, i) => (
-                    <tr key={i} className="hover:bg-muted/40">
-                      <td className="px-5 py-3 font-medium">{r.account}</td>
-                      <td className="px-5 py-3"><span className="inline-flex px-2 py-0.5 rounded-full text-xs bg-info-soft text-info font-semibold">{r.region}</span></td>
-                      <td className="px-5 py-3">{r.product}</td>
-                      <td className="px-5 py-3 font-mono text-xs text-muted-foreground truncate max-w-[220px]">{r.invoice}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{r.date}</td>
-                      <td className="px-5 py-3 text-right tabular-nums">{r.qty}</td>
-                      <td className="px-5 py-3 text-right tabular-nums">${r.price.toFixed(2)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums font-semibold">${r.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </>
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+        <SearchInput value={q} onChange={setQ} placeholder="Search product, account or invoice" className="w-full sm:w-96" />
+        <p role="status" className="text-sm text-muted-foreground">
+          Showing {filtered.length} of {inRange.length} purchases
+          {activeCount > 0 && ` · ${activeCount} ${activeCount === 1 ? "filter" : "filters"} active`}
+        </p>
+      </div>
+
+      <DataTable
+        caption="New product purchases"
+        columns={columns}
+        rows={filtered}
+        rowKey={(r) => `${r.invoice}|${r.product}`}
+        numbered={false}
+        empty={
+          <EmptyState
+            icon={SearchX}
+            title={q.trim() ? `No purchases match “${q.trim()}”` : "No new product purchases in this range"}
+            action={
+              <Btn variant="subtle" icon={X} onClick={clearFilters}>
+                Clear filters
+              </Btn>
+            }
+          >
+            Widen the date range, choose another region or change your search.
+          </EmptyState>
+        }
+      />
     </ReportShell>
   );
 }

@@ -1,106 +1,155 @@
-import { Link } from "@tanstack/react-router";
-import { ChevronRight, Download } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { Sidebar, TopBar } from "@/components/AppShell";
+import { Download, XCircle } from "lucide-react";
+import { Children, cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
+import { AppLayout } from "@/components/AppShell";
+import { BackLink, Btn, KpiTile, ListHeader, money, type Tone } from "@/components/pricing/kit";
 
+export type ReportKpi = {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: Tone;
+  /** Optional drill-down link (KPIs link to the filtered list where one exists). */
+  to?: string;
+  linkLabel?: string;
+};
+
+/**
+ * Frame for every report page — same Option C layout as the pricing list pages:
+ * breadcrumb → ListHeader (h1 + subtitle, actions on the right) → KPI tiles → content.
+ */
 export function ReportShell({
   title,
   subtitle,
-  icon: Icon,
-  accent = "bg-brand/10 text-brand",
   kpis,
   children,
   onExport,
+  exportLabel = "Export CSV",
+  actions,
+  search,
+  onSearch,
 }: {
   title: string;
-  subtitle?: string;
-  icon: React.ComponentType<{ className?: string }>;
+  subtitle?: ReactNode;
+  /** @deprecated kept so existing call sites compile; the header no longer shows an icon chip. */
+  icon?: React.ComponentType<{ className?: string }>;
+  /** @deprecated see `icon`. */
   accent?: string;
-  kpis?: Array<{ label: string; value: string; hint?: string; tone?: "brand" | "success" | "info" | "warning" }>;
+  kpis?: ReportKpi[];
   children: ReactNode;
   onExport?: () => void;
+  exportLabel?: string;
+  /** Extra header actions, shown left of Export. */
+  actions?: ReactNode;
+  /** Optional header search (ListHeader pattern). */
+  search?: string;
+  onSearch?: (v: string) => void;
 }) {
-  const [search, setSearch] = useState("");
-  const toneMap: Record<string, string> = {
-    brand: "from-brand/60 to-brand",
-    success: "from-success/60 to-success",
-    info: "from-info/60 to-info",
-    warning: "from-warning/60 to-warning",
-  };
+  const headerActions =
+    actions || onExport ? (
+      <>
+        {actions}
+        {onExport && (
+          <Btn variant="outline" icon={Download} onClick={onExport}>
+            {exportLabel}
+          </Btn>
+        )}
+      </>
+    ) : undefined;
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <Sidebar activeLabel="Reports" />
-      <div className="flex-1 min-w-0 flex flex-col">
-        <TopBar search={search} onSearch={setSearch} placeholder={`Search in ${title}…`} />
-        <main className="flex-1 px-6 py-6 max-w-[1400px] w-full mx-auto">
-          {/* Breadcrumb */}
-          <nav className="flex items-center gap-1.5 text-sm text-muted-foreground mb-5">
-            <Link to="/reports" className="hover:text-brand font-medium">Reports</Link>
-            <ChevronRight className="size-3.5" />
-            <span className="text-foreground font-semibold">{title}</span>
-          </nav>
+    <AppLayout>
+      <BackLink to="/reports" label="Reports" />
+      <ListHeader title={title} subtitle={subtitle} search={search} onSearch={onSearch} actions={headerActions} />
 
-          {/* Header */}
-          <div className="bg-card border border-border rounded-2xl p-6 mb-6 flex flex-wrap items-start justify-between gap-4 shadow-sm">
-            <div className="flex items-start gap-4">
-              <div className={`size-12 rounded-xl grid place-items-center ${accent}`}>
-                <Icon className="size-6" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-                {subtitle && <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{subtitle}</p>}
-              </div>
-            </div>
-            {onExport && (
-              <button
-                onClick={onExport}
-                type="button"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90 transition"
-              >
-                <Download className="size-4" /> Export
-              </button>
-            )}
-          </div>
+      {kpis && kpis.length > 0 && (
+        <section aria-label="Key figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
+          {kpis.map((k) => (
+            <KpiTile key={k.label} label={k.label} value={k.value} hint={k.hint} tone={k.tone ?? "brand"} to={k.to} linkLabel={k.linkLabel} />
+          ))}
+        </section>
+      )}
 
-          {/* KPIs */}
-          {kpis && kpis.length > 0 && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-              {kpis.map((k) => (
-                <div key={k.label} className="relative overflow-hidden bg-card border border-border rounded-2xl p-5 shadow-sm">
-                  <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${toneMap[k.tone ?? "brand"]}`} />
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">{k.label}</div>
-                  <div className="text-2xl font-bold tracking-tight mt-2">{k.value}</div>
-                  {k.hint && <div className="text-xs text-muted-foreground mt-1">{k.hint}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {children}
-        </main>
-      </div>
-    </div>
+      {children}
+    </AppLayout>
   );
 }
 
 export function FilterBar({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-card border border-border rounded-2xl p-5 mb-6 shadow-sm">
-      <div className="flex flex-wrap items-end gap-4">{children}</div>
+    <section aria-label="Filters" className="bg-card border border-border rounded-xl p-5 mb-6 shadow-sm">
+      <div className="flex flex-wrap items-start gap-4">{children}</div>
+    </section>
+  );
+}
+
+/** Report filter field — label, hint and error are bound to its single child control. */
+export function Field({
+  label,
+  hint,
+  error,
+  required,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
+  const autoId = useId();
+  const only = Children.count(children) === 1 && isValidElement(children) ? (children as ReactElement<Record<string, unknown>>) : null;
+  const controlId = (only?.props.id as string | undefined) ?? `rf${autoId}`;
+  const msgId = `${controlId}-msg`;
+  const control = only
+    ? cloneElement(only, {
+        id: controlId,
+        "aria-invalid": error ? true : only.props["aria-invalid"],
+        "aria-required": required || only.props["aria-required"],
+        "aria-describedby": hint || error ? msgId : only.props["aria-describedby"],
+      })
+    : children;
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[160px] flex-1 basis-40 sm:max-w-[15rem]">
+      <label htmlFor={only ? controlId : undefined} className="text-sm font-medium text-foreground">
+        {label}
+        {required && (
+          <span className="text-destructive ml-0.5" aria-hidden>
+            *
+          </span>
+        )}
+      </label>
+      {control}
+      {hint && !error && (
+        <p id={msgId} className="text-xs text-muted-foreground">
+          {hint}
+        </p>
+      )}
+      {error && (
+        <p id={msgId} className="text-xs text-destructive flex items-start gap-1">
+          <XCircle className="size-3.5 shrink-0 mt-px" aria-hidden />
+          {error}
+        </p>
+      )}
     </div>
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5 min-w-[160px]">
-      <label className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">
-        {label} {hint && <span className="text-muted-foreground/70 normal-case tracking-normal font-normal">— {hint}</span>}
-      </label>
-      {children}
-    </div>
-  );
+/** Right-aligned status + actions slot at the end of a FilterBar (keeps it level with the fields). */
+export function FilterBarEnd({ children }: { children: ReactNode }) {
+  return <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:ml-auto sm:self-end">{children}</div>;
 }
 
 export const inputCls =
-  "px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition";
+  "w-full h-10 px-3 rounded-lg border border-input bg-card text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
+
+/** Report figures are in the source data's currency (USD). Deterministic en-GB grouping. */
+export const usd = (n: number, digits = 2) => money(n, "USD", digits);
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "2026-07-16" → "16 Jul 2026" (en-GB style guide; string-based so server and client match). */
+export function fmtDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return `${d} ${MONTHS[m - 1]} ${y}`;
+}

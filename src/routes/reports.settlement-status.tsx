@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { FileBarChart, Filter, Download } from "lucide-react";
-import { ReportShell, FilterBar, Field, inputCls } from "@/components/ReportShell";
+import { SearchX, X } from "lucide-react";
+import { toast } from "sonner";
+import { ReportShell, FilterBar, FilterBarEnd, Field, inputCls, usd } from "@/components/ReportShell";
+import { Btn, DataTable, EmptyState, notifySuccess, type Column } from "@/components/pricing/kit";
+import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 export const Route = createFileRoute("/reports/settlement-status")({
   head: () => ({
     meta: [
-      { title: "Settlement Status · Rebate Ninja" },
+      { title: "Settlement status · Rebate Ninja" },
       { name: "description", content: "Outstanding vs settled rebate balances by account and program, with ageing buckets." },
     ],
   }),
@@ -56,111 +59,188 @@ function SettlementStatusPage() {
     }),
     { accrued: 0, settled: 0, outstanding: 0, d0_30: 0, d31_60: 0, d61_90: 0, d90p: 0 },
   );
-  const fmt = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 0 })}`;
+  const fmt = (n: number) => usd(n, 0);
   const settledPct = t.accrued ? (t.settled / t.accrued) * 100 : 0;
   const programs = Array.from(new Set(ROWS.map((r) => r.program)));
 
+  const activeCount = [q.trim() !== "", program !== "all"].filter(Boolean).length;
+  const clearFilters = () => {
+    setQ("");
+    setProgram("all");
+  };
+
+  const exportCsv = () => {
+    if (filtered.length === 0) {
+      toast.error("Nothing to export", { description: "No balances match the current filters. Clear filters and try again." });
+      return;
+    }
+    downloadCsv(
+      `settlement-status-${TODAY}.csv`,
+      filtered.map((r) => ({
+        Account: r.account,
+        Program: r.program,
+        Accrued: r.accrued,
+        Settled: r.settled,
+        Outstanding: r.outstanding,
+        "0-30 days": r.d0_30,
+        "31-60 days": r.d31_60,
+        "61-90 days": r.d61_90,
+        "90+ days": r.d90p,
+      })),
+    );
+    notifySuccess("CSV exported", `${filtered.length} ${filtered.length === 1 ? "balance" : "balances"} downloaded`);
+  };
+
+  const columns: Column<Row>[] = [
+    { key: "account", header: "Account", className: "font-semibold", cell: (r) => r.account },
+    {
+      key: "program",
+      header: "Program",
+      cell: (r) => (
+        <button
+          type="button"
+          onClick={() => setProgram(r.program)}
+          className="text-brand font-medium hover:underline text-left"
+          aria-label={`Filter by program ${r.program}`}
+          title="Filter by this program"
+        >
+          {r.program}
+        </button>
+      ),
+    },
+    { key: "accrued", header: "Accrued", align: "right", className: "tabular-nums", cell: (r) => fmt(r.accrued) },
+    {
+      key: "settled",
+      header: "Settled",
+      align: "right",
+      cell: (r) => {
+        const pct = r.accrued ? (r.settled / r.accrued) * 100 : 0;
+        return (
+          <div className="flex items-center justify-end gap-2 tabular-nums">
+            <span className="text-success font-semibold">{fmt(r.settled)}</span>
+            <span className="text-xs text-muted-foreground w-11 text-right">
+              {pct.toFixed(0)}%<span className="sr-only"> settled</span>
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "outstanding",
+      header: "Outstanding",
+      align: "right",
+      cell: (r) => <span className={`tabular-nums font-semibold ${r.outstanding > 0 ? "text-warning-foreground" : "text-muted-foreground"}`}>{fmt(r.outstanding)}</span>,
+    },
+    { key: "d0_30", header: "0–30 days", align: "right", className: "tabular-nums text-muted-foreground", cell: (r) => fmt(r.d0_30) },
+    { key: "d31_60", header: "31–60 days", align: "right", className: "tabular-nums text-muted-foreground", cell: (r) => fmt(r.d31_60) },
+    { key: "d61_90", header: "61–90 days", align: "right", className: "tabular-nums text-muted-foreground", cell: (r) => fmt(r.d61_90) },
+    {
+      key: "d90p",
+      header: "90+ days",
+      align: "right",
+      cell: (r) => <span className={`tabular-nums font-semibold ${r.d90p > 0 ? "text-destructive" : "text-muted-foreground"}`}>{fmt(r.d90p)}</span>,
+    },
+  ];
+
   return (
     <ReportShell
-      title="Settlement Status"
-      subtitle="Outstanding vs settled rebate balances by account and program, with ageing buckets."
-      icon={FileBarChart}
-      accent="bg-info-soft text-info"
+      title="Settlement status"
+      subtitle="Outstanding and settled rebate balances by account and program, with ageing buckets."
+      onExport={exportCsv}
       kpis={[
-        { label: "Total Accrued", value: fmt(t.accrued), tone: "info" },
+        { label: "Total accrued", value: fmt(t.accrued) },
         { label: "Settled", value: fmt(t.settled), hint: `${settledPct.toFixed(1)}% of accrued`, tone: "success" },
         { label: "Outstanding", value: fmt(t.outstanding), tone: "warning" },
-        { label: "Aged 90+ days", value: fmt(t.d90p), hint: "Attention needed", tone: "brand" },
+        { label: "Aged 90+ days", value: fmt(t.d90p), hint: t.d90p > 0 ? "Follow up with these accounts" : "Nothing overdue", tone: t.d90p > 0 ? "danger" : "success" },
       ]}
     >
       <FilterBar>
         <Field label="Program">
           <select value={program} onChange={(e) => setProgram(e.target.value)} className={inputCls}>
-            <option value="all">All Programs</option>
+            <option value="all">All programs</option>
             {programs.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </Field>
         <Field label="Account">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search account…" className={inputCls} />
+          <input
+            type="search"
+            data-page-search
+            aria-keyshortcuts="/"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Account name"
+            className={inputCls}
+          />
         </Field>
-        <Field label="As of"><input type="date" className={inputCls} /></Field>
-        <div className="flex-1" />
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand text-brand-foreground font-semibold text-sm hover:opacity-90" type="button">
-          <Filter className="size-4" /> Apply Filter
-        </button>
-        <button className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted" type="button">
-          <Download className="size-4" /> Export
-        </button>
+        <FilterBarEnd>
+          <span role="status" className="text-sm text-muted-foreground">
+            Showing {filtered.length} of {ROWS.length} balances
+          </span>
+          <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={activeCount === 0}>
+            Clear filters{activeCount > 0 && ` (${activeCount})`}
+          </Btn>
+        </FilterBarEnd>
       </FilterBar>
 
       {/* Settlement progress */}
-      <div className="bg-card border border-border rounded-2xl p-6 mb-6 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
+      <section aria-labelledby="ss-progress" className="bg-card border border-border rounded-xl px-6 py-5 mb-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
           <div>
-            <div className="text-xs uppercase tracking-wide text-muted-foreground font-semibold">Overall settlement progress</div>
-            <div className="text-lg font-bold tracking-tight mt-1">{fmt(t.settled)} settled of {fmt(t.accrued)} accrued</div>
+            <h2 id="ss-progress" className="text-lg font-semibold tracking-tight">
+              Settlement progress
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5 tabular-nums">
+              {fmt(t.settled)} settled of {fmt(t.accrued)} accrued
+            </p>
           </div>
-          <div className="text-2xl font-bold text-success">{settledPct.toFixed(1)}%</div>
+          <div className="text-2xl font-bold text-success tabular-nums">{settledPct.toFixed(1)}%</div>
         </div>
-        <div className="h-3 rounded-full bg-muted overflow-hidden">
+        <div
+          className="h-3 rounded-full bg-muted overflow-hidden"
+          role="progressbar"
+          aria-label="Settled share of accrued"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(settledPct)}
+        >
           <div className="h-full bg-gradient-to-r from-success/60 to-success" style={{ width: `${settledPct}%` }} />
         </div>
-      </div>
+      </section>
 
-      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="text-left px-5 py-3 font-semibold">Account</th>
-                <th className="text-left px-5 py-3 font-semibold">Program</th>
-                <th className="text-right px-5 py-3 font-semibold">Accrued</th>
-                <th className="text-right px-5 py-3 font-semibold">Settled</th>
-                <th className="text-right px-5 py-3 font-semibold">Outstanding</th>
-                <th className="text-right px-5 py-3 font-semibold">0–30</th>
-                <th className="text-right px-5 py-3 font-semibold">31–60</th>
-                <th className="text-right px-5 py-3 font-semibold">61–90</th>
-                <th className="text-right px-5 py-3 font-semibold">90+</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map((r, i) => {
-                const pct = r.accrued ? (r.settled / r.accrued) * 100 : 0;
-                return (
-                  <tr key={i} className="hover:bg-muted/40">
-                    <td className="px-5 py-3 font-semibold">{r.account}</td>
-                    <td className="px-5 py-3 text-brand hover:underline cursor-pointer">{r.program}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">{fmt(r.accrued)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums">
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="text-success font-semibold">{fmt(r.settled)}</span>
-                        <span className="text-xs text-muted-foreground w-11 text-right">{pct.toFixed(0)}%</span>
-                      </div>
-                    </td>
-                    <td className={`px-5 py-3 text-right tabular-nums font-semibold ${r.outstanding > 0 ? "text-warning" : "text-muted-foreground"}`}>{fmt(r.outstanding)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{fmt(r.d0_30)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{fmt(r.d31_60)}</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-muted-foreground">{fmt(r.d61_90)}</td>
-                    <td className={`px-5 py-3 text-right tabular-nums font-semibold ${r.d90p > 0 ? "text-destructive" : "text-muted-foreground"}`}>{fmt(r.d90p)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot className="bg-muted/40 font-semibold">
-              <tr>
-                <td colSpan={2} className="px-5 py-3">Totals</td>
-                <td className="px-5 py-3 text-right tabular-nums">{fmt(t.accrued)}</td>
-                <td className="px-5 py-3 text-right tabular-nums text-success">{fmt(t.settled)}</td>
-                <td className="px-5 py-3 text-right tabular-nums text-warning">{fmt(t.outstanding)}</td>
-                <td className="px-5 py-3 text-right tabular-nums">{fmt(t.d0_30)}</td>
-                <td className="px-5 py-3 text-right tabular-nums">{fmt(t.d31_60)}</td>
-                <td className="px-5 py-3 text-right tabular-nums">{fmt(t.d61_90)}</td>
-                <td className="px-5 py-3 text-right tabular-nums text-destructive">{fmt(t.d90p)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        caption="Settlement status by account and program"
+        columns={columns}
+        rows={filtered}
+        rowKey={(r) => `${r.account}|${r.program}`}
+        numbered={false}
+        empty={
+          <EmptyState
+            icon={SearchX}
+            title="No balances match these filters"
+            action={
+              <Btn variant="subtle" icon={X} onClick={clearFilters}>
+                Clear filters
+              </Btn>
+            }
+          >
+            Try a different program or account name.
+          </EmptyState>
+        }
+        footer={
+          filtered.length > 0 ? (
+            <tr>
+              <th scope="row" colSpan={2} className="px-4 py-3.5 text-left">Totals</th>
+              <td className="px-4 py-3.5 text-right tabular-nums">{fmt(t.accrued)}</td>
+              <td className="px-4 py-3.5 text-right tabular-nums text-success">{fmt(t.settled)}</td>
+              <td className="px-4 py-3.5 text-right tabular-nums text-warning-foreground">{fmt(t.outstanding)}</td>
+              <td className="px-4 py-3.5 text-right tabular-nums">{fmt(t.d0_30)}</td>
+              <td className="px-4 py-3.5 text-right tabular-nums">{fmt(t.d31_60)}</td>
+              <td className="px-4 py-3.5 text-right tabular-nums">{fmt(t.d61_90)}</td>
+              <td className="px-4 py-3.5 text-right tabular-nums text-destructive">{fmt(t.d90p)}</td>
+            </tr>
+          ) : undefined
+        }
+      />
     </ReportShell>
   );
 }

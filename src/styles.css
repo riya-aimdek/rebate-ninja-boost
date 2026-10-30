@@ -39,6 +39,14 @@
   --color-brand-soft: var(--brand-soft);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-danger-soft: var(--danger-soft);
+  --color-navy: var(--navy);
+  --color-navy-foreground: var(--navy-foreground);
 }
 
 :root {
@@ -71,6 +79,18 @@
   --success: oklch(0.55 0.14 155);
   --success-soft: oklch(0.95 0.05 155);
 
+  --warning: oklch(0.7 0.16 70);
+  --warning-soft: oklch(0.96 0.06 85);
+  /* AA-contrast text colour for warnings on light/soft backgrounds */
+  --warning-foreground: oklch(0.47 0.12 60);
+  --info: oklch(0.55 0.15 250);
+  --info-soft: oklch(0.95 0.03 250);
+  --danger-soft: oklch(0.95 0.04 27);
+
+  /* Navy table headers / dark tabs (matches Rebate Ninja app) */
+  --navy: oklch(0.2 0.03 265);
+  --navy-foreground: oklch(0.99 0 0);
+
   --destructive: oklch(0.6 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
 
@@ -94,5 +114,37 @@
     color: var(--color-foreground);
     font-family: var(--font-display);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* WCAG 2.4.7 — one consistent, always-visible keyboard focus indicator */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  ::selection {
+    background: var(--color-brand-soft);
+    color: var(--color-foreground);
+  }
+
+  /* Numbers line up in tables and KPIs */
+  td,
+  th {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* WCAG 2.3.3 — respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
