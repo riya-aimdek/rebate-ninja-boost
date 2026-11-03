@@ -37,10 +37,12 @@ import {
   SEGMENT_HISTORY,
   SEGMENT_METHODS,
   VOLUME_METRICS,
+  VOLUME_UPDATES,
   type Customer,
   type Product,
   type Segment,
   type SegmentAssignment,
+  type VolumeUpdate,
 } from "@/lib/pricing/data";
 
 export const Route = createFileRoute("/pricing/segments")({
@@ -196,6 +198,7 @@ function Page() {
   const [assignSaving, setAssignSaving] = useState(false);
   const [reevaluating, setReevaluating] = useState(false);
   const [methods, setMethods] = useState<Method[]>([]);
+  const [pendingVolume, setPendingVolume] = useState<VolumeUpdate[]>(VOLUME_UPDATES);
   /** Draft next-versions of ACTIVE segments: the live version keeps assigning members until the draft is activated. */
   const [pendingDrafts, setPendingDrafts] = useState<Record<string, { form: Draft; seg: Segment }>>({});
   /** Superseded versions per segment id, newest first. */
@@ -404,10 +407,18 @@ function Page() {
     setAssignSaving(true);
     window.setTimeout(() => {
       // Close the customer's current assignment so the history keeps the prior segment and its period.
-      setHistory((h) => [
+      const nextHistory: SegmentAssignment[] = [
         { customerId: assign.customerId, segment: assign.segment, from: "2026-10-29", method: "MANUAL", reason: assign.reason, override: true },
-        ...h.map((x) => (x.customerId === assign.customerId && !x.to ? { ...x, to: "2026-10-28" } : x)),
-      ]);
+        ...history.map((x) => (x.customerId === assign.customerId && !x.to ? { ...x, to: "2026-10-28" } : x)),
+      ];
+      SEGMENT_HISTORY.splice(0, SEGMENT_HISTORY.length, ...nextHistory);
+      setHistory(nextHistory);
+      // The override sticks: re-evaluation skips customers with a manual override.
+      const c = CUSTOMERS.find((x) => x.id === assign.customerId);
+      if (c) {
+        c.segment = assign.segment;
+        c.segmentOverride = { reason: assign.reason, by: ME, at: NOW };
+      }
       setAssignSaving(false);
       setAssignOpen(false);
       setAssign({ customerId: "", segment: "", reason: "" });
@@ -433,12 +444,60 @@ function Page() {
     toast.success(`${v} added to segment list`);
   };
 
+  /**
+   * Re-evaluates customers whose attributes changed since the last run (US-ST-02 AC#4).
+   * Only rule-based assignments move — manual overrides and AI-derived clusters are left alone.
+   * The prior assignment is closed, so quotes priced before today keep their old segment.
+   */
   const reevaluate = () => {
     setReevaluating(true);
-    toast("Segment re-evaluation started", { description: "Assignments refresh in the background — history updates when it completes." });
+    toast("Segment re-evaluation started", { description: `${pendingVolume.length} changed ${pendingVolume.length === 1 ? "customer" : "customers"} to check.` });
     window.setTimeout(() => {
+      const rules = segments.filter((s) => s.kind === "CUSTOMER" && s.status === "ACTIVE" && (s.method === "VOLUME" || s.method === "ATTRIBUTE")).sort((a, b) => a.priority - b.priority);
+      const fixed = new Set(segments.filter((s) => s.kind === "CUSTOMER" && (s.method === "MANUAL" || s.method === "AI_DERIVED")).map((s) => s.name));
+      const moves: Array<{ c: Customer; from: string; to: Segment; u: (typeof pendingVolume)[number] }> = [];
+      for (const u of pendingVolume) {
+        const c = CUSTOMERS.find((x) => x.id === u.customerId);
+        if (!c) continue;
+        c.rolling12mVolume = u.to;
+        if (c.segmentOverride || fixed.has(c.segment)) continue;
+        const winner = rules.find((s) => SEEDED_MATCH[s.name]?.(c));
+        if (winner && winner.name !== c.segment) moves.push({ c, from: c.segment, to: winner, u });
+      }
+      const today = NOW.slice(0, 10);
+      const yesterday = (() => {
+        const d = new Date(`${today}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - 1);
+        return d.toISOString().slice(0, 10);
+      })();
+      moves.forEach((m) => (m.c.segment = m.to.name));
+      const nextHistory: SegmentAssignment[] = [
+        ...moves.map((m) => ({
+          customerId: m.c.id,
+          segment: m.to.name,
+          from: today,
+          method: m.to.method,
+          reason: `Rolling 12-month ${humanize(m.to.volumeMetric ?? "REVENUE").toLowerCase()} reached ${m.u.to.toLocaleString("en-GB")}${m.to.threshold ? ` (threshold ${m.to.threshold.toLocaleString("en-GB")})` : ""}. Quotes priced before ${today} keep ${m.from}.`,
+        })),
+        ...history.map((x) => (moves.some((m) => m.c.id === x.customerId) && !x.to ? { ...x, to: yesterday } : x)),
+      ];
+      const nextSegments = segments.map((s) =>
+        s.kind !== "CUSTOMER" ? s : { ...s, lastEvaluated: NOW, members: s.members + moves.filter((m) => m.to.name === s.name).length - moves.filter((m) => m.from === s.name).length },
+      );
+      // Keep the in-memory store in sync so customer pages and later visits see the result.
+      SEGMENT_HISTORY.splice(0, SEGMENT_HISTORY.length, ...nextHistory);
+      nextSegments.forEach((s) => {
+        const i = SEGMENTS.findIndex((x) => x.id === s.id);
+        if (i >= 0) SEGMENTS[i] = { ...SEGMENTS[i], members: s.members, lastEvaluated: s.lastEvaluated };
+      });
+      VOLUME_UPDATES.splice(0, VOLUME_UPDATES.length);
+      setHistory(nextHistory);
+      setSegments(nextSegments);
+      setPendingVolume([]);
       setReevaluating(false);
-      toast.success("Segment re-evaluation completed");
+      toast.success("Segment re-evaluation completed", {
+        description: moves.length ? moves.map((m) => `${m.c.name}: ${m.from} → ${m.to.name}`).join(" · ") : "No customer changed segment.",
+      });
     }, 1500);
   };
 
@@ -491,6 +550,26 @@ function Page() {
         }
       >
         Assignments are re-evaluated nightly and whenever a customer or product attribute changes. When a record matches more than one segment, the <b>lowest priority number wins</b>. Historical quotes keep the segment they were priced with.
+        {pendingVolume.length > 0 ? (
+          <div className="mt-2">
+            <span className="font-medium text-foreground">Changes waiting for re-evaluation ({pendingVolume.length}):</span>
+            <ul className="mt-1 space-y-0.5">
+              {pendingVolume.map((u) => (
+                <li key={u.customerId}>
+                  <RecordLink to="/pricing/customers/$id" params={{ id: u.customerId }}>
+                    {CUSTOMERS.find((c) => c.id === u.customerId)?.name ?? u.customerId}
+                  </RecordLink>{" "}
+                  — rolling 12-month volume <span className="tabular-nums">{u.from.toLocaleString("en-GB")} → {u.to.toLocaleString("en-GB")}</span>{" "}
+                  <span className="text-muted-foreground">
+                    ({u.source}, {u.receivedAt})
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="mt-2 text-muted-foreground">No changes waiting — all assignments are up to date.</div>
+        )}
       </InfoBanner>
 
       <FilterPills<Method>
@@ -526,7 +605,7 @@ function Page() {
             cell: (s) => (
               <button
                 type="button"
-                className="text-brand font-semibold hover:underline text-left"
+                className="hit text-brand font-semibold hover:underline text-left"
                 onClick={(e) => {
                   e.stopPropagation();
                   openEditor(s);
@@ -614,7 +693,7 @@ function Page() {
           {lists[tab].map((n) => (
             <li key={n} className="inline-flex items-center gap-1 rounded-full bg-muted pl-3 pr-1 py-1 text-sm">
               {n}
-              <button type="button" aria-label={`Remove ${n}`} onClick={() => removeListValue(n)} className="size-8 grid place-items-center rounded-full text-muted-foreground hover:text-destructive hover:bg-card">
+              <button type="button" aria-label={`Remove ${n}`} onClick={() => removeListValue(n)} className="hit size-8 grid place-items-center rounded-full text-muted-foreground hover:text-destructive hover:bg-card">
                 <X className="size-3.5" aria-hidden />
               </button>
             </li>

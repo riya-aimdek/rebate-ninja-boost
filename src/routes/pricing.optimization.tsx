@@ -106,13 +106,22 @@ function OptimizationPage() {
   }, [progress, navigate]);
 
   const columns: Column<OptRun>[] = [
-    { key: "id", header: "Run ID", className: "whitespace-nowrap", cell: (r) => <span className="font-mono text-xs">{r.id}</span> },
-    { key: "name", header: "Name", className: "min-w-[180px]", cell: (r) => <span className="font-medium">{r.name}</span> },
+    {
+      key: "name",
+      header: "Run",
+      className: "min-w-[170px]",
+      cell: (r) => (
+        <div>
+          <div className="font-medium">{r.name}</div>
+          <div className="text-xs text-muted-foreground font-mono">{r.id}</div>
+        </div>
+      ),
+    },
     {
       key: "status",
       header: "Status",
       cell: (r) => (
-        <div className="flex flex-col gap-1.5 min-w-[120px]">
+        <div className="flex flex-col items-start gap-1.5 min-w-[96px]">
           <StatusPill status={r.status} />
           {progress[r.id] !== undefined && progress[r.id] < 100 && (
             <>
@@ -126,7 +135,7 @@ function OptimizationPage() {
     {
       key: "obj",
       header: "Objective",
-      className: "min-w-[160px]",
+      className: "min-w-[140px]",
       cell: (r) => (
         <div>
           {OBJECTIVE_LABELS[r.objective]}
@@ -134,36 +143,33 @@ function OptimizationPage() {
         </div>
       ),
     },
-    { key: "scope", header: "Scope", className: "min-w-[180px]", cell: (r) => r.scope },
+    { key: "scope", header: "Scope", className: "min-w-[150px]", cell: (r) => r.scope },
     {
-      key: "recs",
-      header: "Recommendations",
-      align: "right",
-      cell: (r) =>
-        r.recommendations > 0 ? (
-          <RecordLink to="/pricing/recommendations">
-            <span className="tabular-nums">{r.recommendations.toLocaleString("en-GB")}</span>
-            <span className="sr-only"> recommendations from {r.id} — review</span>
-          </RecordLink>
-        ) : (
-          <span className="tabular-nums text-muted-foreground">0</span>
-        ),
-    },
-    { key: "conf", header: "Avg confidence", align: "right", cell: (r) => <span className="tabular-nums">{r.avgConfidence !== undefined ? r.avgConfidence.toFixed(2) : "—"}</span> },
-    {
-      key: "inputs",
-      header: "Demand inputs",
+      key: "conf",
+      header: "Results",
       align: "right",
       cell: (r) => (
-        <span className="tabular-nums text-muted-foreground" title={r.inputs.join(", ")}>
-          {r.inputs.length}/{DEMAND_INPUTS.length}
-        </span>
+        <div className="whitespace-nowrap">
+          <div className="tabular-nums">
+            {r.recommendations > 0 ? (
+              <RecordLink to="/pricing/recommendations">
+                {r.recommendations.toLocaleString("en-GB")} recommendations
+              </RecordLink>
+            ) : (
+              <span className="text-muted-foreground">No recommendations</span>
+            )}
+          </div>
+          {r.avgConfidence !== undefined && <div className="text-xs tabular-nums text-muted-foreground">Avg confidence {r.avgConfidence.toFixed(2)}</div>}
+          <div className="text-xs tabular-nums text-muted-foreground" title={r.inputs.join(", ")}>
+            {r.inputs.length}/{DEMAND_INPUTS.length} demand inputs
+          </div>
+        </div>
       ),
     },
     {
       key: "note",
       header: "Notes",
-      className: "min-w-[240px]",
+      className: "min-w-[140px] max-w-[220px]",
       cell: (r) =>
         r.note ? <Flag tone={r.status === "FAILED" ? "danger" : "warning"}>{r.note}</Flag> : <span className="text-muted-foreground">—</span>,
     },
@@ -262,6 +268,7 @@ function OptimizationPage() {
 
       {tab === "new" && (
         <NewRunForm
+          nextId={`RUN-${Math.max(0, ...runs.map((r) => Number(r.id.replace(/\D/g, "")) || 0)) + 1}`}
           onCancel={() => setTab("runs")}
           onSaved={(run, start) => {
             setRuns((r) => [run, ...r]);
@@ -305,7 +312,14 @@ function OptimizationPage() {
   );
 }
 
-function NewRunForm({ onSaved, onCancel }: { onSaved: (run: OptRun, start: boolean) => void; onCancel: () => void }) {
+/** Current local time as "YYYY-MM-DD HH:mm" — the stored format for runs. */
+function nowStamp() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (run: OptRun, start: boolean) => void; onCancel: () => void }) {
   const [name, setName] = useState("");
   const [objective, setObjective] = useState<Objective | "">("");
   const [target, setTarget] = useState("");
@@ -321,13 +335,12 @@ function NewRunForm({ onSaved, onCancel }: { onSaved: (run: OptRun, start: boole
   const targetError =
     objective === "TARGET_MARGIN" && target !== "" && !(targetNum > 0 && targetNum < 100) ? "Enter a target margin between 0 and 100%, e.g. 28." : undefined;
   /** Why "Save and run" is unavailable — shown next to the button (error prevention). */
-  const blocker = !name.trim()
-    ? "Enter a run name to continue."
-    : !objective
-      ? "Choose an objective to continue."
-      : objective === "TARGET_MARGIN" && (!target || targetError)
-        ? "Enter a valid target margin % to continue."
-        : null;
+  const todo = [
+    !objective && "choose an objective",
+    !name.trim() && "enter a run name",
+    objective === "TARGET_MARGIN" && (!target || targetError) && "enter a valid target margin %",
+  ].filter(Boolean) as string[];
+  const blocker = todo.length ? `To continue, ${todo.join(" and ")}.` : null;
 
   const save = (start: boolean) => {
     setErr(null);
@@ -350,7 +363,7 @@ function NewRunForm({ onSaved, onCancel }: { onSaved: (run: OptRun, start: boole
       setSaving(null);
       onSaved(
       {
-        id: `RUN-${35 + Math.floor(Math.random() * 60)}`,
+        id: nextId,
         name,
         objective: objective as Objective,
         targetMarginPct: objective === "TARGET_MARGIN" ? Number(target) : undefined,
@@ -360,7 +373,7 @@ function NewRunForm({ onSaved, onCancel }: { onSaved: (run: OptRun, start: boole
         recommendations: 0,
         modelVersion: "elast-gbm-3.2",
         createdBy: "Riya Shah",
-        createdAt: "2026-10-29 14:30",
+        createdAt: nowStamp(),
         note: missing.length ? `${missing.join(", ")} off — confidence reduced` : undefined,
       },
       start,
@@ -392,7 +405,15 @@ function NewRunForm({ onSaved, onCancel }: { onSaved: (run: OptRun, start: boole
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6" onKeyDown={onFormKeyDown}>
       <div className="xl:col-span-2 space-y-6">
         <ErrorBanner error={err} onClose={() => setErr(null)} />
-        <Card title="Objective" subtitle="Choose deliberately — the objective drives every recommendation in this run.">
+        <Card
+          title={
+            <>
+              Objective <span className="text-destructive" aria-hidden>*</span>
+              <span className="sr-only">(required)</span>
+            </>
+          }
+          subtitle="Choose deliberately — the objective drives every recommendation in this run."
+        >
           <div
             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
             role="radiogroup"

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, PanelRightOpen, Pencil, RefreshCw, Settings2, Sparkles, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, RefreshCw, Settings2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -188,8 +188,8 @@ function RecommendationsPage() {
 
   const startDecision = (rec: Recommendation, kind: Decision) => {
     if (rec.expired && kind !== "REJECT") {
-      toast.error("Recommendation expired", {
-        description: "This recommendation passed its expiry. Regenerate it from the latest optimization run.",
+      toast.error("RECOMMENDATION_EXPIRED", {
+        description: `${rec.id} passed its expiry and cannot be ${kind === "ACCEPT" ? "accepted" : "modified"}. Regenerate it from the latest optimization run.`,
         action: { label: "Regenerate", onClick: () => toast.success(`Regeneration queued for ${rec.id}`) },
       });
       return;
@@ -293,30 +293,28 @@ function RecommendationsPage() {
         </div>
       ),
     },
-    { key: "status", header: "Status", cell: (r) => <StatusPill status={statusOf(r)} /> },
-    { key: "cur", header: "Current", align: "right", cell: (r) => <Price value={r.currentPrice} currency={r.currency} uom={r.uom} /> },
+    // Open is the normal waiting state here, so it isn't shown in the alarm colour.
+    { key: "status", header: "Status", cell: (r) => <StatusPill status={statusOf(r)} tone={statusOf(r) === "OPEN" ? "info" : undefined} /> },
     {
-      key: "sug",
-      header: "Suggested",
-      align: "right",
-      cell: (r) => (
-        <span className="font-semibold">
-          <Price value={r.suggestedPrice} currency={r.currency} uom={r.uom} />
-        </span>
-      ),
-    },
-    {
-      key: "delta",
-      header: "Δ %",
+      key: "price",
+      header: "Current → suggested",
       align: "right",
       cell: (r) => {
         const d = ((r.suggestedPrice - r.currentPrice) / r.currentPrice) * 100;
-        return <span className={`tabular-nums font-medium ${d >= 0 ? "text-success" : "text-destructive"}`}>{pct(d)}</span>;
+        return (
+          <div className="whitespace-nowrap">
+            <span className="text-muted-foreground tabular-nums">{money(r.currentPrice, r.currency)}</span> →{" "}
+            <span className="font-semibold">
+              <Price value={r.suggestedPrice} currency={r.currency} uom={r.uom} />
+            </span>
+            <div className={`text-xs tabular-nums font-medium ${d >= 0 ? "text-success" : "text-destructive"}`}>{pct(d)}</div>
+          </div>
+        );
       },
     },
     {
       key: "impact",
-      header: <SortHead k="marginImpact" label="Expected margin impact" />,
+      header: <SortHead k="marginImpact" label="Margin impact" />,
       align: "right",
       cell: (r) => (
         <span className={`tabular-nums font-semibold ${r.marginImpact >= 0 ? "text-success" : "text-destructive"}`}>
@@ -330,50 +328,25 @@ function RecommendationsPage() {
       header: <SortHead k="confidence" label="Confidence" />,
       cell: (r) => (
         <div className="flex flex-col gap-1 items-start whitespace-nowrap">
-          <span className="tabular-nums text-sm">{r.confidence.toFixed(2)}</span>
+          <span className="flex items-center gap-2">
+            <span className="tabular-nums text-sm">{r.confidence.toFixed(2)}</span>
+            {r.method === "ML" ? <Tag tone="info">ML</Tag> : <Flag tone="warning">Rule-based</Flag>}
+          </span>
           {isLow(r) && <Flag tone="danger">Low confidence</Flag>}
         </div>
       ),
     },
     {
-      key: "method",
-      header: "Method",
-      className: "whitespace-nowrap",
-      cell: (r) => (r.method === "ML" ? <Tag tone="info">ML</Tag> : <Flag tone="warning">Rule-based</Flag>),
-    },
-    {
-      key: "exp",
-      header: "Expires",
-      className: "whitespace-nowrap",
-      cell: (r) => <span className={r.expired ? "text-destructive font-medium" : "text-muted-foreground"}>{fmtDate(r.expiresAt)}</span>,
-    },
-    {
       key: "run",
-      header: "Run · objective",
+      header: "Run",
       className: "whitespace-nowrap",
       cell: (r) => (
         <div className="text-xs">
           <RecordLink to="/pricing/optimization">{r.runId}</RecordLink>
-          <div className="text-muted-foreground">{OBJECTIVE_LABELS[r.objective]}</div>
+          <div className={r.expired ? "text-destructive font-medium" : "text-muted-foreground"}>
+            {r.expired ? "Expired" : "Expires"} {fmtDate(r.expiresAt)}
+          </div>
         </div>
-      ),
-    },
-    {
-      key: "open",
-      header: <span className="sr-only">Details</span>,
-      cell: (r) => (
-        <Btn
-          variant="ghost"
-          size="sm"
-          icon={PanelRightOpen}
-          aria-label={`Review ${r.id}: ${r.product} for ${r.customer}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(r);
-          }}
-        >
-          Review
-        </Btn>
       ),
     },
   ];
@@ -786,7 +759,7 @@ function DecisionModal({
           <Btn variant="subtle" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn variant={kind === "REJECT" ? "danger" : "primary"} onClick={submit} disabled={kind === "MODIFY" && !modified} title={kind === "MODIFY" && !modified ? "Enter a modified price first" : undefined}>
+          <Btn variant={kind === "REJECT" ? "danger" : "primary"} onClick={submit}>
             {kind === "REJECT" ? "Reject" : kind === "MODIFY" ? "Save modification" : "Accept"}
           </Btn>
         </>
@@ -822,7 +795,6 @@ function DecisionModal({
             <div className="text-sm flex flex-wrap items-center gap-2">
               Resulting margin <b className="tabular-nums">{modMargin.toFixed(1)}%</b> (floor {MARGIN_FLOOR_PCT}%)
               {breach && <Flag tone="danger">Guardrail breach — routes to approval matrix</Flag>}
-
             </div>
           )}
         </div>

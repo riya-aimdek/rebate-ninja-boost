@@ -1,6 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Check, Download, EyeOff, FilterX, Lock, PanelRightOpen, RefreshCw, RotateCcw, Wrench } from "lucide-react";
+import {
+  Check,
+  Clock,
+  Database,
+  Download,
+  EyeOff,
+  FilterX,
+  Lock,
+  Package,
+  RefreshCw,
+  RotateCcw,
+  Users,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -10,6 +24,7 @@ import {
   DataTable,
   DetailGrid,
   Drawer,
+  EmptyState,
   ErrorBanner,
   Field,
   FilterChip,
@@ -22,16 +37,35 @@ import {
   humanize,
   inputCls,
   notifyUndo,
+  toneCls,
   type ApiError,
   type Column,
+  type Tone,
 } from "@/components/pricing/kit";
-import { CUSTOMERS, DQ_LOG, DQ_STATUSES, PRODUCTS, SYNC_JOBS, type DqEntry, type DqStatus } from "@/lib/pricing/data";
+import {
+  CUSTOMERS,
+  DQ_LOG,
+  DQ_STATUSES,
+  PRODUCTS,
+  SYNC_JOBS,
+  type DqEntry,
+  type DqStatus,
+} from "@/lib/pricing/data";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 export const Route = createFileRoute("/pricing/data-quality")({
   head: () => ({ meta: [{ title: "Data quality log · Rebate Ninja" }] }),
   component: Page,
 });
+
+const JOB_TONE: Record<string, Tone> = {
+  SUCCEEDED: "success",
+  PARTIAL_SUCCESS: "warning",
+  FAILED: "danger",
+  RUNNING: "info",
+  QUEUED: "info",
+};
+const ENTITY_ICON: Record<string, LucideIcon> = { Product: Package, Customer: Users };
 
 const ENTITIES = ["Product", "Customer", "Cost", "Competitor Price"] as const;
 
@@ -107,15 +141,22 @@ function Page() {
 
   const selected = log.find((d) => d.id === selectedId) ?? null;
 
-  const update = (id: string, patch: Partial<DqEntry>) => setLog((cur) => cur.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+  const update = (id: string, patch: Partial<DqEntry>) =>
+    setLog((cur) => cur.map((d) => (d.id === id ? { ...d, ...patch } : d)));
 
   /** Restore entries to a snapshot (used by every Undo toast on this page). */
-  const restore = (snap: DqEntry[]) => setLog((cur) => cur.map((d) => snap.find((s) => s.id === d.id) ?? d));
+  const restore = (snap: DqEntry[]) =>
+    setLog((cur) => cur.map((d) => snap.find((s) => s.id === d.id) ?? d));
 
   const transition = (target: DqStatus) => {
     if (!selected) return;
     if (target === "IGNORED" && !note.trim()) {
-      setError({ errorClass: "VALIDATION", code: "VALIDATION_REQUIRED", message: "Add a resolution note explaining why this record can be ignored.", field: "resolutionNote" });
+      setError({
+        errorClass: "VALIDATION",
+        code: "VALIDATION_REQUIRED",
+        message: "Add a resolution note explaining why this record can be ignored.",
+        field: "resolutionNote",
+      });
       return;
     }
     const snap = [selected];
@@ -133,9 +174,13 @@ function Page() {
 
   const bulkAcknowledge = () => {
     const snap = [...canAck];
-    setLog((cur) => cur.map((d) => (canAck.some((x) => x.id === d.id) ? { ...d, status: "ACKNOWLEDGED" } : d)));
+    setLog((cur) =>
+      cur.map((d) => (canAck.some((x) => x.id === d.id) ? { ...d, status: "ACKNOWLEDGED" } : d)),
+    );
     setChecked(new Set());
-    notifyUndo(`${snap.length} ${snap.length === 1 ? "record" : "records"} acknowledged`, () => restore(snap));
+    notifyUndo(`${snap.length} ${snap.length === 1 ? "record" : "records"} acknowledged`, () =>
+      restore(snap),
+    );
   };
 
   const confirmBulkIgnore = () => {
@@ -144,12 +189,20 @@ function Page() {
       return;
     }
     const snap = [...canIgnore];
-    setLog((cur) => cur.map((d) => (canIgnore.some((x) => x.id === d.id) ? { ...d, status: "IGNORED", resolutionNote: bulkNote.trim() } : d)));
+    setLog((cur) =>
+      cur.map((d) =>
+        canIgnore.some((x) => x.id === d.id)
+          ? { ...d, status: "IGNORED", resolutionNote: bulkNote.trim() }
+          : d,
+      ),
+    );
     setChecked(new Set());
     setBulkIgnore(false);
     setBulkNote("");
     setBulkNoteErr(undefined);
-    notifyUndo(`${snap.length} ${snap.length === 1 ? "record" : "records"} ignored`, () => restore(snap));
+    notifyUndo(`${snap.length} ${snap.length === 1 ? "record" : "records"} ignored`, () =>
+      restore(snap),
+    );
   };
 
   const refresh = () => {
@@ -168,16 +221,25 @@ function Page() {
     setFrom("");
     setTo("");
   };
-  const dateError = from && to && from > to ? "“From” is after “To”. Choose a start date on or before the end date." : undefined;
+  const dateError =
+    from && to && from > to
+      ? "“From” is after “To”. Choose a start date on or before the end date."
+      : undefined;
 
   const reprocess = () => {
     if (!selected || selected.status !== "FIXED_AT_SOURCE" || reprocessing) return;
     setReprocessing(true);
     const id = selected.id;
     setTimeout(() => {
-      update(id, { status: "REPROCESSED", resolutionNote: note.trim() || "Re-submitted stored payload — accepted", lastSeen: `${TODAY} 14:22` });
+      update(id, {
+        status: "REPROCESSED",
+        resolutionNote: note.trim() || "Re-submitted stored payload — accepted",
+        lastSeen: `${TODAY} 14:22`,
+      });
       setReprocessing(false);
-      toast.success(`${id} reprocessed`, { description: "Stored payload re-submitted once and accepted." });
+      toast.success(`${id} reprocessed`, {
+        description: "Stored payload re-submitted once and accepted.",
+      });
     }, 900);
   };
 
@@ -248,158 +310,233 @@ function Page() {
       ),
     },
     {
-      key: "rec",
-      header: "Record",
+      key: "id",
+      header: "Entry",
       cell: (d) => (
-        <div className="flex flex-col items-start gap-1">
-          <span className="whitespace-nowrap">
-            <Tag>{d.entity}</Tag>
-          </span>
-          <span className="font-mono text-xs whitespace-nowrap">{d.sourceId}</span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openEntry(d);
+          }}
+          className="hit text-brand font-medium hover:underline whitespace-nowrap"
+          aria-label={`Review data quality entry ${d.id}: ${d.code}`}
+        >
+          {d.id}
+        </button>
+      ),
+    },
+    {
+      key: "entity",
+      header: "Entity",
+      className: "whitespace-nowrap",
+      cell: (d) => <Tag>{d.entity}</Tag>,
+    },
+    {
+      key: "src",
+      header: "Source ID",
+      cell: (d) => (
+        <div className="whitespace-nowrap">
+          <div className="font-mono text-xs">{d.sourceId}</div>
+          <div className="text-xs text-muted-foreground">{d.sourceSystem}</div>
         </div>
       ),
     },
     {
       key: "err",
       header: "Error",
-      className: "min-w-[260px] max-w-[380px]",
+      className: "min-w-[180px] max-w-[280px]",
       cell: (d) => (
         <div>
-          <div className="font-mono text-xs font-semibold text-destructive">{d.code}</div>
-          <div className="line-clamp-2 mt-0.5">{d.message}</div>
+          <div className="font-mono text-xs font-semibold">{d.code}</div>
+          <div className="line-clamp-2 mt-0.5 text-muted-foreground">{d.message}</div>
         </div>
       ),
     },
-    { key: "ts", header: "Last seen", cell: (d) => <span className="whitespace-nowrap tabular-nums text-muted-foreground">{d.lastSeen}</span> },
-    { key: "occ", header: "Occurrences", align: "center", cell: (d) => <span className="inline-grid place-items-center min-w-6 h-6 px-1.5 rounded-full bg-muted text-xs font-semibold">{d.occurrenceCount}</span> },
-    { key: "st", header: "Status", cell: (d) => <StatusPill status={d.status} /> },
-    { key: "own", header: "Owner", cell: (d) => <span className="whitespace-nowrap">{d.owner}</span> },
     {
-      key: "open",
-      header: <span className="sr-only">Details</span>,
-      cell: (d) => (
-        <Btn
-          variant="ghost"
-          size="sm"
-          icon={PanelRightOpen}
-          aria-label={`Review ${d.id}: ${d.code}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            openEntry(d);
-          }}
-        >
-          Review
-        </Btn>
-      ),
+      key: "ts",
+      header: "Last seen",
+      cell: (d) => <span className="whitespace-nowrap tabular-nums">{d.lastSeen}</span>,
+    },
+    {
+      key: "occ",
+      header: <span title="Occurrence count">Count</span>,
+      align: "right",
+      cell: (d) => <span className="tabular-nums">{d.occurrenceCount}</span>,
+    },
+    { key: "st", header: "Status", cell: (d) => <StatusPill status={d.status} /> },
+    {
+      key: "own",
+      header: "Owner",
+      className: "whitespace-nowrap",
+      cell: (d) => d.owner,
     },
   ];
 
-  const filterCount = (entity !== "all" ? 1 : 0) + (status !== "all" ? 1 : 0) + (from || to ? 1 : 0);
+  // Status has its own pill row, so the filter button counts only the panel's filters.
+  const filterCount = (entity !== "all" ? 1 : 0) + (from || to ? 1 : 0);
+  const anyFilter = filterCount > 0 || status !== "all" || q !== "";
+
+  const countOf = (s: DqStatus) => log.filter((d) => d.status === s).length;
 
   return (
-    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Administration" }, { label: "Data quality log" }]}>
+    <PricingLayout
+      crumbs={[
+        { label: "Pricing", to: "/pricing" },
+        { label: "Administration" },
+        { label: "Data quality log" },
+      ]}
+    >
       <ListHeader
+        eyebrow={
+          <>
+            Administration <span aria-hidden>›</span> Integration monitor
+          </>
+        }
         title="Data quality log"
         count={rows.length}
         noun="rejected record"
-        subtitle="Records the integrations could not load. Fix at source, then reprocess."
+        subtitle="Rejected and warned records from every integration. Fix at source, then reprocess."
         search={q}
         onSearch={setQ}
-        filterCount={(entity !== "all" ? 1 : 0) + (from || to ? 1 : 0)}
-        onFilter={() => setShowFilters((s) => !s)}
+        filterCount={filterCount}
+        onFilter={() => setShowFilters((v) => !v)}
         actions={
           <>
-            <Btn variant="outline" icon={RefreshCw} onClick={refresh} loading={refreshing}>
-              Refresh
-            </Btn>
             <Btn variant="outline" icon={Download} onClick={exportCsv} disabled={rows.length === 0}>
               Export CSV
+            </Btn>
+            <Btn variant="outline" icon={RefreshCw} onClick={refresh} loading={refreshing}>
+              Refresh
             </Btn>
           </>
         }
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
-        <h2 className="text-lg font-semibold tracking-tight">Latest sync jobs</h2>
-        <DataAsOf at={refreshedAt} />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        {SYNC_JOBS.map((j) => (
-          <div key={j.id} className="bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h3 className="font-semibold">{j.entity} sync</h3>
-                <div className="text-xs text-muted-foreground">{j.source}</div>
-              </div>
-              <StatusPill status={j.status} />
-            </div>
-            <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-              <div>
-                <div className="text-xl font-bold tabular-nums">{j.created.toLocaleString("en-GB")}</div>
-                <div className="text-xs text-muted-foreground">Created</div>
-              </div>
-              <div>
-                <div className="text-xl font-bold tabular-nums">{j.updated.toLocaleString("en-GB")}</div>
-                <div className="text-xs text-muted-foreground">Updated</div>
-              </div>
-              <div>
-                <div className={`text-xl font-bold tabular-nums ${j.failed ? "text-destructive" : ""}`}>{j.failed.toLocaleString("en-GB")}</div>
-                <div className="text-xs text-muted-foreground">Failed</div>
-              </div>
-            </div>
-            <dl className="text-xs text-muted-foreground mt-4 space-y-0.5">
-              <div className="flex justify-between gap-2">
-                <dt>Job</dt>
-                <dd className="font-mono whitespace-nowrap">{j.id}</dd>
-              </div>
-              <div className="flex justify-between gap-2">
-                <dt>Ran</dt>
-                <dd className="tabular-nums whitespace-nowrap">
-                  {j.started.slice(0, 10)}, {j.started.slice(11)}–{j.finished.slice(11)}
-                </dd>
-              </div>
-            </dl>
-            {j.failed > 0 && (
-              <div className="mt-auto pt-3">
-                <Btn variant="ghost" size="sm" className="-ml-3" onClick={() => setEntity(j.entity)}>
-                  Show {j.entity.toLowerCase()} failures
-                </Btn>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+      {/* Latest job results — created, updated and failed counts; partial success stated (US-MD-01 AC#2). */}
+      <section aria-labelledby="dq-jobs-h" className="mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
+          <h2 id="dq-jobs-h" className="text-lg font-semibold tracking-tight">
+            Latest sync jobs
+          </h2>
+          <DataAsOf at={refreshedAt} />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {SYNC_JOBS.map((j) => {
+            const tone = JOB_TONE[j.status] ?? "neutral";
+            const Icon = ENTITY_ICON[j.entity] ?? Database;
+            return (
+              <article
+                key={j.id}
+                aria-labelledby={`job-${j.id}`}
+                className="overflow-hidden bg-card border border-border rounded-xl shadow-sm flex flex-col"
+              >
+                <div className="p-5 flex flex-col gap-4 flex-1">
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`size-10 shrink-0 rounded-lg grid place-items-center ${toneCls[tone].soft} ${toneCls[tone].text}`}
+                      aria-hidden
+                    >
+                      <Icon className="size-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <h3 id={`job-${j.id}`} className="font-semibold leading-tight">
+                        {j.entity} sync
+                      </h3>
+                      <p className="text-xs text-muted-foreground truncate">{j.source}</p>
+                    </div>
+                    <StatusPill status={j.status} />
+                  </div>
 
+                  <dl className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: "Created", value: j.created, danger: false },
+                      { label: "Updated", value: j.updated, danger: false },
+                      { label: "Failed", value: j.failed, danger: j.failed > 0 },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        className={`rounded-lg px-3 py-2 ${s.danger ? "bg-danger-soft" : "bg-muted/60"}`}
+                      >
+                        <dt
+                          className={`text-xs font-medium ${s.danger ? "text-destructive" : "text-muted-foreground"}`}
+                        >
+                          {s.label}
+                        </dt>
+                        <dd
+                          className={`text-xl font-bold tabular-nums ${s.danger ? "text-destructive" : ""}`}
+                        >
+                          {s.value.toLocaleString("en-GB")}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+
+                <footer className="px-5 py-3 border-t border-border bg-muted/30 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-mono">{j.id}</span>
+                  <span className="inline-flex items-center gap-1.5 tabular-nums">
+                    <Clock className="size-3.5" aria-hidden />
+                    {j.started.slice(0, 10)}, {j.started.slice(11)}–{j.finished.slice(11)}
+                  </span>
+                </footer>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <h2 id="dq-records-h" className="text-lg font-semibold tracking-tight mb-3 scroll-mt-24">
+        Rejected records
+      </h2>
       <FilterPills<DqStatus>
         label="Status"
         multiple={false}
         selected={status === "all" ? [] : [status as DqStatus]}
         onChange={(next) => setStatus(next[0] ?? "all")}
-        options={DQ_STATUSES.map((s) => ({ key: s, label: humanize(s), count: log.filter((d) => d.status === s).length }))}
+        options={DQ_STATUSES.map((s) => ({ key: s, label: humanize(s), count: countOf(s) }))}
       />
 
-      {showFilters && (
-      <div className="bg-card border border-border rounded-xl p-4 mb-4 flex flex-wrap gap-4 items-start" role="group" aria-label="Filters">
-        <Field label="Entity" className="min-w-[180px]">
-          <select className={inputCls} value={entity} onChange={(e) => setEntity(e.target.value)}>
-            <option value="all">All entities</option>
-            {ENTITIES.map((e) => (
-              <option key={e}>{e}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="From">
-          <input type="date" className={inputCls} value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
-        </Field>
-        <Field label="To" error={dateError}>
-          <input type="date" className={inputCls} value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
-        </Field>
-      </div>
+      {(showFilters || filterCount > 0) && (
+        <div
+          className="bg-card border border-border rounded-xl p-4 mb-4 grid grid-cols-1 sm:grid-cols-3 gap-4"
+          role="group"
+          aria-label="Filters"
+        >
+          <Field label="Entity">
+            <select className={inputCls} value={entity} onChange={(e) => setEntity(e.target.value)}>
+              <option value="all">All entities</option>
+              {ENTITIES.map((e) => (
+                <option key={e}>{e}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="From">
+            <input
+              type="date"
+              className={inputCls}
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </Field>
+          <Field label="To" error={dateError}>
+            <input
+              type="date"
+              className={inputCls}
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </Field>
+        </div>
       )}
 
-      {(filterCount > 0 || q) && (
+      {filterCount > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          {entity !== "all" && <FilterChip label={`Entity: ${entity}`} onRemove={() => setEntity("all")} />}
+          {entity !== "all" && (
+            <FilterChip label={`Entity: ${entity}`} onRemove={() => setEntity("all")} />
+          )}
           {(from || to) && (
             <FilterChip
               label={`Date: ${from || "…"} → ${to || "…"}`}
@@ -416,7 +553,11 @@ function Page() {
       )}
 
       {checked.size > 0 && (
-        <div className="sticky top-20 z-10 mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-brand/40 bg-brand-soft px-4 py-3" role="region" aria-label="Bulk actions">
+        <div
+          className="sticky top-20 z-10 mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-brand/40 bg-brand-soft px-4 py-3"
+          role="region"
+          aria-label="Bulk actions"
+        >
           <span className="text-sm font-semibold" role="status">
             {checked.size} selected
           </span>
@@ -424,10 +565,20 @@ function Page() {
             Clear
           </Btn>
           <div className="flex-1" />
-          <Btn variant="subtle" icon={EyeOff} onClick={() => setBulkIgnore(true)} disabled={canIgnore.length === 0}>
+          <Btn
+            variant="subtle"
+            icon={EyeOff}
+            onClick={() => setBulkIgnore(true)}
+            disabled={canIgnore.length === 0}
+          >
             Ignore ({canIgnore.length})
           </Btn>
-          <Btn icon={Check} onClick={bulkAcknowledge} disabled={canAck.length === 0} title={canAck.length === 0 ? "Only open records can be acknowledged" : undefined}>
+          <Btn
+            icon={Check}
+            onClick={bulkAcknowledge}
+            disabled={canAck.length === 0}
+            title={canAck.length === 0 ? "Only open records can be acknowledged" : undefined}
+          >
             Acknowledge ({canAck.length})
           </Btn>
         </div>
@@ -442,14 +593,19 @@ function Page() {
         selectedKey={selectedId}
         pageSize={25}
         empty={
-          <span>
-            No rejected records match these filters.{" "}
-            {(filterCount > 0 || q) && (
-              <button type="button" className="text-brand font-semibold hover:underline" onClick={clearFilters}>
-                Clear filters
-              </button>
-            )}
-          </span>
+          <EmptyState
+            icon={Database}
+            title={q ? `No rejected records match “${q}”` : "No rejected records match these filters"}
+            action={
+              anyFilter ? (
+                <Btn variant="subtle" icon={FilterX} onClick={clearFilters}>
+                  Clear filters
+                </Btn>
+              ) : undefined
+            }
+          >
+            Try a different source ID, error code or status.
+          </EmptyState>
         }
       />
 
@@ -482,7 +638,9 @@ function Page() {
         open={!!selected}
         onClose={() => setSelectedId(null)}
         title={selected ? `${selected.code}` : ""}
-        subtitle={selected ? `${selected.id} · ${selected.entity} · ${selected.sourceSystem}` : undefined}
+        subtitle={
+          selected ? `${selected.id} · ${selected.entity} · ${selected.sourceSystem}` : undefined
+        }
         footer={
           selected && (
             <>
@@ -517,20 +675,33 @@ function Page() {
         {selected && (
           <>
             <ErrorBanner error={error} onClose={() => setError(null)} />
-            <ol className="flex flex-wrap items-center gap-2 text-sm" aria-label="Resolution workflow">
-              {(["OPEN", "ACKNOWLEDGED", "FIXED_AT_SOURCE", "REPROCESSED"] as DqStatus[]).map((s, i) => (
-                <li key={s} className="flex items-center gap-2" aria-current={selected.status === s ? "step" : undefined}>
-                  <span className={selected.status === s ? "rounded-full ring-2 ring-brand ring-offset-2" : ""}>
-                    <StatusPill status={s} />
-                  </span>
-                  {selected.status === s && <span className="sr-only">(current status)</span>}
-                  {i < 3 && (
-                    <span className="text-muted-foreground" aria-hidden>
-                      →
+            <ol
+              className="flex flex-wrap items-center gap-2 text-sm"
+              aria-label="Resolution workflow"
+            >
+              {(["OPEN", "ACKNOWLEDGED", "FIXED_AT_SOURCE", "REPROCESSED"] as DqStatus[]).map(
+                (s, i) => (
+                  <li
+                    key={s}
+                    className="flex items-center gap-2"
+                    aria-current={selected.status === s ? "step" : undefined}
+                  >
+                    <span
+                      className={
+                        selected.status === s ? "rounded-full ring-2 ring-brand ring-offset-2" : ""
+                      }
+                    >
+                      <StatusPill status={s} />
                     </span>
-                  )}
-                </li>
-              ))}
+                    {selected.status === s && <span className="sr-only">(current status)</span>}
+                    {i < 3 && (
+                      <span className="text-muted-foreground" aria-hidden>
+                        →
+                      </span>
+                    )}
+                  </li>
+                ),
+              )}
               {selected.status === "IGNORED" && (
                 <li aria-current="step">
                   <StatusPill status="IGNORED" />
@@ -542,30 +713,51 @@ function Page() {
               <DetailGrid
                 items={[
                   { label: "Entity type", value: selected.entity },
-                  { label: "Source ID", value: <span className="font-mono">{selected.sourceId}</span> },
+                  {
+                    label: "Source ID",
+                    value: <span className="font-mono">{selected.sourceId}</span>,
+                  },
                   { label: "Record in app", value: <SourceRecordLink d={selected} /> },
-                  { label: "Error code", value: <span className="font-mono text-destructive">{selected.code}</span> },
+                  {
+                    label: "Error code",
+                    value: <span className="font-mono text-destructive">{selected.code}</span>,
+                  },
                   { label: "Occurrence count", value: selected.occurrenceCount },
                   { label: "Error message", value: selected.message, full: true },
-                  { label: "First seen", value: <span className="tabular-nums">{selected.firstSeen}</span> },
-                  { label: "Last seen", value: <span className="tabular-nums">{selected.lastSeen}</span> },
+                  {
+                    label: "First seen",
+                    value: <span className="tabular-nums">{selected.firstSeen}</span>,
+                  },
+                  {
+                    label: "Last seen",
+                    value: <span className="tabular-nums">{selected.lastSeen}</span>,
+                  },
                   { label: "Job", value: selected.job },
                   { label: "Owner", value: selected.owner },
                 ]}
               />
             </Card>
-            <Card title="Stored payload" subtitle="Encrypted at rest; visible only to roles with access">
+            <Card
+              title="Stored payload"
+              subtitle="Encrypted at rest; visible only to roles with access"
+            >
               <div className="flex items-center gap-3 rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
                 <Lock className="size-5 shrink-0" aria-hidden />
                 <span>
-                  Payload masked. Your role does not have <code className="text-xs">integration.payload.read</code>. Reprocess re-submits the stored payload without exposing it.
+                  Payload masked. Your role does not have{" "}
+                  <code className="text-xs">integration.payload.read</code>. Reprocess re-submits
+                  the stored payload without exposing it.
                 </span>
               </div>
             </Card>
             <Field
               label="Resolution note"
               hint="Required when ignoring a record"
-              error={error?.field === "resolutionNote" ? "Add a note explaining why this record can be ignored." : undefined}
+              error={
+                error?.field === "resolutionNote"
+                  ? "Add a note explaining why this record can be ignored."
+                  : undefined
+              }
             >
               <textarea
                 className={`${inputCls} h-24 py-2`}

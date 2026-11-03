@@ -306,8 +306,8 @@ function Page() {
             if (!blocker) run();
           }}
         >
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-4 items-start">
-          <Field label="Customer" className="md:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-4 items-start">
+          <Field label="Customer" className="2xl:col-span-2">
             <select className={inputCls} value={ctx.customer} onChange={(e) => setCtx({ ...ctx, customer: e.target.value })}>
               {TRACE_CUSTOMERS.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -368,6 +368,8 @@ function Page() {
       </p>
 
       <div className={`grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6 mt-6 items-start ${stale ? "opacity-70" : ""}`}>
+        {/* Left: the price and its guardrail check (both about the final price). Right: how it was chosen. */}
+        <div className="space-y-6 min-w-0">
         <Card
           title="Price detail"
           subtitle={
@@ -432,7 +434,33 @@ function Page() {
           )}
         </Card>
 
-        <div className="space-y-6 min-w-0">
+        <Card title="Guardrail check" subtitle="The most specific guardrail in force on the pricing date applies.">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <Flag tone={OUTCOME[guard.outcome].tone}>{OUTCOME[guard.outcome].label}</Flag>
+            {guard.applied && (
+              <span className="text-sm">
+                <RecordLink to="/pricing/guardrails">{guard.applied.id}</RecordLink> · {humanize(guard.applied.scopeLevel)} · {guard.applied.scope} · {guard.applied.product}{" "}
+                <span className="text-muted-foreground">v{guard.applied.version}</span>
+              </span>
+            )}
+          </div>
+          {guard.applied ? (
+            guard.breaches.length > 0 ? (
+              <ul className="mt-3 list-disc pl-5 text-sm space-y-1">
+                {guard.breaches.map((b) => (
+                  <li key={b}>{b}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground mt-3">The final price meets every limit on this guardrail.</p>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground mt-3">No global, segment or customer guardrail covers this customer and product on {resultCtx.date}.</p>
+          )}
+        </Card>
+        </div>
+
+        <div className="min-w-0 xl:sticky xl:top-6">
         <Card title="Precedence used">
           <ol className="space-y-2">
             {result.precedence.order.map((t, i) => {
@@ -458,29 +486,6 @@ function Page() {
               Change order
             </Link>
           </div>
-        </Card>
-
-        <Card title="Guardrail check" subtitle="The most specific guardrail in force on the pricing date applies.">
-          <Flag tone={OUTCOME[guard.outcome].tone}>{OUTCOME[guard.outcome].label}</Flag>
-          {guard.applied ? (
-            <>
-              <p className="text-sm mt-3">
-                <RecordLink to="/pricing/guardrails">{guard.applied.id}</RecordLink> · {humanize(guard.applied.scopeLevel)} · {guard.applied.scope} · {guard.applied.product}{" "}
-                <span className="text-muted-foreground">v{guard.applied.version}</span>
-              </p>
-              {guard.breaches.length > 0 ? (
-                <ul className="mt-2 list-disc pl-5 text-sm space-y-0.5">
-                  {guard.breaches.map((b) => (
-                    <li key={b}>{b}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground mt-2">The final price meets every limit on this guardrail.</p>
-              )}
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground mt-3">No global, segment or customer guardrail covers this customer and product on {resultCtx.date}.</p>
-          )}
         </Card>
         </div>
       </div>

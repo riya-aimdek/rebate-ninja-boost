@@ -14,9 +14,9 @@ import {
   LinkBtn,
   Modal,
   PricingLayout,
+  RecordId,
   RecordLink,
   StatusPill,
-  Tag,
   humanize,
   inputCls,
   notifyUndo,
@@ -24,17 +24,16 @@ import {
 } from "@/components/pricing/kit";
 import {
   FORMULAS,
-  OPERATORS,
   REASON_CODES,
   RULES,
   RULE_ACTIONS,
-  RULE_ATTRIBUTES,
   RULE_TYPES,
   STRATEGIES,
   type Condition,
   type PricingRule,
 } from "@/lib/pricing/data";
-import { actionSummary, conditionSummary } from "@/lib/pricing/rules";
+import { actionSummary } from "@/lib/pricing/rules";
+import { ConditionBuilder, conditionError, friendlySummary } from "@/components/pricing/ConditionBuilder";
 
 export const Route = createFileRoute("/pricing/rules/$id")({
   head: () => ({ meta: [{ title: "Pricing rule · Rebate Ninja" }] }),
@@ -50,8 +49,6 @@ function parseTiers(v?: string): Tier[] {
     return m ? { from: m[1], to: m[2] ?? "", pct: m[3] } : { from: "", to: "", pct: "" };
   });
 }
-/** Operator enums arrive Title Case ("Equal To"); labels are sentence case. */
-const sentence = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
 const tiersToValue = (t: Tier[]) => t.map((x) => `${x.from}${x.to ? `–${x.to}` : "+"}: ${x.pct}%`).join(" · ");
 
 const blankRule = (): PricingRule => ({
@@ -122,9 +119,8 @@ function Editor({ id }: { id: string }) {
   const effective: PricingRule = rule.action.type === "APPLY_TIERS" ? { ...rule, action: { ...rule.action, value: tiersToValue(tiers) } } : rule;
   const dirty = JSON.stringify({ rule, tiers }) !== baseline;
 
-  const setCond = (i: number, patch: Partial<Condition>) => setRule((r) => ({ ...r, conditions: r.conditions.map((c, j) => (j === i ? { ...c, ...patch } : c)) }));
-  const nextGroup = () => Math.max(0, ...rule.conditions.map((c) => c.group ?? 0)) + 1;
-
+  const setConditions = (next: Condition[] | ((cur: Condition[]) => Condition[])) =>
+    setRule((r) => ({ ...r, conditions: typeof next === "function" ? next(r.conditions) : next }));
   /** Field errors keyed by input id — order = visual order, so the first key is focused on submit. */
   const fieldErrors = (): Record<string, string> => {
     const e: Record<string, string> = {};
@@ -133,7 +129,8 @@ function Editor({ id }: { id: string }) {
     if (!rule.effectiveFrom) e["rule-from"] = "Choose the date this rule starts.";
     if (rule.effectiveFrom && rule.effectiveTo && rule.effectiveTo < rule.effectiveFrom) e["rule-to"] = "The end date must be on or after the start date.";
     rule.conditions.forEach((c, i) => {
-      if (!c.value.trim()) e[`rule-cond-${i}`] = c.operator === "Between" ? "Enter a range, e.g. 100 … 499." : "Enter a value to match, e.g. Widget.";
+      const msg = conditionError(c);
+      if (msg) e[`rule-cond-${i}`] = msg;
     });
     if (rule.conditions.length === 0) e["rule-add-condition"] = "Add at least one condition so the rule knows when to apply.";
     if (rule.action.type === "APPLY_TIERS") {
@@ -308,18 +305,14 @@ function Editor({ id }: { id: string }) {
       <DetailTitle
         title={isNew && rule.id === "new" ? "Create pricing rule" : rule.name || "Untitled rule"}
         status={rule.status}
-        subtitle={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            {!isNew ? `${rule.id} · v${rule.version} · owner ${rule.owner} · last updated ${rule.lastUpdated}` : "Build a rule from attributes and one action. Saved as draft."}
-            {dirty && <StatusPill status="PENDING" label="Unsaved changes" />}
-          </span>
-        }
-        chips={
-          <>
-            <Tag tone="info">{humanize(rule.type)}</Tag>
-            <Tag tone="brand">{humanize(rule.strategy)}</Tag>
-          </>
-        }
+        unsaved={dirty}
+        subtitle={isNew ? "Build a rule from attributes and one action. Saved as draft." : undefined}
+        meta={isNew ? undefined : [<RecordId key="id">{rule.id}</RecordId>, versions.length > 1 ? null : `v${rule.version}`, `Owner ${rule.owner}`, `Updated ${rule.lastUpdated}`]}
+        attributes={[
+          { label: "Type", value: humanize(rule.type) },
+          { label: "Strategy", value: humanize(rule.strategy) },
+        ]}
+        versions={versions.map((v) => ({ key: v.id, version: v.version, status: v.status, to: "/pricing/rules/$id", params: { id: v.id }, current: v.id === rule.id }))}
         actions={
           <>
             {dirty ? (
@@ -364,16 +357,6 @@ function Editor({ id }: { id: string }) {
       )}
       {rule.status !== "ACTIVE" && dirty && !readOnly && <p className="text-xs text-muted-foreground -mt-2 mb-4">Save your changes before activating.</p>}
 
-      {versions.length > 1 && (
-        <nav className="flex flex-wrap items-center gap-2 mb-4 text-sm" aria-label="Rule versions">
-          <span className="text-muted-foreground">Versions:</span>
-          {versions.map((v) => (
-            <Link key={v.id} to="/pricing/rules/$id" params={{ id: v.id }} aria-current={v.id === rule.id ? "page" : undefined} className={`inline-flex items-center gap-2 px-3 py-1.5 min-h-10 rounded-full border ${v.id === rule.id ? "border-brand bg-brand-soft" : "border-border bg-card hover:bg-muted"}`}>
-              v{v.version} <StatusPill status={v.status} />
-            </Link>
-          ))}
-        </nav>
-      )}
       {original?.status === "ACTIVE" && (
         <InfoBanner title="Editing an active rule">Saving creates a new draft version with a reason code. This version stays active until the new version is activated.</InfoBanner>
       )}
@@ -424,78 +407,14 @@ function Editor({ id }: { id: string }) {
             </p>
           </Card>
 
-          <Card
-            title="Conditions"
-            subtitle="All conditions must match. Conditions in the same OR group match if any one is true."
-            actions={
-              !readOnly && (
-                <>
-                  <Btn variant="subtle" size="sm" icon={Plus} onClick={() => { const g = nextGroup(); setRule((r) => ({ ...r, conditions: [...r.conditions, { attribute: "Geography", operator: "Equal To", value: "", group: g }, { attribute: "Geography", operator: "Equal To", value: "", group: g }] })); }}>
-                    Add OR group
-                  </Btn>
-                  <Btn id="rule-add-condition" variant="outline" size="sm" icon={Plus} onClick={() => setRule((r) => ({ ...r, conditions: [...r.conditions, { attribute: "Product", operator: "Equal To", value: "" }] }))}>
-                    Add AND condition
-                  </Btn>
-                </>
-              )
-            }
-          >
-            {rule.conditions.length === 0 && (
-              <div role={fe("rule-add-condition") ? "alert" : undefined} className={`rounded-lg border border-dashed p-6 text-center text-sm ${fe("rule-add-condition") ? "border-destructive text-destructive" : "border-border text-muted-foreground"}`}>
-                No conditions yet. Add at least one so the rule knows when to apply.
-              </div>
-            )}
-            <div className="space-y-4">
-              {rule.conditions.map((c, i) => {
-                const err = fe(`rule-cond-${i}`);
-                const label = c.group ? `OR group ${c.group}` : i === 0 ? "Where" : "And";
-                return (
-                  <div key={i} className={`grid grid-cols-1 sm:grid-cols-[96px_1fr_1fr_1.3fr_40px] gap-2 items-start ${c.group ? "pl-3 border-l-4 border-info" : ""}`}>
-                    <span className="text-sm font-medium text-foreground sm:pt-3">{label}</span>
-                    <select className={inputCls} value={c.attribute} onChange={(e) => setCond(i, { attribute: e.target.value })} disabled={readOnly} aria-label={`Condition ${i + 1} attribute`}>
-                      {RULE_ATTRIBUTES.map((a) => (
-                        <option key={a}>{a}</option>
-                      ))}
-                    </select>
-                    <select className={inputCls} value={c.operator} onChange={(e) => setCond(i, { operator: e.target.value })} disabled={readOnly} aria-label={`Condition ${i + 1} operator`}>
-                      {OPERATORS.map((o) => (
-                        <option key={o} value={o}>
-                          {sentence(o)}
-                        </option>
-                      ))}
-                    </select>
-                    <div>
-                      <input
-                        id={`rule-cond-${i}`}
-                        className={inputCls}
-                        value={c.value}
-                        aria-invalid={!!err || undefined}
-                        aria-describedby={err ? `rule-cond-${i}-msg` : undefined}
-                        placeholder={c.operator === "Between" ? "e.g. 100 … 499" : c.operator.includes("In") ? "e.g. CB-2.5, CB-6.0" : "e.g. Widget"}
-                        onChange={(e) => setCond(i, { value: e.target.value })}
-                        disabled={readOnly}
-                        aria-label={`Condition ${i + 1} value`}
-                      />
-                      {err && (
-                        <p id={`rule-cond-${i}-msg`} className="text-xs text-destructive mt-1.5">
-                          {err}
-                        </p>
-                      )}
-                    </div>
-                    {!readOnly && (
-                      <button
-                        type="button"
-                        aria-label={`Remove condition ${i + 1}`}
-                        className="size-10 grid place-items-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted"
-                        onClick={() => setRule((r) => ({ ...r, conditions: r.conditions.filter((_, j) => j !== i) }))}
-                      >
-                        <Trash2 className="size-4" aria-hidden />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+          <Card title="Conditions" subtitle="Every AND condition must match. Inside an OR group, any one option is enough.">
+            <ConditionBuilder
+              conditions={rule.conditions}
+              onChange={setConditions}
+              readOnly={readOnly}
+              showErrors={submitted}
+              emptyError={fe("rule-add-condition")}
+            />
           </Card>
 
           <Card title="Action" subtitle="Exactly one action per rule.">
@@ -586,7 +505,7 @@ function Editor({ id }: { id: string }) {
         <div className="space-y-6 min-w-0">
           <Card title="Rule summary">
             <p className="text-sm leading-relaxed">
-              <b>When</b> {conditionSummary(rule.conditions)}
+              <b>When</b> {friendlySummary(rule.conditions)}
               <br />
               <b>then</b> {actionSummary(effective.action)}
               <br />
@@ -627,7 +546,7 @@ function Editor({ id }: { id: string }) {
         description={
           future
             ? `The rule will start pricing on ${rule.effectiveFrom}. Until then it stays scheduled and current prices are unchanged.`
-            : `The rule starts pricing immediately${supersedes.length ? `, and ${supersedes.map((s) => `v${s.version}`).join(", ")} will be superseded` : ""}. ${conditionSummary(rule.conditions)} → ${actionSummary(effective.action)}.`
+            : `The rule starts pricing immediately${supersedes.length ? `, and ${supersedes.map((s) => `v${s.version}`).join(", ")} will be superseded` : ""}. ${friendlySummary(rule.conditions)} → ${actionSummary(effective.action)}.`
         }
         confirmLabel={future ? "Schedule activation" : "Activate rule"}
         loading={busy === "activate"}

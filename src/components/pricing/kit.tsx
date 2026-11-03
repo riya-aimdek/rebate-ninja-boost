@@ -55,7 +55,7 @@ export function PricingLayout({ crumbs, children }: { crumbs?: Crumb[]; children
 export function BackLink({ to, label }: { to: string; label: string }) {
   return (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    <Link to={to as any} className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded">
+    <Link to={to as any} className="hit mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded">
       <ChevronLeft className="size-4" aria-hidden />
       {label}
     </Link>
@@ -78,7 +78,8 @@ const btnVariants: Record<BtnVariant, string> = {
   danger: "bg-destructive text-destructive-foreground hover:opacity-90",
   subtle: "border border-border bg-card text-foreground hover:bg-muted",
 };
-const btnSizes = { sm: "h-8 px-3 text-xs", md: "h-10 px-4", lg: "h-12 px-6 text-base" };
+// `sm` grows to 40px below lg so it stays a comfortable touch target on phones and tablets.
+const btnSizes = { sm: "h-10 lg:h-8 px-3 text-xs", md: "h-10 px-4", lg: "h-12 px-6 text-base" };
 
 export function Btn({
   variant = "primary",
@@ -119,6 +120,7 @@ export function Btn({
 export function LinkBtn({
   to,
   params,
+  search,
   variant = "primary",
   size = "md",
   icon: Icon,
@@ -127,6 +129,7 @@ export function LinkBtn({
 }: {
   to: string;
   params?: Record<string, string>;
+  search?: Record<string, string | undefined>;
   variant?: BtnVariant;
   size?: keyof typeof btnSizes;
   icon?: LucideIcon;
@@ -138,6 +141,7 @@ export function LinkBtn({
     <Link
       to={to as any}
       params={params as any}
+      search={search as any}
       className={`${btnBase} ${btnVariants[variant]} ${btnSizes[size]} ${className}`}
     >
       {Icon && <Icon className="size-4" aria-hidden />}
@@ -147,7 +151,7 @@ export function LinkBtn({
 }
 
 export const inputCls =
-  "w-full h-10 px-3 rounded-lg border border-input bg-card text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
+  "w-full h-10 px-3 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
 
 export function Field({
   label,
@@ -238,7 +242,7 @@ export function SearchInput({
         placeholder={placeholder}
         aria-label={label ?? placeholder}
         aria-keyshortcuts="/"
-        className="w-full h-10 pl-10 pr-10 rounded-lg border border-input bg-card text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand [&::-webkit-search-cancel-button]:hidden"
+        className="w-full h-10 pl-10 pr-10 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
         <button
@@ -378,8 +382,11 @@ export function ListHeader({
   noun = "item",
   nounPlural,
   subtitle,
+  eyebrow,
 }: {
   title: string;
+  /** Small section label above the title, e.g. the nav path for admin pages. */
+  eyebrow?: ReactNode;
   count?: number;
   /** Singular noun for the count line, e.g. "product" -> "248 products". */
   noun?: string;
@@ -395,6 +402,7 @@ export function ListHeader({
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 mb-6">
       <div className="min-w-0 flex-1 basis-72">
+        {eyebrow && <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{eyebrow}</p>}
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         {(count !== undefined || subtitle) && (
           <p className="text-sm text-muted-foreground mt-1">
@@ -415,7 +423,7 @@ export function ListHeader({
       {(onSearch || actions) && (
         <div className="flex flex-wrap items-center justify-end gap-3 w-full sm:w-auto">
           {onSearch && (
-            <div className="flex items-center gap-3 flex-1 sm:flex-none sm:w-80">
+            <div className="flex items-center gap-3 basis-full sm:basis-auto sm:flex-none sm:w-80">
               <SearchInput
                 value={search ?? ""}
                 onChange={onSearch}
@@ -440,31 +448,133 @@ export function RefreshBtn({ onClick }: { onClick?: () => void }) {
   );
 }
 
+/** One "Label: value" attribute in a record header. `tone` only for meaning (e.g. Strategic), never decoration. */
+export type HeaderAttribute = { label?: string; value: ReactNode; tone?: Tone; icon?: LucideIcon };
+
+/** A version a record header can switch to. `to`/`params` route to that version; omit for the current one. */
+export type VersionLink = { key: string; version: number; status: string; to?: string; params?: Record<string, string>; current?: boolean };
+
+/**
+ * Record header used by every detail page, in one fixed order:
+ * title + status · meta line (ID, owner, updated) · attribute chips · version switcher.
+ */
 export function DetailTitle({
   title,
   subtitle,
   status,
+  unsaved,
+  meta,
+  attributes,
   chips,
+  versions,
   actions,
 }: {
   title: string;
+  /** Free-text description under the title (create pages). Record pages use `meta`. */
   subtitle?: ReactNode;
   status?: string;
+  /** Shows a consistent "Unsaved changes" pill next to the status. */
+  unsaved?: boolean;
+  /** Short facts joined by "·", e.g. [<RecordId>R-110</RecordId>, "Owner Priya Nair", "Updated 2026-04-11 13:20"]. */
+  meta?: ReactNode[];
+  attributes?: HeaderAttribute[];
+  /** @deprecated prefer `attributes` so chips look the same on every page. */
   chips?: ReactNode;
+  /** Two or more versions render the switcher. */
+  versions?: VersionLink[];
   actions?: ReactNode;
 }) {
+  const facts = (meta ?? []).filter((m) => m !== null && m !== undefined && m !== false && m !== "");
+  const hasAttrs = !!(attributes?.length || chips);
+  // Two rows only: identity (title, status, versions) and details (meta facts + attribute chips).
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
-      <div>
-        <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-5">
+      <div className="min-w-0 flex-1 basis-80">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
           {status && <StatusPill status={status} />}
+          {unsaved && <StatusPill status="PENDING" label="Unsaved changes" />}
+          {versions && versions.length > 1 && <VersionSwitcher versions={versions} />}
         </div>
         {subtitle && <div className="text-sm text-muted-foreground mt-1">{subtitle}</div>}
-        {chips && <div className="flex flex-wrap gap-2 mt-3">{chips}</div>}
+        {(facts.length > 0 || hasAttrs) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2 text-sm text-muted-foreground">
+            {facts.length > 0 && (
+              <ul className="flex flex-wrap items-center gap-x-2 gap-y-1" aria-label="Record details">
+                {facts.map((m, i) => (
+                  <li key={i} className="inline-flex items-center gap-2">
+                    {i > 0 && <span aria-hidden>·</span>}
+                    {m}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {facts.length > 0 && hasAttrs && <span className="hidden sm:block h-4 w-px bg-border" aria-hidden />}
+            {hasAttrs && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {attributes?.map((a, i) => <AttributeChip key={i} {...a} />)}
+                {chips}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
+  );
+}
+
+/** Record identifier shown in meta lines and tables — always monospace, never wrapped. */
+export function RecordId({ children }: { children: ReactNode }) {
+  return <span className="font-mono text-xs text-foreground/80 whitespace-nowrap">{children}</span>;
+}
+
+function AttributeChip({ label, value, tone, icon: Icon }: HeaderAttribute) {
+  const t = toneCls[tone ?? "default"];
+  return (
+    <span className={`inline-flex items-center gap-1 h-6 px-2 rounded-md border text-xs ${t.soft} ${t.border}`}>
+      {Icon && <Icon className={`size-3.5 ${t.text}`} aria-hidden />}
+      {label && <span className="text-muted-foreground">{label}</span>}
+      <span className={`font-medium ${tone ? t.text : "text-foreground"}`}>{value}</span>
+    </span>
+  );
+}
+
+/**
+ * Segmented version switcher. Status is a dot + word (never colour alone); the open version is
+ * filled navy and marked aria-current. Links keep Back/forward working between versions.
+ */
+export function VersionSwitcher({ versions, className = "" }: { versions: VersionLink[]; className?: string }) {
+  const sorted = [...versions].sort((a, b) => b.version - a.version);
+  return (
+    <nav aria-label="Versions" className={`inline-flex ${className}`}>
+      <div className="inline-flex flex-wrap items-center gap-0.5 rounded-lg border border-border bg-card p-0.5">
+        {sorted.map((v) => {
+          const dot = toneCls[STATUS_TONE[v.status.toUpperCase()] ?? "neutral"].dot;
+          // 40px tall on touch layouts, compact beside the title on desktop.
+          const cls = `inline-flex items-center gap-1.5 h-10 lg:h-7 px-2.5 rounded-md text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+            v.current ? "bg-navy text-navy-foreground" : "text-foreground hover:bg-muted"
+          }`;
+          const body = (
+            <>
+              <span className="font-semibold tabular-nums">v{v.version}</span>
+              <span className={`size-1.5 rounded-full ${v.current ? "bg-navy-foreground" : dot}`} aria-hidden />
+              <span className={`text-xs ${v.current ? "opacity-90" : "text-muted-foreground"}`}>{humanize(v.status)}</span>
+            </>
+          );
+          return v.current || !v.to ? (
+            <span key={v.key} className={cls} aria-current={v.current ? "page" : undefined}>
+              {body}
+            </span>
+          ) : (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            <Link key={v.key} to={v.to as any} params={v.params as any} className={cls}>
+              {body}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -573,9 +683,10 @@ export function Segmented<T extends string>({
             {o.label}
             {o.count !== undefined && (
               <span
-                className={`size-5 rounded-full grid place-items-center text-[11px] text-white ${tone.dot}`}
+                className={`min-w-5 h-5 px-1.5 rounded-full grid place-items-center text-[11px] tabular-nums text-white ${tone.dot}`}
               >
-                {o.count}
+                {/* Pill grows with the number; large counts are abbreviated (100,000 → 100k). */}
+                {o.count >= 10_000 ? `${Math.round(o.count / 1000)}k` : o.count.toLocaleString("en-GB")}
               </span>
             )}
           </button>
@@ -1037,7 +1148,8 @@ export function DataTable<T>({
         role="region"
         aria-label={caption ?? "Data table"}
       >
-        <table className="w-full text-sm">
+        {/* Min width per column so narrow screens scroll the table instead of crushing cells into tall stacks. */}
+        <table className="w-full text-sm" style={{ minWidth: columns.length * 96 + (numbered ? 48 : 0) }}>
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
             <tr className="bg-navy text-navy-foreground">
@@ -1171,7 +1283,7 @@ export function RecordLink({
     <Link
       to={to as any}
       params={params as any}
-      className="text-brand font-medium hover:underline"
+      className="hit text-brand font-medium hover:underline"
       onClick={(e) => e.stopPropagation()}
     >
       {children}
@@ -1227,16 +1339,32 @@ function useDialogFocus(open: boolean, onClose: () => void, dismissible = true) 
       }
     };
     document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      unlockBodyScroll();
       previous?.focus?.();
     };
   }, [open]);
   return ref;
 }
+
+/*
+ * Ref-counted body scroll lock. Overlays can stack (drawer + confirm dialog) and close in the
+ * same render; restoring a saved "previous" value per overlay then runs in the wrong order and
+ * leaves the page stuck at overflow:hidden. Counting means only the last overlay to close unlocks.
+ */
+let scrollLocks = 0;
+function lockBodyScroll() {
+  if (scrollLocks++ === 0) document.body.style.overflow = "hidden";
+}
+function unlockBodyScroll() {
+  scrollLocks = Math.max(0, scrollLocks - 1);
+  // Remove rather than restore a saved value — a saved value can itself be a stale "hidden".
+  if (scrollLocks === 0) document.body.style.removeProperty("overflow");
+}
+// No overlay is open when this module (re)loads, so clear any lock left behind (e.g. across hot reloads).
+if (typeof document !== "undefined") document.body.style.removeProperty("overflow");
 
 export function Modal({
   open,
@@ -1676,7 +1804,7 @@ export function Toggle({
         aria-checked={checked}
         aria-label={label ? undefined : "Toggle"}
         onClick={() => onChange(!checked)}
-        className={`relative w-10 h-6 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${checked ? "bg-brand" : "bg-muted-foreground/40"}`}
+        className={`hit relative w-10 h-6 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${checked ? "bg-brand" : "bg-muted-foreground/40"}`}
       >
         <span
           aria-hidden

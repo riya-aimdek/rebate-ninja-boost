@@ -15,11 +15,13 @@ import {
   FilterPills,
   Flag,
   InfoBanner,
+  KpiTile,
   LinkBtn,
   ListHeader,
   PricingLayout,
   RecordLink,
   ProgressBar,
+  Segmented,
   StatusPill,
   Stepper,
   Tag,
@@ -40,8 +42,17 @@ import {
   productBySku,
   type BulkJob,
 } from "@/lib/pricing/data";
+import { downloadCsv } from "@/lib/pricing/csv";
+
+type BulkSearch = { pct?: number; list?: string; scenario?: string };
 
 export const Route = createFileRoute("/pricing/bulk-update")({
+  // `?pct=3&scenario=A%20%2B3%25&list=BL-001` — the scenario simulator opens the preview prefilled (US-OP-03 AC#7).
+  validateSearch: (s: Record<string, unknown>): BulkSearch => ({
+    pct: typeof s.pct === "number" && Number.isFinite(s.pct) ? s.pct : undefined,
+    list: typeof s.list === "string" && PRICE_LISTS.some((l) => l.id === s.list) ? s.list : undefined,
+    scenario: typeof s.scenario === "string" && s.scenario ? s.scenario : undefined,
+  }),
   head: () => ({ meta: [{ title: "Bulk price update · Rebate Ninja" }] }),
   component: Page,
 });
@@ -143,12 +154,15 @@ function formatAdjustment(method: string, v: number) {
 }
 
 function Page() {
-  const [step, setStep] = useState(0);
+  const search = Route.useSearch();
+  const fromScenario = search.pct !== undefined;
+  // Opened from a simulator scenario: land on the preview with the same adjustment.
+  const [step, setStep] = useState(fromScenario ? 2 : 0);
   const [selection, setSelection] = useState<string>(BULK_SELECTION[1]);
   const [selectionDetail, setSelectionDetail] = useState(HIERARCHY_NODES[0]);
-  const [target, setTarget] = useState("BL-002");
+  const [target, setTarget] = useState(search.list ?? "BL-002");
   const [method, setMethod] = useState<string>("PERCENTAGE");
-  const [value, setValue] = useState("5");
+  const [value, setValue] = useState(fromScenario ? String(search.pct) : "5");
   const [handling, setHandling] = useState<string>("CLAMP");
   const [reason, setReason] = useState("ANNUAL_PRICE_INCREASE");
   const [error, setError] = useState<ApiError | null>(null);
@@ -196,14 +210,17 @@ function Page() {
   const breachEstimate = Math.round((count * breaches) / (SAMPLE.length * 300)) || breaches;
 
   // Inline validation for step 2 (kept as the user typed it — never cleared on error).
+  // Negative results are checked before the range so -120% reports ADJUSTMENT_RESULT_NEGATIVE (US-PL-02 AC#4).
+  const negative = value.trim() !== "" && !Number.isNaN(v) && preview.some((p) => p.raw < 0);
   const valueError =
     value.trim() === "" || Number.isNaN(v)
       ? `Enter an adjustment value. ${rule.label}.`
-      : (rule.min !== undefined && v < rule.min) || (rule.max !== undefined && v > rule.max)
-        ? `${rule.label}.`
-        : preview.some((p) => p.raw < 0)
-          ? "This adjustment makes some prices negative. Enter a smaller decrease."
+      : negative
+        ? "This adjustment makes some prices negative. Enter a smaller decrease."
+        : (rule.min !== undefined && v < rule.min) || (rule.max !== undefined && v > rule.max)
+          ? `${rule.label}.`
           : undefined;
+  const fileMissing = selection === "Uploaded file" && !selectionDetail;
   const reasonError = reason
     ? undefined
     : "Select a reason code — every price change needs one for the audit trail.";
@@ -212,9 +229,28 @@ function Page() {
   const next = (e?: FormEvent) => {
     e?.preventDefault();
     setError(null);
+    if (step === 0 && fileMissing) {
+      setShowErrors(true);
+      document.getElementById("bulk-file")?.focus();
+      return;
+    }
+    if (step === 0) setShowErrors(false);
     if (step === 1) {
       if (valueError || reasonError) {
         setShowErrors(true);
+        if (value.trim() === "")
+          setError({
+            errorClass: "VALIDATION",
+            code: "VALIDATION_REQUIRED",
+            message: "Adjustment Value is required. Enter a value to continue.",
+            field: "Adjustment Value",
+          });
+        else if (negative)
+          setError({
+            errorClass: "VALIDATION",
+            code: "ADJUSTMENT_RESULT_NEGATIVE",
+            message: `${adjustmentLabel} would make some prices negative. Enter a smaller decrease.`,
+          });
         (valueError ? valueRef.current : reasonRef.current)?.focus();
         return;
       }
@@ -328,7 +364,7 @@ function Page() {
       cell: (j) => (
         <button
           type="button"
-          className="text-brand font-medium hover:underline whitespace-nowrap"
+          className="hit text-brand font-medium hover:underline whitespace-nowrap"
           onClick={(e) => {
             e.stopPropagation();
             setOpenJob(j);
@@ -338,14 +374,15 @@ function Page() {
         </button>
       ),
     },
-    { key: "t", header: "Target list (draft)", className: "min-w-40", cell: (j) => j.targetList },
+    { key: "t", header: "Target list (draft)", className: "min-w-32", cell: (j) => j.targetList },
     {
       key: "m",
       header: "Method",
       cell: (j) => (
-        <span className="whitespace-nowrap">
-          {humanize(j.method)} · {j.value}
-        </span>
+        <div className="whitespace-nowrap">
+          <div>{humanize(j.method)}</div>
+          <div className="text-xs text-muted-foreground">{j.value}</div>
+        </div>
       ),
     },
     {
@@ -380,38 +417,31 @@ function Page() {
       ),
     },
     {
-      key: "ok",
-      header: "Succeeded",
-      align: "right",
+      key: "res",
+      header: "Results",
       cell: (j) => (
-        <span className="tabular-nums text-success font-semibold">
-          {j.succeeded.toLocaleString("en-GB")}
-        </span>
+        <dl className="text-xs tabular-nums whitespace-nowrap grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
+          <dt className="text-muted-foreground">Succeeded</dt>
+          <dd className="text-right font-semibold text-success">{j.succeeded.toLocaleString("en-GB")}</dd>
+          <dt className="text-muted-foreground">Failed</dt>
+          <dd className={`text-right ${j.failed ? "font-semibold text-destructive" : ""}`}>{j.failed.toLocaleString("en-GB")}</dd>
+          {j.clamped > 0 && (
+            <>
+              <dt className="text-muted-foreground">Clamped</dt>
+              <dd className="text-right">{j.clamped.toLocaleString("en-GB")}</dd>
+            </>
+          )}
+        </dl>
       ),
-    },
-    {
-      key: "f",
-      header: "Failed",
-      align: "right",
-      cell: (j) => (
-        <span className={`tabular-nums ${j.failed ? "text-destructive font-semibold" : ""}`}>
-          {j.failed.toLocaleString("en-GB")}
-        </span>
-      ),
-    },
-    {
-      key: "c",
-      header: "Clamped",
-      align: "right",
-      cell: (j) => <span className="tabular-nums">{j.clamped.toLocaleString("en-GB")}</span>,
     },
     {
       key: "by",
       header: "Started",
       cell: (j) => (
-        <span className="whitespace-nowrap text-muted-foreground">
-          {j.startedBy} · {j.startedAt}
-        </span>
+        <div className="whitespace-nowrap">
+          <div>{j.startedBy}</div>
+          <div className="text-xs text-muted-foreground tabular-nums">{j.startedAt}</div>
+        </div>
       ),
     },
   ];
@@ -423,22 +453,36 @@ function Page() {
         subtitle="Apply one controlled change across many SKUs — preview the impact first; results land in a draft version you can roll back until it is published."
       />
 
-      <InfoBanner
-        tone="brand"
-        title="Simulate before you change"
-        action={
-          <LinkBtn to="/pricing/simulator" variant="outline" size="sm" icon={FlaskConical}>
-            Run simulation
-          </LinkBtn>
-        }
-      >
-        See volume, revenue and margin sensitivity before committing.
-      </InfoBanner>
+      {fromScenario ? (
+        <InfoBanner
+          tone="info"
+          title={`Prefilled from scenario ${search.scenario ?? ""}`.trim()}
+          action={
+            <LinkBtn to="/pricing/simulator" variant="outline" size="sm" icon={ArrowLeft}>
+              Back to simulator
+            </LinkBtn>
+          }
+        >
+          Same scope and a {pct(search.pct ?? 0)} percentage adjustment. Check the preview, then continue to confirm.
+        </InfoBanner>
+      ) : (
+        <InfoBanner
+          tone="brand"
+          title="Simulate before you change"
+          action={
+            <LinkBtn to="/pricing/simulator" variant="outline" size="sm" icon={FlaskConical}>
+              Run simulation
+            </LinkBtn>
+          }
+        >
+          See volume, revenue and margin sensitivity before committing.
+        </InfoBanner>
+      )}
 
       <Card
         className="mb-8"
         title="Create bulk update"
-        subtitle={`Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`}
+        subtitle="Choose products and an adjustment, check the preview, then apply."
       >
         <form onSubmit={next} noValidate>
           <Stepper steps={STEPS} current={step} />
@@ -459,31 +503,28 @@ function Page() {
                     *
                   </span>
                 </legend>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {BULK_SELECTION.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      aria-pressed={selection === s}
-                      onClick={() => {
-                        setSelection(s);
-                        setSelectionDetail(
-                          s === "Product Hierarchy node"
-                            ? HIERARCHY_NODES[0]
-                            : s === "Saved filter"
-                              ? SAVED_FILTERS[0]
-                              : "",
-                        );
-                      }}
-                      className={`text-left rounded-lg border px-3 py-2 min-h-10 text-sm ${selection === s ? "border-brand bg-brand-soft font-semibold" : "border-border bg-card hover:bg-muted"}`}
-                    >
-                      {humanize(s)}
-                      <div className="text-xs text-muted-foreground font-normal">
-                        {SELECTION_COUNT[s].toLocaleString("en-GB")} SKUs
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                <Segmented<string>
+                  value={selection}
+                  onChange={(s) => {
+                    setSelection(s);
+                    setSelectionDetail(
+                      s === "Product Hierarchy node"
+                        ? HIERARCHY_NODES[0]
+                        : s === "Saved filter"
+                          ? SAVED_FILTERS[0]
+                          : "",
+                    );
+                  }}
+                  options={BULK_SELECTION.map((s) => ({
+                    key: s,
+                    label: humanize(s),
+                    count: SELECTION_COUNT[s],
+                    tone: "brand" as const,
+                  }))}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  {SELECTION_COUNT[selection].toLocaleString("en-GB")} SKUs in this selection
+                </p>
               </fieldset>
               <div className="space-y-4">
                 {selection === "Product Hierarchy node" && (
@@ -513,8 +554,14 @@ function Page() {
                   </Field>
                 )}
                 {selection === "Uploaded file" && (
-                  <Field label="Upload file" hint="CSV or XLSX with a SKU column">
+                  <Field
+                    label="Upload file"
+                    required
+                    hint="CSV or XLSX with a SKU column"
+                    error={showErrors && fileMissing ? "Choose a file to upload." : undefined}
+                  >
                     <input
+                      id="bulk-file"
                       type="file"
                       accept=".csv,.xlsx"
                       className={`${inputCls} py-1.5`}
@@ -524,9 +571,7 @@ function Page() {
                 )}
                 {selection === "Product List" && (
                   <div>
-                    <p className="text-sm font-medium text-foreground mb-1.5">
-                      Products
-                    </p>
+                    <p className="text-sm font-medium text-foreground mb-1.5">Products</p>
                     <div className="flex flex-wrap gap-2">
                       {SAMPLE.map((s) => (
                         <Tag key={s.sku}>{s.sku}</Tag>
@@ -567,19 +612,15 @@ function Page() {
                     *
                   </span>
                 </legend>
-                <div className="flex flex-wrap gap-2">
-                  {BULK_METHODS.map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      aria-pressed={method === m}
-                      onClick={() => setMethod(m)}
-                      className={`rounded-lg border px-4 h-10 text-sm ${method === m ? "border-brand bg-brand-soft text-brand font-semibold" : "border-border bg-card hover:bg-muted"}`}
-                    >
-                      {humanize(m)}
-                    </button>
-                  ))}
-                </div>
+                <Segmented<string>
+                  value={method}
+                  onChange={setMethod}
+                  options={BULK_METHODS.map((m) => ({
+                    key: m,
+                    label: humanize(m),
+                    tone: "brand" as const,
+                  }))}
+                />
               </fieldset>
               <div className="grid md:grid-cols-3 gap-x-6 gap-y-4">
                 <Field
@@ -661,12 +702,12 @@ function Page() {
                   ["Maximum change", `${max.toFixed(2)}%`],
                   ["Guardrail breaches (est.)", breachEstimate.toLocaleString("en-GB")],
                 ].map(([l, val]) => (
-                  <div key={l} className="rounded-xl border border-border p-4 bg-card">
-                    <div className="text-sm font-medium text-foreground">
-                      {l}
-                    </div>
-                    <div className="text-2xl font-bold tabular-nums mt-1">{val}</div>
-                  </div>
+                  <KpiTile
+                    key={l}
+                    label={l}
+                    value={val}
+                    tone={l.startsWith("Guardrail") && breachEstimate > 0 ? "warning" : "neutral"}
+                  />
                 ))}
               </div>
               <DataTable
@@ -941,8 +982,36 @@ function JobDrawer({
                 setExporting(true);
                 window.setTimeout(() => {
                   setExporting(false);
+                  downloadCsv(`${job.id}-results.csv`, [
+                    {
+                      job: job.id,
+                      targetList: job.targetList,
+                      method: `${job.method} ${job.value}`,
+                      status: job.status,
+                      total: job.total,
+                      succeeded: job.succeeded,
+                      failed: job.failed,
+                      clamped: job.clamped,
+                      sku: "",
+                      errorCode: "",
+                      message: "",
+                    },
+                    ...failures.map((f) => ({
+                      job: job.id,
+                      targetList: job.targetList,
+                      method: "",
+                      status: "FAILED",
+                      total: "",
+                      succeeded: "",
+                      failed: "",
+                      clamped: "",
+                      sku: f.sku,
+                      errorCode: f.code,
+                      message: f.message,
+                    })),
+                  ]);
                   toast.success(`${job.id} results exported`, {
-                    description: "CSV with one row per record.",
+                    description: "Job summary plus one row per failed record.",
                   });
                 }, 500);
               }}

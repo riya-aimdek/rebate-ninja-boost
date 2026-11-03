@@ -148,3 +148,23 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Touch targets (WCAG 2.5.5 / HIG 44pt). `.hit` widens the tappable area of small
+   text-sized controls without changing layout; column-header sort buttons get it too. */
+.hit,
+thead button {
+  position: relative;
+}
+.hit::after,
+thead button::after {
+  content: "";
+  position: absolute;
+  inset: -10px -6px;
+}
+@media (pointer: coarse) {
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+}

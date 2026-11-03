@@ -139,7 +139,7 @@ export function FilterBarEnd({ children }: { children: ReactNode }) {
 }
 
 export const inputCls =
-  "w-full h-10 px-3 rounded-lg border border-input bg-card text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
+  "w-full h-10 px-3 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
 
 /** Report figures are in the source data's currency (USD). Deterministic en-GB grouping. */
 export const usd = (n: number, digits = 2) => money(n, "USD", digits);

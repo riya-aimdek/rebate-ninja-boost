@@ -9,24 +9,27 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Btn,
   Card,
   ConfirmDialog,
+  DataTable,
   DetailGrid,
   DetailTitle,
   ErrorBanner,
   Field,
   Flag,
   InfoBanner,
+  Price,
   PricingLayout,
   Stepper,
   Tag,
   Toggle,
   humanize,
   inputCls,
+  money,
   notifyUndo,
   type ApiError,
 } from "@/components/pricing/kit";
@@ -37,12 +40,17 @@ import {
   CUSTOMER_SEGMENTS,
   INHERITANCE_MODES,
   LIST_TYPES,
+  MAX_DERIVATION_DEPTH,
   PRICE_LISTS,
   PRODUCTS,
   REASON_CODES,
   REGIONS,
   UOMS,
+  chainDepth,
+  deriveLines,
+  finalLinePrice,
   productBySku,
+  type PriceLine,
   type PriceList,
 } from "@/lib/pricing/data";
 import { TODAY } from "@/lib/pricing/csv";
@@ -136,11 +144,13 @@ const FIELD_ORDER: Array<keyof Header> = [
   "channel",
   "segment",
   "uom",
+  "parentId",
   "adjustmentValue",
   "reasonCode",
   "reasonText",
 ];
 const STEP_OF: Partial<Record<keyof Header, number>> = {
+  parentId: 1,
   adjustmentValue: 1,
   reasonCode: 3,
   reasonText: 3,
@@ -314,6 +324,13 @@ function Page() {
       else if (!h.openEnded && h.effectiveFrom && h.effectiveTo <= h.effectiveFrom)
         fe.effectiveTo = "End date must be after the start date. Choose a later date.";
     }
+    if (s === 1 && derived) {
+      const p = PRICE_LISTS.find((l) => l.id === h.parentId);
+      if (p && chainDepth(p.id) >= MAX_DERIVATION_DEPTH)
+        fe.parentId = `DERIVATION_TOO_DEEP — ${p.name} is already level ${chainDepth(p.id)}; the chain allows ${MAX_DERIVATION_DEPTH} levels. Choose a higher-level parent.`;
+      else if (p && p.currency !== h.currency)
+        fe.parentId = `${p.name} is in ${p.currency}. Choose a parent in ${h.currency}, or change this list's currency to ${p.currency}.`;
+    }
     if (s === 1 && derived && h.adjustmentType !== "NONE") {
       const v = h.adjustmentValue.trim();
       if (!v)
@@ -341,6 +358,8 @@ function Page() {
 
   /** Validate one step; shows inline errors and focuses the first invalid field. */
   const checkStep = (s: number) => {
+    // Derived lines are calculated from the parent, so there is nothing to validate by hand.
+    if (s === 2 && derived) return true;
     if (s === 2) {
       const errs = validateLines();
       // Only duplicates block progress; other invalid lines can be saved as a draft (fix before submitting).
@@ -390,7 +409,7 @@ function Page() {
   const save = (e?: FormEvent) => {
     e?.preventDefault();
     // Re-check every step (silently for lines) and jump to the first one that needs a fix.
-    const errs = checkLines();
+    const errs = derived ? {} : checkLines();
     setLineErr(errs);
     for (const s of [0, 1, 2, 3]) {
       const ok =
@@ -439,19 +458,26 @@ function Page() {
         adjustmentValue: isNumericAdj ? Number(h.adjustmentValue) : undefined,
         inheritanceMode: derived ? (h.inheritanceMode as PriceList["inheritanceMode"]) : undefined,
         rounding: h.rounding,
-        lines: lines
-          .filter((l) => l.sku)
-          .map((l, i) => ({
-            id: `${id}-L${i + 1}`,
-            sku: l.sku,
-            price: l.price === "" ? null : Number(l.price),
-            uom: l.uom,
-            minQty: Number(l.minQty) || 1,
-            maxQty: l.maxQty ? Number(l.maxQty) : undefined,
-            effectiveFrom: l.effectiveFrom || h.effectiveFrom,
-            effectiveTo: l.effectiveTo || (h.openEnded ? undefined : h.effectiveTo),
-            allowZeroPrice: l.allowZeroPrice,
-          })),
+        lines: derived
+          ? derivedLines.map((l, i) => ({
+              ...l,
+              id: `${id}-L${i + 1}`,
+              effectiveFrom: h.effectiveFrom,
+              effectiveTo: h.openEnded ? undefined : h.effectiveTo,
+            }))
+          : lines
+              .filter((l) => l.sku)
+              .map((l, i) => ({
+                id: `${id}-L${i + 1}`,
+                sku: l.sku,
+                price: l.price === "" ? null : Number(l.price),
+                uom: l.uom,
+                minQty: Number(l.minQty) || 1,
+                maxQty: l.maxQty ? Number(l.maxQty) : undefined,
+                effectiveFrom: l.effectiveFrom || h.effectiveFrom,
+                effectiveTo: l.effectiveTo || (h.openEnded ? undefined : h.effectiveTo),
+                allowZeroPrice: l.allowZeroPrice,
+              })),
       };
       PRICE_LISTS.unshift(rec);
       skipBlock.current = true;
@@ -466,6 +492,15 @@ function Page() {
   };
 
   const parent = PRICE_LISTS.find((l) => l.id === h.parentId);
+  // US-PL-03: lines follow the parent through the adjustment, rounded with this list's rule.
+  const derivedLines = useMemo(
+    () =>
+      derived && parent
+        ? deriveLines(parent, h.adjustmentType, h.adjustmentValue, h.rounding, TODAY)
+        : [],
+    [derived, parent, h.adjustmentType, h.adjustmentValue, h.rounding],
+  );
+  const lineCount = derived ? derivedLines.length : lines.length;
   const last = step === STEPS.length - 1;
   const adjNumeric = h.adjustmentType === "PERCENT" || h.adjustmentType === "ABSOLUTE";
   const requiredNote = (
@@ -489,7 +524,7 @@ function Page() {
         title="Create price list"
         subtitle="Draft data never reaches live pricing until the list is approved and active."
         status="DRAFT"
-        chips={dirty ? <Tag tone="warning">Unsaved changes</Tag> : undefined}
+        unsaved={dirty}
       />
       <Stepper steps={STEPS} current={step} />
       <ErrorBanner error={error} onClose={() => setError(null)} />
@@ -663,19 +698,33 @@ function Page() {
             subtitle="Derive this list from a parent: base → segment → customer. Maximum chain depth 3 (configurable up to 5)."
           >
             <div className="grid md:grid-cols-2 gap-x-6 gap-y-4">
-              <Field label="Parent list">
+              <Field
+                label="Parent list"
+                error={fieldErr.parentId}
+                hint="Only Active lists; lines are calculated from the parent's final prices"
+              >
                 <select
+                  id={fid("parentId")}
                   className={inputCls}
                   value={h.parentId}
-                  onChange={(e) => set("parentId", e.target.value)}
+                  onChange={(e) => {
+                    set("parentId", e.target.value);
+                    // Derived prices are in the parent's currency, so follow it by default.
+                    const p = PRICE_LISTS.find((l) => l.id === e.target.value);
+                    if (p && p.currency !== h.currency) set("currency", p.currency);
+                  }}
                   disabled={h.type === "BASE"}
                 >
                   <option value="">None — independent list</option>
-                  {PRICE_LISTS.filter((l) => l.status === "ACTIVE").map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.id} · {l.name}
-                    </option>
-                  ))}
+                  {PRICE_LISTS.filter((l) => l.status === "ACTIVE").map((l) => {
+                    const full = chainDepth(l.id) >= MAX_DERIVATION_DEPTH;
+                    return (
+                      <option key={l.id} value={l.id} disabled={full}>
+                        {l.id} · {l.name} · {l.currency}
+                        {full ? " (max depth reached)" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </Field>
               <Field label="Adjustment type">
@@ -776,7 +825,81 @@ function Page() {
           </Card>
         )}
 
-        {step === 2 && (
+        {step === 2 && derived && parent && (
+          <Card
+            title="Product lines (derived)"
+            subtitle={`${derivedLines.length} ${derivedLines.length === 1 ? "line" : "lines"} calculated from ${parent.name} · ${humanize(h.adjustmentType)} ${h.adjustmentValue}${h.adjustmentType === "PERCENT" ? "%" : ""} · rounding ${h.rounding}`}
+            padded={false}
+          >
+            <DataTable
+              caption={`Lines derived from ${parent.name}`}
+              columns={[
+                {
+                  key: "p",
+                  header: "Product",
+                  cell: (l: PriceLine) => (
+                    <div>
+                      <div className="font-medium">{productBySku(l.sku)?.name ?? l.sku}</div>
+                      <div className="text-xs text-muted-foreground">{l.sku}</div>
+                    </div>
+                  ),
+                },
+                {
+                  key: "parent",
+                  header: `Parent (${parent.id})`,
+                  align: "right",
+                  cell: (l) => {
+                    const src = parent.lines.find(
+                      (x) => x.sku === l.sku && x.uom === l.uom && x.minQty === l.minQty,
+                    );
+                    const v = src ? finalLinePrice(src, TODAY) : null;
+                    return (
+                      <span className="tabular-nums">{money(v ?? undefined, h.currency)}</span>
+                    );
+                  },
+                },
+                {
+                  key: "calc",
+                  header: "Calculated",
+                  align: "right",
+                  cell: (l) => (
+                    <span className="font-semibold">
+                      <Price value={l.calculatedPrice} currency={h.currency} uom={l.uom} />
+                    </span>
+                  ),
+                },
+                { key: "uom", header: "UoM", cell: (l) => l.uom },
+                {
+                  key: "qty",
+                  header: "Min qty",
+                  align: "right",
+                  cell: (l) => <span className="tabular-nums">{l.minQty}</span>,
+                },
+                {
+                  key: "chain",
+                  header: "Derivation chain",
+                  cell: (l) => (
+                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded whitespace-nowrap">
+                      {l.derivationChain}
+                    </code>
+                  ),
+                },
+              ]}
+              rows={derivedLines}
+              rowKey={(l) => l.id}
+              empty={`${parent.name} has no priced lines to derive from.`}
+            />
+            <div className="px-6 py-3 text-xs text-muted-foreground border-t border-border">
+              {h.inheritanceMode === "LIVE_LINK"
+                ? "Live link — these prices recalculate when the parent changes."
+                : "Snapshot — copied once; later parent changes don't apply."}{" "}
+              To set a different price for one product, save the list and add an override on its
+              Lines tab (reason code required).
+            </div>
+          </Card>
+        )}
+
+        {step === 2 && !derived && (
           <Card
             title="Product lines"
             subtitle={`${lines.length} ${lines.length === 1 ? "line" : "lines"} · prices in ${h.currency}`}
@@ -1080,8 +1203,9 @@ function Page() {
                     label: "Product lines",
                     value: (
                       <span className="inline-flex flex-wrap items-center gap-2">
-                        {lines.length}
-                        {Object.keys(lineErr).length > 0 && (
+                        {lineCount}
+                        {derived && <Tag tone="info">Derived from {parent?.name}</Tag>}
+                        {!derived && Object.keys(lineErr).length > 0 && (
                           <Flag tone="warning">
                             {Object.keys(lineErr).length} invalid — fix before submitting
                           </Flag>

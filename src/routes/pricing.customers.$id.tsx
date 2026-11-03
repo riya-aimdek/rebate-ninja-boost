@@ -1,11 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowLeft, Building2, Lock, Star } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { CustomerTree } from "@/components/pricing/CustomerTree";
+import { ArrowLeft, Lock, Star } from "lucide-react";
 import {
   Card,
   DataTable,
   DetailGrid,
   DetailTitle,
+  RecordId,
   Locked,
   EmptyState,
   Flag,
@@ -19,14 +20,19 @@ import {
   humanize,
   money,
 } from "@/components/pricing/kit";
-import { CUSTOMERS, MAX_HIERARCHY_DEPTH, SEGMENT_HISTORY, childrenOf, customerById, type Customer } from "@/lib/pricing/data";
+import { MAX_HIERARCHY_DEPTH, SEGMENT_HISTORY, childrenOf, customerById, type Customer } from "@/lib/pricing/data";
+
+type TabKey = "details" | "hierarchy" | "segments" | "source";
+const TABS: TabKey[] = ["details", "hierarchy", "segments", "source"];
 
 export const Route = createFileRoute("/pricing/customers/$id")({
+  // Tab lives in the URL so Back and shared links return to the same view.
+  validateSearch: (s: Record<string, unknown>): { tab?: TabKey } => ({
+    tab: TABS.includes(s.tab as TabKey) && s.tab !== "details" ? (s.tab as TabKey) : undefined,
+  }),
   head: ({ params }) => ({ meta: [{ title: `${customerById(params.id)?.name ?? "Customer"} · Customers · Rebate Ninja` }] }),
   component: Page,
 });
-
-type TabKey = "details" | "hierarchy" | "segments" | "source";
 
 const Ro = ({ children }: { children: React.ReactNode }) => <Locked owner="the source system">{children}</Locked>;
 
@@ -40,38 +46,20 @@ function ancestors(c: Customer): Customer[] {
   return out;
 }
 
-function TreeNode({ c, currentId }: { c: Customer; currentId: string }) {
-  const kids = childrenOf(c.id);
-  const on = c.id === currentId;
-  return (
-    <li>
-      <Link
-        to="/pricing/customers/$id"
-        params={{ id: c.id }}
-        aria-current={on ? "page" : undefined}
-        className={`inline-flex flex-wrap items-center gap-2 px-3 py-2 rounded-lg border my-1 ${on ? "bg-navy text-navy-foreground border-navy" : "bg-card border-border hover:border-brand"}`}
-      >
-        <Building2 className="size-4" aria-hidden />
-        <span className="font-medium">{c.name}</span>
-        <span className={`text-xs ${on ? "text-navy-foreground/80" : "text-muted-foreground"}`}>L{c.level} · {c.segment}</span>
-        {on && <span className="sr-only">(this customer)</span>}
-        {c.status === "BLOCKED" && <StatusPill status="BLOCKED" />}
-      </Link>
-      {kids.length > 0 && (
-        <ul className="ml-6 pl-4 border-l-2 border-border">
-          {kids.map((k) => (
-            <TreeNode key={k.id} c={k} currentId={currentId} />
-          ))}
-        </ul>
-      )}
-    </li>
-  );
+/** The customer's whole family: top-level ancestor plus every descendant. */
+function family(root: Customer): Customer[] {
+  const out: Customer[] = [root];
+  for (let i = 0; i < out.length; i++) out.push(...childrenOf(out[i].id));
+  return out;
 }
 
 function Page() {
   const { id } = Route.useParams();
   const c = customerById(id);
-  const [tab, setTab] = useState<TabKey>("details");
+  const navigate = useNavigate();
+  const tab = Route.useSearch().tab ?? "details";
+  const setTab = (t: TabKey) =>
+    navigate({ to: "/pricing/customers/$id", params: { id }, search: { tab: t === "details" ? undefined : t }, replace: true });
 
   if (!c) {
     return (
@@ -98,19 +86,14 @@ function Page() {
     <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Customers", to: "/pricing/customers" }, { label: c.name }]}>
       <DetailTitle
         title={c.name}
-        subtitle={`Customer ID ${c.id} · Level ${c.level} of max ${MAX_HIERARCHY_DEPTH}`}
+        meta={[<RecordId key="id">{c.id}</RecordId>, `Level ${c.level} of ${MAX_HIERARCHY_DEPTH}`, `Owner ${c.owner}`, `Updated ${c.lastUpdated}`]}
         status={c.status}
-        chips={
-          <>
-            <Tag tone="brand">{c.segment}</Tag>
-            <Tag>{c.tier}</Tag>
-            {c.strategic && (
-              <Tag tone="warning">
-                <Star className="size-3 mr-1 fill-current" aria-hidden /> Strategic account
-              </Tag>
-            )}
-          </>
-        }
+        attributes={[
+          { label: "Segment", value: c.segment },
+          { value: c.tier },
+          { label: "Channel", value: c.channel },
+          ...(c.strategic ? [{ value: "Strategic account", tone: "warning" as const, icon: Star }] : []),
+        ]}
       />
 
       {c.status === "BLOCKED" && (
@@ -140,7 +123,20 @@ function Page() {
                 label: "Parent customer",
                 value: <Ro>{c.parentId ? <RecordLink to="/pricing/customers/$id" params={{ id: c.parentId }}>{customerById(c.parentId)?.name ?? c.parentId}</RecordLink> : "— (top level)"}</Ro>,
               },
-              { label: "Customer hierarchy", value: [...chain, c].map((x) => x.name).join(" › ") },
+              {
+                label: "Customer hierarchy",
+                value: (
+                  <span className="flex flex-wrap items-center gap-x-1.5">
+                    {chain.map((x) => (
+                      <span key={x.id} className="inline-flex items-center gap-1.5">
+                        <RecordLink to="/pricing/customers/$id" params={{ id: x.id }}>{x.name}</RecordLink>
+                        <span className="text-muted-foreground" aria-hidden>›</span>
+                      </span>
+                    ))}
+                    <span>{c.name}</span>
+                  </span>
+                ),
+              },
               { label: "Customer segment", value: c.segment },
               { label: "Industry", value: c.industry },
               { label: "Geography", value: <Ro>{c.geography}</Ro> },
@@ -158,12 +154,19 @@ function Page() {
       )}
 
       {tab === "hierarchy" && (
-        <Card title="Customer hierarchy" subtitle={`Synchronised from ${c.sourceSystem}. Cycles are rejected (HIERARCHY_CYCLE) and levels beyond ${MAX_HIERARCHY_DEPTH} are rejected (HIERARCHY_TOO_DEEP).`}>
-          <ul aria-label={`Hierarchy of ${root.name}`}>
-            <TreeNode c={root} currentId={c.id} />
-          </ul>
-          {CUSTOMERS.filter((x) => x.parentId === c.id).length === 0 && c.parentId === undefined && (
-            <p className="text-sm text-muted-foreground mt-3">This customer has no parent or children.</p>
+        <Card
+          title="Customer hierarchy"
+          subtitle={`Synchronised from ${c.sourceSystem}, read-only here. Loops (HIERARCHY_CYCLE) and accounts deeper than level ${MAX_HIERARCHY_DEPTH} (HIERARCHY_TOO_DEEP) are rejected at sync.`}
+        >
+          {chain.length === 0 && childrenOf(c.id).length === 0 ? (
+            <p className="text-sm text-muted-foreground">This customer has no parent or child accounts.</p>
+          ) : (
+            <CustomerTree
+              nodes={family(root)}
+              currentId={c.id}
+              label={`Hierarchy of ${root.name}`}
+              onSelect={(x) => x.id !== c.id && navigate({ to: "/pricing/customers/$id", params: { id: x.id }, search: { tab: "hierarchy" } })}
+            />
           )}
         </Card>
       )}

@@ -79,13 +79,13 @@ function Page() {
         ]}
       />
 
-      <div className="grid lg:grid-cols-3 gap-6 mb-6 [&>*]:min-w-0">
-        <div className="lg:col-span-2">
+      <div className="grid xl:grid-cols-3 gap-6 mb-6 [&>*]:min-w-0">
+        <div className="xl:col-span-2">
           <AttentionQueue />
         </div>
-        {/* Right card takes the left card's height on desktop instead of setting it. */}
-        <div className="lg:relative">
-          <div className="lg:absolute lg:inset-0">
+        {/* Right card takes the left card's height on wide screens instead of setting it. */}
+        <div className="xl:relative">
+          <div className="xl:absolute xl:inset-0">
             <TypeBreakdown />
           </div>
         </div>
@@ -121,9 +121,9 @@ function Lifecycle({ stages, ended }: { stages: Stage[]; ended: Stage[] }) {
         </p>
       </header>
 
-      <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] gap-6 lg:gap-0 p-5 sm:p-6">
+      <div className="grid xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] gap-6 xl:gap-0 p-5 sm:p-6">
         <StageGroup title="In progress and live" count={inFlow} stages={stages} flow />
-        <StageGroup title="Ended" count={done} stages={ended} className="lg:border-l lg:border-border lg:pl-6 lg:ml-6" />
+        <StageGroup title="Ended" count={done} stages={ended} className="xl:border-l xl:border-border xl:pl-6 xl:ml-6" />
       </div>
     </section>
   );
@@ -138,7 +138,7 @@ function StageGroup({ title, count, stages, flow = false, className = "" }: { ti
       </h3>
       <ol
         aria-labelledby={id}
-        className={`grid gap-3 ${flow ? "grid-cols-2 sm:grid-cols-5 sm:gap-6" : "grid-cols-3 sm:gap-6 lg:gap-3"}`}
+        className={`grid gap-3 ${flow ? "grid-cols-2 sm:grid-cols-5 sm:gap-6" : "grid-cols-3 sm:gap-6 xl:gap-3"}`}
       >
         {stages.map((s, i) => (
           <li key={s.key} className={`relative ${flow ? "last:col-span-2 sm:last:col-span-1" : ""}`}>
@@ -317,7 +317,7 @@ function TypeBreakdown() {
       title="Price lists by type"
       subtitle={`${plural(total, "price list")} across ${plural(rows.length, "type")}`}
       actions={
-        <Link to="/pricing/price-lists" className="inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline whitespace-nowrap">
+        <Link to="/pricing/price-lists" className="hit inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline whitespace-nowrap">
           View all
           <ArrowRight className="size-4" aria-hidden />
         </Link>

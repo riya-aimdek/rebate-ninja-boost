@@ -193,7 +193,7 @@ function NewProductPurchasePage() {
         </FilterBarEnd>
       </FilterBar>
 
-      <div className="grid gap-6 lg:grid-cols-2 mb-6">
+      <div className="grid gap-6 lg:grid-cols-2 mb-6 [&>*]:min-w-0">
         <Card title="Top accounts by purchase value">
           {byAccount.length === 0 ? (
             <p className="text-sm text-muted-foreground">No purchases in the selected range.</p>
@@ -202,7 +202,7 @@ function NewProductPurchasePage() {
               {byAccount.map(([name, val]) => (
                 <li key={name}>
                   <div className="flex justify-between gap-3 text-sm mb-1.5">
-                    <span className="truncate" title={name}>
+                    <span className="min-w-0 truncate" title={name}>
                       {name}
                     </span>
                     <span className="tabular-nums font-semibold whitespace-nowrap">{usd(val)}</span>

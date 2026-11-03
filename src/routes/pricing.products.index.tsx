@@ -185,7 +185,7 @@ function ProductQuickView({ product: p, onClose, onOpen }: { product: Product | 
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-mono">{p.productId}</span>
             <StatusPill status={p.lifecycleStatus} />
-            <Tag tone="brand">{p.productSegment}</Tag>
+            <Tag tone="brand">Segment: {p.productSegment}</Tag>
           </span>
         )
       }

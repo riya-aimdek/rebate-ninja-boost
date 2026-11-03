@@ -124,38 +124,37 @@ function Page() {
   const columns: Column<AuditEntry>[] = [
     {
       key: "id",
-      header: "Entry",
+      header: "Entry · time",
       cell: (a) => (
+        <div className="whitespace-nowrap">
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             setSelected(a);
           }}
-          className="text-brand font-medium hover:underline whitespace-nowrap"
+          className="hit text-brand font-medium hover:underline whitespace-nowrap"
           aria-label={`View details of audit entry ${a.id}`}
         >
           {a.id}
         </button>
+          <div className="text-xs text-muted-foreground tabular-nums">{a.at}</div>
+        </div>
       ),
-    },
-    {
-      key: "at",
-      header: "Timestamp",
-      cell: (a) => <span className="whitespace-nowrap tabular-nums">{a.at}</span>,
     },
     { key: "actor", header: "Actor", className: "whitespace-nowrap", cell: (a) => a.actor },
     {
-      key: "entity",
-      header: "Entity",
-      className: "whitespace-nowrap",
-      cell: (a) => <Tag>{humanize(a.entity)}</Tag>,
-    },
-    {
       key: "record",
       header: "Record",
-      className: "min-w-56",
-      cell: (a) => <AuditRecord entry={a} />,
+      className: "min-w-52",
+      cell: (a) => (
+        <div>
+          <AuditRecord entry={a} />
+          <div className="mt-1">
+            <Tag>{humanize(a.entity)}</Tag>
+          </div>
+        </div>
+      ),
     },
     {
       key: "action",
@@ -163,16 +162,14 @@ function Page() {
       cell: (a) => <span className="whitespace-nowrap">{humanize(a.action)}</span>,
     },
     {
-      key: "before",
-      header: "Before",
+      key: "change",
+      header: "Before → after",
       align: "right",
-      cell: (a) => <span className="tabular-nums text-muted-foreground">{a.before ?? "—"}</span>,
-    },
-    {
-      key: "after",
-      header: "After",
-      align: "right",
-      cell: (a) => <span className="tabular-nums font-semibold">{a.after ?? "—"}</span>,
+      cell: (a) => (
+        <span className="tabular-nums whitespace-nowrap">
+          <span className="text-muted-foreground">{a.before ?? "—"}</span> → <span className="font-semibold">{a.after ?? "—"}</span>
+        </span>
+      ),
     },
     {
       key: "reason",
@@ -193,13 +190,6 @@ function Page() {
         ),
     },
     { key: "v", header: "Version", className: "whitespace-nowrap", cell: (a) => a.version ?? "—" },
-    {
-      key: "cid",
-      header: "Correlation ID",
-      cell: (a) => (
-        <span className="font-mono text-xs text-muted-foreground">{a.correlationId}</span>
-      ),
-    },
   ];
 
   const exportCsv = () => {
@@ -262,7 +252,7 @@ function Page() {
         count={rows.length}
         noun="entry"
         nounPlural="entries"
-        subtitle="Every price change, newest first."
+        subtitle="Every price, rule, guardrail and recommendation change, newest first."
         search={q}
         onSearch={setQ}
         filterCount={active.length}
@@ -399,7 +389,7 @@ function Page() {
                 { label: "Entity", value: humanize(selected.entity) },
                 { label: "Record", value: <AuditRecord entry={selected} /> },
                 { label: "Action", value: humanize(selected.action) },
-                { label: "Field", value: selected.field ?? "—" },
+                { label: "Field", value: selected.field ? humanize(selected.field.replace(/([a-z])([A-Z])/g, "$1_$2")) : "—" },
                 { label: "Before", value: selected.before ?? "—" },
                 { label: "After", value: selected.after ?? "—" },
                 {

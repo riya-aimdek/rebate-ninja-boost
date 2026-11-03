@@ -1,7 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Download, MoreVertical, Plus, RefreshCw, Tags } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   DataTable,
   DetailGrid,
@@ -29,10 +35,13 @@ import {
   LIST_TYPES,
   PRICE_LISTS,
   REGIONS,
+  createDraftVersion,
+  duplicatePriceList,
+  openDraftOf,
   type ListStatus,
   type PriceList,
 } from "@/lib/pricing/data";
-import { downloadCsv } from "@/lib/pricing/csv";
+import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 type ListSearch = { status?: string };
 
@@ -85,11 +94,8 @@ function actionsFor(l: PriceList): Array<{ key: string; label: string; enabled: 
 }
 
 function RowMenu({ list }: { list: PriceList }) {
-  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const menuId = `menu-${list.id}`;
   const run = (key: string) => {
-    setOpen(false);
     if (
       key === "view" ||
       key === "compare" ||
@@ -102,63 +108,53 @@ function RowMenu({ list }: { list: PriceList }) {
       return;
     }
     if (key === "edit") {
-      toast.success(
-        list.status === "ACTIVE"
-          ? `Draft v${list.version + 1} created for ${list.name}. Active v${list.version} keeps pricing quotes.`
-          : `Opening draft ${list.name}`,
-      );
-      navigate({ to: "/pricing/price-lists/$id", params: { id: list.id } });
+      // ACTIVE lists open a separate draft version n+1 (US-PL-01 AC#6).
+      if (list.status === "ACTIVE") {
+        const existing = openDraftOf(list.id);
+        const draft = createDraftVersion(list, "Riya Shah", `${TODAY} 14:15`);
+        notifySuccess(
+          existing ? `Opening draft v${draft.version}` : `Draft v${draft.version} created`,
+          `Active v${list.version} keeps pricing quotes until v${draft.version} is approved and active.`,
+        );
+        navigate({ to: "/pricing/price-lists/$id", params: { id: draft.id } });
+      } else navigate({ to: "/pricing/price-lists/$id", params: { id: list.id } });
       return;
     }
-    if (key === "duplicate") notifySuccess(`${list.name} duplicated`, "Created as a new draft.");
+    if (key === "duplicate") {
+      const copy = duplicatePriceList(list, "Riya Shah", `${TODAY} 14:15`);
+      notifySuccess(`${list.name} duplicated`, `Created ${copy.id} as draft v1.`);
+      navigate({ to: "/pricing/price-lists/$id", params: { id: copy.id } });
+    }
   };
   // Only actions valid for the list's current status are offered (no unexplained disabled items).
   const items = actionsFor(list).filter((a) => a.enabled);
+  // Same Radix menu as the detail page header: arrow keys, Esc and focus return come built in.
   return (
-    <div
-      className="relative inline-block"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" && open) {
-          e.stopPropagation();
-          setOpen(false);
-        }
-      }}
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="size-9 grid place-items-center rounded-md hover:bg-muted"
-        aria-label={`Actions for ${list.name}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-      >
-        <MoreVertical className="size-4" aria-hidden />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
-          <div
-            id={menuId}
-            role="menu"
+    <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className="size-10 grid place-items-center rounded-md hover:bg-muted"
             aria-label={`Actions for ${list.name}`}
-            className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-border bg-card shadow-lg py-1 text-sm text-left"
           >
-            {items.map((a) => (
-              <button
-                key={a.key}
-                type="button"
-                role="menuitem"
-                onClick={() => run(a.key)}
-                className="w-full text-left px-3 py-2.5 hover:bg-brand-soft focus-visible:bg-brand-soft"
+            <MoreVertical className="size-4" aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-56">
+          {items.map((a) => (
+            <Fragment key={a.key}>
+              {a.key === "cancel" && <DropdownMenuSeparator />}
+              <DropdownMenuItem
+                className={`min-h-10 ${a.key === "cancel" ? "text-destructive focus:text-destructive" : ""}`}
+                onSelect={() => run(a.key)}
               >
                 {a.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+              </DropdownMenuItem>
+            </Fragment>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -255,34 +251,26 @@ function Page() {
       width: "48px",
     },
     {
-      key: "id",
-      header: "ID",
-      className: "whitespace-nowrap",
-      cell: (l) => <span className="font-mono text-xs">{l.id}</span>,
-    },
-    {
       key: "name",
       header: "Name",
       className: "min-w-48",
       cell: (l) => (
-        <RecordLink to="/pricing/price-lists/$id" params={{ id: l.id }}>
-          {l.name}
-        </RecordLink>
+        <div>
+          <RecordLink to="/pricing/price-lists/$id" params={{ id: l.id }}>
+            {l.name}
+          </RecordLink>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            <span className="font-mono">{l.id}</span> · v{l.version} · {l.currency}
+          </div>
+        </div>
       ),
     },
     { key: "type", header: "Type", cell: (l) => <Tag>{humanize(l.type)}</Tag> },
     { key: "status", header: "Status", cell: (l) => <StatusPill status={l.status} /> },
     {
-      key: "ver",
-      header: "Version",
-      align: "center",
-      cell: (l) => <span className="tabular-nums">v{l.version}</span>,
-    },
-    { key: "cur", header: "Currency", cell: (l) => l.currency },
-    {
       key: "scope",
       header: "Region · channel · segment",
-      className: "min-w-48",
+      className: "min-w-40",
       cell: (l) => (
         <span className="text-muted-foreground">
           {l.region} · {l.channel} · {l.segment}
@@ -293,21 +281,23 @@ function Page() {
       key: "eff",
       header: "Effective",
       cell: (l) => (
-        <span className="whitespace-nowrap tabular-nums">
-          {l.effectiveFrom} –{" "}
-          {l.openEnded ? (
-            <span className="italic text-muted-foreground">Open-ended</span>
-          ) : (
-            l.effectiveTo
-          )}
-        </span>
+        <div className="whitespace-nowrap tabular-nums">
+          <div>{l.effectiveFrom}</div>
+          <div className="text-xs text-muted-foreground">
+            to {l.openEnded ? <span className="italic">open-ended</span> : l.effectiveTo}
+          </div>
+        </div>
       ),
     },
-    { key: "owner", header: "Owner", className: "whitespace-nowrap", cell: (l) => l.owner },
     {
       key: "upd",
-      header: "Last updated",
-      cell: (l) => <span className="text-muted-foreground whitespace-nowrap">{l.lastUpdated}</span>,
+      header: "Owner · updated",
+      cell: (l) => (
+        <div className="whitespace-nowrap">
+          <div>{l.owner}</div>
+          <div className="text-xs text-muted-foreground tabular-nums">{l.lastUpdated}</div>
+        </div>
+      ),
     },
     { key: "act", header: "", align: "right", cell: (l) => <RowMenu list={l} /> },
   ];

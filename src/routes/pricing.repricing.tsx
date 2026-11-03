@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState, type FormEvent } from "react";
-import { Check, Pencil, Plus, X } from "lucide-react";
+import { ArrowRight, Check, Pause, Pencil, Plus, Power, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -164,6 +164,42 @@ function RepricingPage() {
     proposals.some((p) => p.id === id && p.status === "PENDING_APPROVAL"),
   );
 
+  const [activating, setActivating] = useState<RepricingRule | null>(null);
+  const [activateBusy, setActivateBusy] = useState(false);
+  const setRuleStatus = (id: string, status: RepricingRule["status"]) =>
+    setRules((rs) => rs.map((x) => (x.id === id ? { ...x, status } : x)));
+
+  // Activation starts live proposals, so it is confirmed; deactivation is reversible via undo.
+  const activate = () => {
+    if (!activating) return;
+    const r = activating;
+    const errs = validateRule(r);
+    if (Object.keys(errs).length) {
+      setActivating(null);
+      toast.error(`${r.name} can't be activated`, {
+        description: `${Object.values(errs)[0]} Edit the rule, then activate it.`,
+      });
+      return;
+    }
+    setActivateBusy(true);
+    window.setTimeout(() => {
+      setRuleStatus(r.id, "ACTIVE");
+      setActivateBusy(false);
+      setActivating(null);
+      toast.success(`${r.name} activated`, {
+        description: `New ${humanize(r.trigger).toLowerCase()} events now create proposals.`,
+      });
+    }, 400);
+  };
+  const deactivate = (r: RepricingRule) => {
+    setRuleStatus(r.id, "INACTIVE");
+    notifyUndo(
+      `${r.name} deactivated`,
+      () => setRuleStatus(r.id, "ACTIVE"),
+      "Events no longer create proposals from this rule.",
+    );
+  };
+
   const setStatus = (ids: string[], status: Proposal["status"]) =>
     setProposals((ps) => ps.map((x) => (ids.includes(x.id) ? { ...x, status } : x)));
 
@@ -268,16 +304,40 @@ function RepricingPage() {
     {
       key: "edit",
       header: <span className="sr-only">Actions</span>,
+      className: "whitespace-nowrap",
       cell: (r) => (
-        <Btn
-          variant="ghost"
-          size="sm"
-          icon={Pencil}
-          onClick={() => setEditing(r)}
-          aria-label={`Edit ${r.name}`}
-        >
-          Edit
-        </Btn>
+        <div className="flex justify-end gap-2">
+          <Btn
+            variant="ghost"
+            size="sm"
+            icon={Pencil}
+            onClick={() => setEditing(r)}
+            aria-label={`Edit ${r.name}`}
+          >
+            Edit
+          </Btn>
+          {r.status === "ACTIVE" ? (
+            <Btn
+              variant="subtle"
+              size="sm"
+              icon={Pause}
+              onClick={() => deactivate(r)}
+              aria-label={`Deactivate ${r.name}`}
+            >
+              Deactivate
+            </Btn>
+          ) : (
+            <Btn
+              variant="outline"
+              size="sm"
+              icon={Power}
+              onClick={() => setActivating(r)}
+              aria-label={`Activate ${r.name}`}
+            >
+              Activate
+            </Btn>
+          )}
+        </div>
       ),
     },
   ];
@@ -288,7 +348,7 @@ function RepricingPage() {
       header: (
         <input
           type="checkbox"
-          className="size-4"
+          className="size-4 accent-[var(--brand)]"
           aria-label="Select all pending proposals"
           checked={allPendingSelected}
           disabled={pendingShown.length === 0}
@@ -299,7 +359,7 @@ function RepricingPage() {
         p.status === "PENDING_APPROVAL" ? (
           <input
             type="checkbox"
-            className="size-4"
+            className="size-4 accent-[var(--brand)]"
             aria-label={`Select ${p.id}`}
             checked={selected.includes(p.id)}
             onChange={() => toggleSel(p.id)}
@@ -362,7 +422,9 @@ function RepricingPage() {
                 .replace("maxDecreasePct", "max decrease")}
             </Flag>
           ))}
-          {p.note && <span className="text-xs text-muted-foreground">{p.note}</span>}
+          {p.note && !p.flags.some((f) => f.toLowerCase().includes(p.note!.toLowerCase())) && (
+            <span className="text-xs text-muted-foreground">{p.note}</span>
+          )}
         </div>
       ),
     },
@@ -385,6 +447,7 @@ function RepricingPage() {
             </Btn>
             <Btn
               size="sm"
+              variant="outline"
               icon={Check}
               onClick={() => decide(p, true)}
               aria-label={`Approve ${p.id}`}
@@ -429,7 +492,7 @@ function RepricingPage() {
       />
 
       <div className="grid gap-4 grid-cols-2 xl:grid-cols-4 mb-6">
-        <KpiTile label="Active rules" value={rules.filter((r) => r.status === "ACTIVE").length} />
+        <KpiTile label="Active rules" value={rules.filter((r) => r.status === "ACTIVE").length} hint="Watching cost, index and competitor events" />
         <KpiTile
           label="Pending proposals"
           value={pending}
@@ -442,6 +505,7 @@ function RepricingPage() {
             proposals.filter((p) => p.flags.some((f) => f.toLowerCase().includes("capped"))).length
           }
           tone="info"
+          hint="Limited by max change or a guardrail"
         />
         <KpiTile
           label="Suppressed proposals"
@@ -466,7 +530,14 @@ function RepricingPage() {
 
       {tab === "rules" && (
         <>
-          <WorkedExample />
+          <WorkedExample
+            rule={rules.find((r) => r.id === "RP-01")}
+            proposal={proposals.find((p) => p.ruleId === "RP-01" && p.status === "PENDING_APPROVAL")}
+            onOpenProposal={() => {
+              setSearch("");
+              setTab("proposals");
+            }}
+          />
           <DataTable
             caption="Repricing rules"
             columns={ruleCols}
@@ -620,6 +691,20 @@ function RepricingPage() {
         onCancel={() => setBulk(null)}
       />
 
+      <ConfirmDialog
+        open={activating !== null}
+        title={`Activate ${activating?.name ?? "rule"}?`}
+        description={
+          activating
+            ? `From now on, ${humanize(activating.trigger).toLowerCase()} events for ${activating.scope} create price proposals, capped at +${activating.maxIncreasePct}% / −${activating.maxDecreasePct}% with guardrails on top. ${activating.autoApprove ? "Proposals inside policy are auto-approved." : "Every proposal is routed through the approval matrix."}`
+            : ""
+        }
+        confirmLabel="Activate rule"
+        loading={activateBusy}
+        onConfirm={activate}
+        onCancel={() => setActivating(null)}
+      />
+
       {editing && (
         <RuleModal
           rule={editing === "new" ? null : editing}
@@ -631,7 +716,11 @@ function RepricingPage() {
             );
             setEditing(null);
             setTab("rules");
-            toast.success(`${r.name} ${isNew ? "created" : "saved"}`);
+            toast.success(`${r.name} ${isNew ? "created as draft" : "saved"}`, {
+              description: isNew
+                ? "Select Activate on the rule to start creating proposals."
+                : undefined,
+            });
           }}
         />
       )}
@@ -639,48 +728,73 @@ function RepricingPage() {
   );
 }
 
-function WorkedExample() {
-  const cost0 = 82.5;
+/** RP-01 walkthrough, computed from the rule's live settings so it can't drift from what the rule does. */
+function WorkedExample({ rule, proposal, onOpenProposal }: { rule?: RepricingRule; proposal?: Proposal; onOpenProposal: () => void }) {
+  if (!rule) return null;
+  const target = rule.targetMarginPct ?? 25;
+  const cap = rule.maxIncreasePct;
   const price0 = 110;
-  const cost1 = cost0 * 1.12;
-  const target = cost1 / (1 - 0.25);
-  const capped = price0 * 1.08;
+  const cost0 = price0 * (1 - target / 100); // the starting price sits exactly on the target margin
+  const rise = 12;
+  const cost1 = cost0 * (1 + rise / 100);
+  // Margins are levels, not changes — no +/− sign.
+  const margin = (price: number, cost: number) => `${(((price - cost) / price) * 100).toFixed(1)}%`;
+  const uncapped = cost1 / (1 - target / 100);
+  const capped = Math.min(uncapped, price0 * (1 + cap / 100));
+  const wasCapped = capped < uncapped;
+  const steps: Array<{ label: string; value: string; detail: React.ReactNode; tone?: "warn" | "result" }> = [
+    { label: "Starting point", value: money(price0), detail: <>Cost {money(cost0)} → margin <b>{margin(price0, cost0)}</b>, on the {target}% target</> },
+    { label: "Cost event", value: `+${rise}%`, detail: <>Cost {money(cost0)} → {money(cost1)}. At the old price, margin drops to <b>{margin(price0, cost1)}</b></>, tone: "warn" },
+    { label: `Price for ${target}% margin`, value: money(uncapped), detail: <>{pct(((uncapped - price0) / price0) * 100)} on the current price{wasCapped ? ` — above the +${cap}% automatic limit` : ""}</> },
+    {
+      label: "Proposal",
+      value: money(capped),
+      detail: (
+        <>
+          {wasCapped ? <>Capped at +{cap}%, margin {margin(capped, cost1)}. </> : null}
+          {rule.autoApprove ? "Auto-approved inside policy." : "Routed for approval per the approval matrix."}
+        </>
+      ),
+      tone: "result",
+    },
+  ];
   return (
-    <Card title="Worked example — RP-01 Widget margin keeper" className="mb-6">
-      <ol className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-        <Step n={1} label="Rule">
-          Maintain <b>25% margin</b> on Widget · max automatic increase <b>8%</b>
-        </Step>
-        <Step n={2} label="Event">
-          Cost rises <b>+12%</b>: {cost0.toFixed(2)} → {cost1.toFixed(2)}
-        </Step>
-        <Step n={3} label="Uncapped">
-          Price for 25% margin = <b>{target.toFixed(2)}</b> (
-          {pct(((target - price0) / price0) * 100)})
-        </Step>
-        <Step n={4} label="Proposal">
-          Capped at 8% → <b className="text-brand">{capped.toFixed(2)}</b>. Routed for approval per
-          the approval matrix.
-        </Step>
+    <Card
+      title={`Worked example — ${rule.id} ${rule.name}`}
+      subtitle={`How a cost rise becomes a capped price proposal, using ${rule.id}'s current settings: ${target}% target margin, +${cap}% maximum automatic increase.`}
+      actions={
+        proposal && (
+          <Btn variant="ghost" size="sm" onClick={onOpenProposal}>
+            See {proposal.id} in Proposals
+          </Btn>
+        )
+      }
+      className="mb-6"
+    >
+      <ol className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 text-sm">
+        {steps.map((s, i) => (
+          <li
+            key={s.label}
+            className={`relative rounded-lg border p-4 flex flex-col gap-1 ${s.tone === "result" ? "border-brand/50 bg-brand-soft/50" : "border-border"}`}
+          >
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <span className="size-6 rounded-full bg-navy text-navy-foreground grid place-items-center text-xs normal-case tracking-normal" aria-hidden>
+                {i + 1}
+              </span>
+              {s.label}
+            </div>
+            <div className={`text-xl font-bold tabular-nums ${s.tone === "result" ? "text-brand" : s.tone === "warn" ? "text-warning-foreground" : ""}`}>{s.value}</div>
+            <p className="text-muted-foreground">{s.detail}</p>
+            {/* Arrow to the next step on the 4-across layout. */}
+            {i < steps.length - 1 && (
+              <span className="hidden xl:grid absolute -right-3 top-1/2 -translate-y-1/2 z-10 size-6 place-items-center rounded-full bg-card border border-border text-muted-foreground" aria-hidden>
+                <ArrowRight className="size-3.5" />
+              </span>
+            )}
+          </li>
+        ))}
       </ol>
     </Card>
-  );
-}
-
-function Step({ n, label, children }: { n: number; label: string; children: React.ReactNode }) {
-  return (
-    <li className="rounded-lg border border-border p-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <span
-          className="size-6 rounded-full bg-navy text-navy-foreground grid place-items-center"
-          aria-hidden
-        >
-          {n}
-        </span>
-        {label}
-      </div>
-      <div className="mt-2">{children}</div>
-    </li>
   );
 }
 
@@ -941,9 +1055,7 @@ function RuleModal({
             />
           </Field>
           <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-foreground">
-              Approval
-            </span>
+            <span className="text-sm font-medium text-foreground">Approval</span>
             <div className="h-10 flex items-center">
               <Toggle
                 checked={r.autoApprove}

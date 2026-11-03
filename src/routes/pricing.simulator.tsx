@@ -122,6 +122,13 @@ function fmtStamp(s: string) {
   return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}${m[4] ? `, ${m[4]}` : ""}`;
 }
 
+/** Current local time as "YYYY-MM-DD HH:mm" — the stored format for saved simulations. */
+function nowStamp() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 const DEFAULT_SCENARIOS: ScenarioInput[] = [
   { id: 1, name: "A +3%", kind: "PERCENT", value: "3" },
   { id: 2, name: "B +5%", kind: "PERCENT", value: "5" },
@@ -267,10 +274,11 @@ function SimulatorPage() {
       elasticitySource: source,
       modelVersion: MODEL_VERSION,
       createdBy: "Riya Shah",
-      createdAt: "2026-10-29 14:30",
-      scenarios: results.map((r) => ({
+      createdAt: nowStamp(),
+      // Store the scenario input ("PERCENT 3", "SWAP_LIST BL-002") so reopening restores it exactly.
+      scenarios: results.map((r, i) => ({
         name: r.name,
-        change: `${r.pricePct.toFixed(1)}%`,
+        change: scenarios[i].kind === "SWAP_LIST" ? `SWAP_LIST ${scenarios[i].list ?? "BL-002"}` : `${scenarios[i].kind} ${scenarios[i].value}`,
         revenue: r.revenue.scen - r.revenue.base,
         volumePct: ((r.volume.scen - r.volume.base) / r.volume.base) * 100,
         margin: r.margin.scen - r.margin.base,
@@ -280,11 +288,40 @@ function SimulatorPage() {
     toast.success(`${sim.id} saved`, { description: "Stored with user, timestamp and inputs." });
   };
 
+  /** Reopen a saved simulation: restores its inputs; run again to see results. */
+  const openSaved = (s: Simulation) => {
+    const hist = s.baseline.startsWith("Historical: ");
+    setName(s.name);
+    setBaselineKind(hist ? "HISTORICAL" : "PRICE_LIST");
+    if (hist) setPeriod(s.baseline.slice("Historical: ".length));
+    else setBaseList(PRICE_LISTS.find((l) => s.baseline.endsWith(l.name))?.id ?? baseList);
+    setHorizon(String(s.horizonMonths));
+    setSource(s.elasticitySource);
+    setScenarios(
+      s.scenarios.map((sc, i) => {
+        const [k, v = ""] = sc.change.split(" ");
+        const kind: ScenarioKind = (["PERCENT", "ABSOLUTE", "TARGET_MARGIN", "SWAP_LIST"] as const).find((x) => x === k) ?? "PERCENT";
+        return kind === "SWAP_LIST"
+          ? { id: Date.now() + i, name: sc.name, kind, value: "", list: v }
+          : { id: Date.now() + i, name: sc.name, kind, value: String(Number(v.replace("%", "")) || 0) };
+      }),
+    );
+    setResults(null);
+    setSelected(null);
+    setErr(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    toast.success(`${s.id} opened`, { description: "Inputs restored. Run the simulation to see results." });
+  };
+
   const createBulk = () => {
     const r = results?.find((x) => x.name === selected);
     if (!r) return;
-    toast.success("Bulk update preview opened", { description: `Same scope and a ${r.pricePct.toFixed(1)}% adjustment from scenario "${r.name}".` });
-    navigate({ to: "/pricing/bulk-update" });
+    const adj = Number(r.pricePct.toFixed(1));
+    toast.success("Bulk update preview opened", { description: `Same scope and a ${adj}% adjustment from scenario "${r.name}".` });
+    navigate({
+      to: "/pricing/bulk-update",
+      search: { pct: adj, scenario: r.name, list: baselineKind === "PRICE_LIST" ? baseList : undefined },
+    });
   };
 
   const update = (id: number, patch: Partial<ScenarioInput>) => setScenarios((ss) => ss.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -550,7 +587,7 @@ function SimulatorPage() {
             <Card title="Assumptions">
               <dl className="text-sm space-y-2.5">
                 {[
-                  ["Model version", MODEL_VERSION],
+                  ["Model version", source === "MODEL" ? MODEL_VERSION : "Not used"],
                   ["Elasticity source", sourceLabel],
                   [
                     "Baseline",
@@ -617,6 +654,7 @@ function SimulatorPage() {
         numbered={false}
         rows={saved}
         rowKey={(s) => s.id}
+        onRowClick={openSaved}
         empty={
           <EmptyState icon={FlaskConical} title="No saved simulations yet">
             Run a simulation, then choose Save simulation to keep it with its inputs.

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ArrowRight, CornerDownRight, FileText, Star, Users } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, CornerDownRight, FileText, Star, Users } from "lucide-react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -57,6 +57,15 @@ function Page() {
   const [q, setQ] = useState("");
   const [segments, setSegments] = useState<Segment[]>([]);
   const [hierarchy, setHierarchy] = useState(true);
+  // Parents whose children are hidden in hierarchy view.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (cid: string) =>
+    setCollapsed((cur) => {
+      const next = new Set(cur);
+      if (next.has(cid)) next.delete(cid);
+      else next.add(cid);
+      return next;
+    });
   const [error, setError] = useState<ApiError | null>(null);
   const [syncedAt, setSyncedAt] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
@@ -82,8 +91,15 @@ function Page() {
         (!t || [c.id, c.name, c.industry, c.geography].some((v) => v.toLowerCase().includes(t))) &&
         (segments.length === 0 || segments.includes(c.segment as Segment)),
     );
-    return hierarchy ? treeOrder(filtered) : [...filtered].sort((a, b) => a.name.localeCompare(b.name));
-  }, [q, segments, hierarchy]);
+    if (!hierarchy) return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+    const hidden = (c: Customer): boolean => {
+      for (let p = c.parentId ? customerById(c.parentId) : undefined; p; p = p.parentId ? customerById(p.parentId) : undefined) {
+        if (collapsed.has(p.id)) return true;
+      }
+      return false;
+    };
+    return treeOrder(filtered).filter((c) => !hidden(c));
+  }, [q, segments, hierarchy, collapsed]);
 
   const startQuote = (c: Customer) => {
     if (c.status === "BLOCKED") {
@@ -106,7 +122,22 @@ function Page() {
       header: "Name",
       cell: (c) => (
         <span className="inline-flex items-center gap-1.5" style={{ paddingLeft: hierarchy ? (c.level - 1) * 24 : 0 }}>
-          {hierarchy && c.level > 1 && <CornerDownRight className="size-3.5 text-muted-foreground" aria-hidden />}
+          {hierarchy && childrenOf(c.id).length > 0 ? (
+            <button
+              type="button"
+              className="hit -ml-1 grid place-items-center size-6 rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-expanded={!collapsed.has(c.id)}
+              aria-label={`${collapsed.has(c.id) ? "Show" : "Hide"} ${childrenOf(c.id).length} child ${childrenOf(c.id).length === 1 ? "account" : "accounts"} of ${c.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleCollapsed(c.id);
+              }}
+            >
+              {collapsed.has(c.id) ? <ChevronRight className="size-4" aria-hidden /> : <ChevronDown className="size-4" aria-hidden />}
+            </button>
+          ) : (
+            hierarchy && c.level > 1 && <CornerDownRight className="size-3.5 text-muted-foreground" aria-hidden />
+          )}
           <RecordLink to="/pricing/customers/$id" params={{ id: c.id }}>{c.name}</RecordLink>
           {c.strategic && <Star className="size-3.5 text-brand fill-brand" role="img" aria-label="Strategic customer" />}
         </span>
@@ -223,8 +254,12 @@ function CustomerQuickView({
           <span className="flex flex-wrap items-center gap-2">
             <span className="font-mono">{c.id}</span>
             <StatusPill status={c.status} />
-            <Tag tone="brand">{c.segment}</Tag>
-            {c.strategic && <Tag>Strategic</Tag>}
+            <Tag tone="brand">Segment: {c.segment}</Tag>
+            {c.strategic && (
+              <Tag tone="warning">
+                <Star className="size-3 mr-1 fill-current" aria-hidden /> Strategic account
+              </Tag>
+            )}
           </span>
         )
       }

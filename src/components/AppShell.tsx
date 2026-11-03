@@ -377,14 +377,14 @@ export function TopBar({
   useGlobalShortcuts(openPalette, openHelp);
   useEffect(() => setMobileOpen(false), [pathname]);
 
-  const initials = (account ?? "AW").slice(0, 2).toUpperCase();
+  const initials = (account ?? "RS").slice(0, 2).toUpperCase();
 
   return (
     <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 sm:px-6 h-[72px] flex items-center gap-3">
       <button
         type="button"
         onClick={() => setMobileOpen(true)}
-        className="lg:hidden size-10 grid place-items-center rounded-lg border border-border bg-card hover:bg-muted"
+        className="lg:hidden size-10 shrink-0 grid place-items-center rounded-lg border border-border bg-card hover:bg-muted"
         aria-label="Open navigation menu"
         aria-expanded={mobileOpen}
       >
@@ -401,7 +401,7 @@ export function TopBar({
             onChange={(e) => onSearch(e.target.value)}
             aria-label={placeholder.replace(/…$/, "")}
             placeholder={placeholder}
-            className="w-full h-10 pl-10 pr-3 rounded-lg border border-input bg-card text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+            className="w-full h-10 pl-10 pr-3 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
           />
         </div>
       ) : null}
@@ -411,17 +411,23 @@ export function TopBar({
         onClick={openPalette}
         aria-keyshortcuts="Control+K Meta+K"
         className={`h-10 rounded-lg border border-input bg-card text-sm text-muted-foreground hover:bg-muted flex items-center gap-2 px-3 ${
-          onSearch ? "shrink-0" : "flex-1 max-w-xl"
+          onSearch ? "shrink-0" : "flex-[3] min-w-0 max-w-xl"
         }`}
       >
         <Search className="size-4 shrink-0" aria-hidden />
-        <span className={onSearch ? "hidden md:inline" : "flex-1 text-left truncate"}>
-          {onSearch ? "Jump to" : "Jump to a page or action…"}
-        </span>
+        {onSearch ? (
+          <span className="hidden md:inline">Jump to</span>
+        ) : (
+          <span className="flex-1 text-left truncate">
+            <span className="sm:hidden">Search</span>
+            <span className="hidden sm:inline">Jump to a page or action…</span>
+          </span>
+        )}
         <kbd className="hidden sm:inline-flex h-6 items-center rounded border border-border bg-muted px-1.5 text-[11px] font-semibold">Ctrl K</kbd>
       </button>
 
-      <div className="flex-1" />
+      {/* Spacer; on phones the "Jump to" button takes the free width instead. */}
+      <div className={onSearch ? "flex-1" : "hidden sm:block flex-1"} />
 
       <button
         type="button"
@@ -429,14 +435,14 @@ export function TopBar({
         aria-label="Keyboard shortcuts"
         aria-keyshortcuts="Shift+Slash"
         title="Keyboard shortcuts (?)"
-        className="hidden sm:grid size-10 place-items-center rounded-lg border border-border bg-card hover:bg-muted"
+        className="hidden sm:grid size-10 shrink-0 place-items-center rounded-lg border border-border bg-card hover:bg-muted"
       >
         <Keyboard className="size-5" aria-hidden />
       </button>
 
       <Popover>
         <PopoverTrigger asChild>
-          <button type="button" aria-label="Notifications" className="size-10 grid place-items-center rounded-lg border border-border bg-card hover:bg-muted">
+          <button type="button" aria-label="Notifications" className="size-10 shrink-0 grid place-items-center rounded-lg border border-border bg-card hover:bg-muted">
             <Bell className="size-5" aria-hidden />
           </button>
         </PopoverTrigger>
@@ -454,7 +460,7 @@ export function TopBar({
         to="/profile"
         aria-label={`My profile${account ? ` — ${account}` : ""}`}
         title="My profile"
-        className="size-10 rounded-full bg-brand text-brand-foreground grid place-items-center font-semibold text-sm hover:opacity-90"
+        className="size-10 shrink-0 rounded-full bg-brand text-brand-foreground grid place-items-center font-semibold text-sm hover:opacity-90"
       >
         {initials}
       </Link>

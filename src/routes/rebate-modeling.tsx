@@ -1257,7 +1257,7 @@ function GrowthConfig({
                       value={s.type}
                       onChange={(e) => updateScenario(i, { type: e.target.value as RebateType })}
                       aria-label={`Rebate type for ${s.name}`}
-                      className="h-10 px-2 text-xs font-semibold rounded-lg border border-input bg-card text-foreground"
+                      className="h-10 px-2 text-base sm:text-xs font-semibold rounded-lg border border-input bg-card text-foreground"
                     >
                       <option>Fixed</option><option>Growth</option><option>Targeted</option><option>Mixed</option>
                     </select>

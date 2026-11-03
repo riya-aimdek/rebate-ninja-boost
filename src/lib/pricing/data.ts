@@ -202,6 +202,10 @@ export const SEGMENT_HISTORY: SegmentAssignment[] = [
   { customerId: "C-1", segment: "Distributor", from: "2026-04-01", method: "ATTRIBUTE", reason: "Matched Mid-Market (priority 20) and Distributor (priority 10) — lower number wins" },
 ];
 
+/** Rolling-volume changes received from the ERP since the last segment evaluation (US-ST-02 AC#4). */
+export type VolumeUpdate = { customerId: string; from: number; to: number; source: string; receivedAt: string };
+export const VOLUME_UPDATES: VolumeUpdate[] = [{ customerId: "155010", from: 900_000, to: 1_050_000, source: "SAP ERP", receivedAt: "2026-10-29 09:40" }];
+
 /* ---------------- Cost data ---------------- */
 
 export type CostRecord = {
@@ -260,6 +264,8 @@ export type PriceLine = {
   calculatedPrice?: number;
   overridePrice?: number;
   overrideReason?: string;
+  /** Free text; required when overrideReason is OTHER. */
+  overrideReasonText?: string;
   overrideExpires?: string;
   derivationChain?: string;
 };
@@ -283,6 +289,8 @@ export type PriceList = {
   submittedBy?: string;
   lastUpdated: string;
   parentId?: string;
+  /** Set on a draft version opened from an Active list (US-PL-01 AC#6); that list stays Active until this one activates. */
+  draftOf?: string;
   adjustmentType?: (typeof ADJUSTMENT_TYPES)[number];
   adjustmentValue?: number;
   inheritanceMode?: (typeof INHERITANCE_MODES)[number];
@@ -602,7 +610,7 @@ export type RepricingRule = {
 export const REPRICING_RULES: RepricingRule[] = [
   { id: "RP-01", name: "Widget margin keeper", trigger: "COST_CHANGE", scope: "Widget · UK Base 2026", targetMarginPct: 25, minChangePct: 1, maxIncreasePct: 8, maxDecreasePct: 5, cooldownHours: 24, autoApprove: false, status: "ACTIVE" },
   { id: "RP-02", name: "Cable copper follow", trigger: "INDEX_CHANGE", scope: "Cable · all lists", minChangePct: 0.5, maxIncreasePct: 10, maxDecreasePct: 10, cooldownHours: 12, autoApprove: true, status: "ACTIVE" },
-  { id: "RP-03", name: "E-com match lowest", trigger: "COMPETITOR_PRICE_CHANGE", scope: "Lighting · E-commerce", minChangePct: 1, maxIncreasePct: 5, maxDecreasePct: 8, cooldownHours: 6, autoApprove: true, competitorStrategy: "MATCH_LOWEST", marginFloorPct: 22, status: "ACTIVE" },
+  { id: "RP-03", name: "E-com match lowest", trigger: "COMPETITOR_PRICE_CHANGE", scope: "Lighting · E-commerce", minChangePct: 1, maxIncreasePct: 5, maxDecreasePct: 35, cooldownHours: 6, autoApprove: true, competitorStrategy: "MATCH_LOWEST", marginFloorPct: 22, status: "ACTIVE" },
 ];
 
 export type Proposal = {
@@ -800,4 +808,135 @@ export const AUDIT_LOG: AuditEntry[] = [
 export const productBySku = (sku: string) => PRODUCTS.find((p) => p.sku === sku || p.productId === sku);
 export const customerById = (id: string) => CUSTOMERS.find((c) => c.id === id);
 export const priceListById = (id: string) => PRICE_LISTS.find((l) => l.id === id);
+
+/** Copies a list as a new independent DRAFT v1 (Appendix B "Duplicate") and returns the copy. */
+export function duplicatePriceList(src: PriceList, owner: string, at: string): PriceList {
+  let n = PRICE_LISTS.length + 1;
+  while (PRICE_LISTS.some((l) => l.id === `DR-${String(n).padStart(3, "0")}`)) n++;
+  const id = `DR-${String(n).padStart(3, "0")}`;
+  const copy: PriceList = {
+    ...src,
+    id,
+    name: `${src.name} (copy)`,
+    status: "DRAFT",
+    version: 1,
+    owner,
+    submittedBy: undefined,
+    lastUpdated: at,
+    lines: src.lines.map((l, i) => ({ ...l, id: `${id}-L${i + 1}` })),
+  };
+  PRICE_LISTS.unshift(copy);
+  return copy;
+}
+
+const OPEN_DRAFT: ListStatus[] = ["DRAFT", "SUBMITTED", "APPROVED", "SCHEDULED"];
+/** The in-progress draft version of an Active list, if one exists. */
+export const openDraftOf = (id: string) =>
+  PRICE_LISTS.find((l) => l.draftOf === id && OPEN_DRAFT.includes(l.status));
+
+/**
+ * "Edit draft" on an Active list (US-PL-01 AC#6): opens version n+1 as a separate DRAFT record.
+ * Returns the existing open draft instead of creating a second one.
+ */
+export function createDraftVersion(src: PriceList, owner: string, at: string): PriceList {
+  const existing = openDraftOf(src.id);
+  if (existing) return existing;
+  const version = src.version + 1;
+  const id = `${src.id}-v${version}`;
+  const draft: PriceList = {
+    ...src,
+    id,
+    status: "DRAFT",
+    version,
+    draftOf: src.id,
+    owner,
+    submittedBy: undefined,
+    lastUpdated: at,
+    lines: src.lines.map((l, i) => ({ ...l, id: `${id}-L${i + 1}` })),
+  };
+  PRICE_LISTS.unshift(draft);
+  return draft;
+}
+
+/** Writes a list's in-session changes back to the mock store so other pages see them. */
+export function savePriceList(list: PriceList) {
+  const i = PRICE_LISTS.findIndex((l) => l.id === list.id);
+  if (i >= 0) PRICE_LISTS[i] = list;
+}
+
+/** Number of lists in a derivation chain ending at `id` (a base list is depth 1). */
+export function chainDepth(id: string): number {
+  let depth = 0;
+  let cur = priceListById(id);
+  while (cur) {
+    depth++;
+    cur = cur.parentId ? priceListById(cur.parentId) : undefined;
+  }
+  return depth;
+}
+
+export const MAX_DERIVATION_DEPTH = 3;
+
+/** Applies a list's rounding rule, e.g. "2 decimals · UP" (US-PL-03: rounding after adjustment). */
+export function roundByRule(x: number, rule: string): number {
+  const decimals = Number(rule.match(/^(\d+)/)?.[1] ?? 2);
+  const f = 10 ** decimals;
+  const v = Number((x * f).toFixed(6));
+  const r = rule.includes("UP") ? Math.ceil(v) : rule.includes("DOWN") ? Math.floor(v) : Math.round(v);
+  return r / f;
+}
+
+/** Final price of a line: an unexpired override wins, else calculated, else the list price. */
+export function finalLinePrice(l: PriceLine, today: string): number | null {
+  if (l.overridePrice !== undefined && !(l.overrideExpires && l.overrideExpires < today)) return l.overridePrice;
+  return l.calculatedPrice ?? l.price;
+}
+
+/**
+ * Derives lines from a parent list (US-PL-03). PERCENT and ABSOLUTE are applied then rounded;
+ * NONE copies the parent price; FORMULA copies it and records the formula for evaluation at activation.
+ */
+export function deriveLines(
+  parent: PriceList,
+  adjustmentType: string,
+  adjustmentValue: string,
+  rounding: string,
+  today: string,
+): PriceLine[] {
+  const v = Number(adjustmentValue);
+  return parent.lines
+    .filter((l) => finalLinePrice(l, today) !== null)
+    .map((l, i) => {
+      const base = finalLinePrice(l, today) as number;
+      const overridden = base !== (l.calculatedPrice ?? l.price);
+      const from = overridden
+        ? `${parent.id} override ${base.toFixed(2)}`
+        : (l.derivationChain ?? `${parent.id} ${base.toFixed(2)}`);
+      let calc = base;
+      let step = "";
+      if (adjustmentType === "PERCENT" && Number.isFinite(v)) {
+        const f = 1 + v / 100;
+        calc = roundByRule(base * f, rounding);
+        step = ` × ${f.toFixed(2)}`;
+      } else if (adjustmentType === "ABSOLUTE" && Number.isFinite(v)) {
+        calc = roundByRule(base + v, rounding);
+        step = ` ${v < 0 ? "−" : "+"} ${Math.abs(v).toFixed(2)}`;
+      } else if (adjustmentType === "FORMULA") {
+        step = ` → formula ${adjustmentValue || "—"} (evaluated at activation)`;
+      }
+      return {
+        id: `L${i + 1}`,
+        sku: l.sku,
+        price: calc,
+        calculatedPrice: calc,
+        uom: l.uom,
+        minQty: l.minQty,
+        maxQty: l.maxQty,
+        effectiveFrom: l.effectiveFrom,
+        effectiveTo: l.effectiveTo,
+        allowZeroPrice: l.allowZeroPrice,
+        derivationChain: `${from}${step}`,
+      };
+    });
+}
 export const childrenOf = (id: string) => CUSTOMERS.filter((c) => c.parentId === id);

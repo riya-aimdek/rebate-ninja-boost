@@ -1,14 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
-  KeyRound,
   Mail,
   MapPin,
   Pencil,
   Phone,
   Upload,
 } from "lucide-react";
-import { toast } from "sonner";
 import { AppLayout } from "@/components/AppShell";
 import {
   Btn,
@@ -68,12 +66,12 @@ type Profile = {
 };
 
 const INITIAL_PROFILE: Profile = {
-  username: "awebb",
-  email: "alex.webb@envirovent.co.uk",
-  firstName: "Alex",
-  lastName: "Webb",
+  username: "rshah",
+  email: "riya.shah@envirovent.co.uk",
+  firstName: "Riya",
+  lastName: "Shah",
   phone: "+44 7700 900 812",
-  jobTitle: "Pricing Manager",
+  jobTitle: "Pricing Analyst",
   language: "en-GB",
   currency: "GBP",
   timeZone: "London",
@@ -183,7 +181,7 @@ function ProfilePage() {
               </h1>
               <p className="text-sm text-muted-foreground mt-1">{saved.jobTitle} · EnviroVent Ltd</p>
               <div className="flex flex-wrap items-center gap-2 mt-3">
-                <Tag tone="brand">Admin</Tag>
+                <Tag tone="brand">{ROLE}</Tag>
                 <Tag>Member since Jan 2024</Tag>
               </div>
             </div>
@@ -239,16 +237,16 @@ function ProfilePage() {
                 subtitle={editing ? "* Required" : "How your name and contact details appear across Rebate Ninja."}
               >
                 <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                  <Field label="User name" required error={showError("username")}>
+                  <Field label="User name" required={editing} error={showError("username")}>
                     <input {...fieldProps("username")} autoComplete="username" />
                   </Field>
-                  <Field label="Email address" required error={showError("email")}>
+                  <Field label="Email address" required={editing} error={showError("email")}>
                     <input {...fieldProps("email")} type="email" autoComplete="email" />
                   </Field>
-                  <Field label="First name" required error={showError("firstName")}>
+                  <Field label="First name" required={editing} error={showError("firstName")}>
                     <input {...fieldProps("firstName")} autoComplete="given-name" />
                   </Field>
-                  <Field label="Last name" required error={showError("lastName")}>
+                  <Field label="Last name" required={editing} error={showError("lastName")}>
                     <input {...fieldProps("lastName")} autoComplete="family-name" />
                   </Field>
                   <Field label="Phone" error={showError("phone")} hint={editing ? "e.g. +44 7700 900 812" : undefined}>
@@ -312,7 +310,7 @@ function ProfilePage() {
                     { what: "Updated a pricing rule", when: "3 days ago", to: "/pricing/rules" },
                   ].map((a) => (
                     <li key={a.what} className="flex items-start justify-between gap-3">
-                      <Link to={a.to} className="text-brand font-medium hover:underline">
+                      <Link to={a.to} className="hit text-brand font-medium hover:underline">
                         {a.what}
                       </Link>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{a.when}</span>
@@ -333,6 +331,30 @@ function ProfilePage() {
 
 /* ---------- Tabs ---------- */
 
+const ROLE = "Pricing Administrator";
+type Level = "F" | "E" | "A" | "V" | "N";
+/** Pricing Administrator row of the RBAC matrix (SRS Appendix C). */
+const ROLE_ACCESS: Array<{ module: string; level: Level }> = [
+  { module: "Master data & price lists", level: "F" },
+  { module: "Strategy & segmentation", level: "F" },
+  { module: "Price optimization / AI", level: "E" },
+  { module: "CPQ & quoting", level: "V" },
+  { module: "Deal desk", level: "V" },
+  { module: "Rebate Ninja", level: "F" },
+  { module: "Analytics & reporting", level: "F" },
+  { module: "System / RBAC admin", level: "V" },
+  { module: "Audit logs", level: "V" },
+];
+const ACCESS_LABEL: Record<Level, string> = { F: "Full", E: "Edit", A: "Approve", V: "View only", N: "No access" };
+const ACCESS_HINT: Record<Level, string> = {
+  F: "Create, edit, approve and delete",
+  E: "Create and edit; no delete",
+  A: "View, plus approve or reject",
+  V: "Read only",
+  N: "Hidden",
+};
+const ACCESS_TONE: Record<Level, "success" | "info" | "warning" | "neutral" | "danger"> = { F: "success", E: "info", A: "warning", V: "neutral", N: "danger" };
+
 function AccountTab() {
   return (
     <div className="space-y-6">
@@ -346,21 +368,23 @@ function AccountTab() {
         />
       </Card>
 
-      <Card title="Roles & permissions" subtitle="What you can access in Rebate Ninja.">
+      <Card
+        title="Roles & permissions"
+        subtitle={`Your role is ${ROLE}. Access per module comes from the role (SRS Appendix C) and is managed by your administrator.`}
+      >
         <DataTable
-          caption="Roles and permissions by area"
+          caption={`Access by module for ${ROLE}`}
           numbered={false}
-          rowKey={(r) => r.area}
-          rows={[
-            { area: "Price lists", role: "Admin", access: "Full" },
-            { area: "Pricing rules", role: "Admin", access: "Full" },
-            { area: "Price optimization", role: "Editor", access: "Create and edit" },
-            { area: "Audit log", role: "Viewer", access: "Read only" },
-          ]}
+          rowKey={(r) => r.module}
+          rows={ROLE_ACCESS}
           columns={[
-            { key: "area", header: "Area", cell: (r) => <span className="font-medium">{r.area}</span> },
-            { key: "role", header: "Role", cell: (r) => r.role },
-            { key: "access", header: "Access", cell: (r) => <span className="text-muted-foreground">{r.access}</span> },
+            { key: "module", header: "Module", cell: (r) => <span className="font-medium">{r.module}</span> },
+            {
+              key: "level",
+              header: "Access",
+              cell: (r) => <StatusPill status={r.level} tone={ACCESS_TONE[r.level]} label={ACCESS_LABEL[r.level]} />,
+            },
+            { key: "what", header: "What you can do", cell: (r) => <span className="text-muted-foreground">{ACCESS_HINT[r.level]}</span> },
           ]}
         />
       </Card>
@@ -413,141 +437,53 @@ function NotificationsTab() {
   );
 }
 
-const PASSWORD_RULE = "Use at least 12 characters with a number and a symbol";
-
 function SecurityTab() {
-  const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
-  const [pwSubmitted, setPwSubmitted] = useState(false);
-  const [pwSaving, setPwSaving] = useState(false);
-  const [twoFactor, setTwoFactor] = useState(true);
-  const [confirm2fa, setConfirm2fa] = useState(false);
   const [sessions, setSessions] = useState([
-    { device: "Chrome · macOS", meta: "Harrogate, UK · Current session", current: true },
-    { device: "Safari · iPhone", meta: "Leeds, UK · 2 days ago", current: false },
+    { device: "Chrome · Windows", meta: "Ahmedabad, IN · Current session", current: true },
+    { device: "Safari · iPhone", meta: "Ahmedabad, IN · 2 days ago", current: false },
   ]);
   const [signOutTarget, setSignOutTarget] = useState<string | null>(null);
 
-  const pwErrors: Partial<Record<"current" | "next" | "confirm", string>> = {};
-  if (!pw.current) pwErrors.current = "Enter your current password";
-  if (pw.next.length < 12 || !/\d/.test(pw.next) || !/[^A-Za-z0-9]/.test(pw.next)) pwErrors.next = PASSWORD_RULE;
-  if (pw.confirm !== pw.next || !pw.confirm) pwErrors.confirm = "Passwords don't match — retype the new password";
-  const pwErr = (k: keyof typeof pwErrors) => (pwSubmitted ? pwErrors[k] : undefined);
-
-  const updatePassword = (e: FormEvent) => {
-    e.preventDefault();
-    setPwSubmitted(true);
-    if (Object.keys(pwErrors).length > 0) return;
-    setPwSaving(true);
-    window.setTimeout(() => {
-      setPwSaving(false);
-      setPwSubmitted(false);
-      setPw({ current: "", next: "", confirm: "" });
-      notifySuccess("Password updated", "Use your new password next time you sign in.");
-    }, 500);
-  };
-
-  const onToggle2fa = (v: boolean) => {
-    if (!v) {
-      setConfirm2fa(true);
-      return;
-    }
-    setTwoFactor(true);
-    notifySuccess("Two-factor authentication turned on");
-  };
-
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <Card title="Change password" subtitle={`${PASSWORD_RULE}.`}>
-        <form onSubmit={updatePassword} noValidate className="grid gap-4">
-          <Field label="Current password" required error={pwErr("current")}>
-            <input
-              className={inputCls}
-              type="password"
-              autoComplete="current-password"
-              value={pw.current}
-              onChange={(e) => setPw({ ...pw, current: e.target.value })}
-            />
-          </Field>
-          <Field label="New password" required error={pwErr("next")}>
-            <input
-              className={inputCls}
-              type="password"
-              autoComplete="new-password"
-              value={pw.next}
-              onChange={(e) => setPw({ ...pw, next: e.target.value })}
-            />
-          </Field>
-          <Field label="Confirm new password" required error={pwErr("confirm")}>
-            <input
-              className={inputCls}
-              type="password"
-              autoComplete="new-password"
-              value={pw.confirm}
-              onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
-            />
-          </Field>
-          <div className="flex justify-end">
-            <Btn type="submit" icon={KeyRound} loading={pwSaving}>
-              Update password
-            </Btn>
-          </div>
-        </form>
+      <Card title="Sign-in" subtitle="You sign in with your company account through single sign-on.">
+        <DetailGrid
+          items={[
+            { label: "Method", value: "Corporate SSO · Azure AD (OIDC)" },
+            { label: "Multi-factor authentication", value: <StatusPill status="ACTIVE" tone="success" label="Required — enforced by your identity provider" />, full: true },
+            { label: "Password", value: "Managed by your identity provider — change it in your company account, not here.", full: true },
+          ]}
+        />
       </Card>
 
-      <div className="space-y-6">
-        <Card title="Two-factor authentication" subtitle="Extra protection for your account.">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            {twoFactor ? (
-              <StatusPill status="ACTIVE" tone="success" label="On — authenticator app" />
-            ) : (
-              <StatusPill status="OFF" tone="warning" label="Off — your account is less secure" />
-            )}
-            <Switch checked={twoFactor} onChange={onToggle2fa} label="Two-factor authentication" />
-          </div>
-        </Card>
+      <Card title="Active sessions" subtitle="Devices currently signed in. Sessions end when your company account is deactivated.">
+        <ul className="divide-y divide-border">
+          {sessions.map((s) => (
+            <li key={s.device} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+              <div>
+                <div className="text-sm font-semibold">{s.device}</div>
+                <div className="text-xs text-muted-foreground">{s.meta}</div>
+              </div>
+              {!s.current && (
+                <Btn variant="subtle" onClick={() => setSignOutTarget(s.device)} aria-label={`Sign out ${s.device}`}>
+                  Sign out
+                </Btn>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Card>
 
-        <Card title="Active sessions" subtitle="Devices currently signed in.">
-          <ul className="divide-y divide-border">
-            {sessions.map((s) => (
-              <li key={s.device} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div>
-                  <div className="text-sm font-semibold">{s.device}</div>
-                  <div className="text-xs text-muted-foreground">{s.meta}</div>
-                </div>
-                {!s.current && (
-                  <Btn variant="subtle" onClick={() => setSignOutTarget(s.device)} aria-label={`Sign out ${s.device}`}>
-                    Sign out
-                  </Btn>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
-
-      <ConfirmDialog
-        open={confirm2fa}
-        tone="danger"
-        title="Turn off two-factor authentication?"
-        description="Anyone with your password will be able to sign in without a second check. You can turn it back on at any time."
-        confirmLabel="Turn off"
-        onCancel={() => setConfirm2fa(false)}
-        onConfirm={() => {
-          setTwoFactor(false);
-          setConfirm2fa(false);
-          toast.warning("Two-factor authentication turned off");
-        }}
-      />
       <ConfirmDialog
         open={signOutTarget !== null}
         tone="danger"
         title={`Sign out ${signOutTarget ?? ""}?`}
-        description="That device will need your password (and two-factor code) to sign in again."
+        description="That device will need to sign in again through your company account."
         confirmLabel="Sign out"
         onCancel={() => setSignOutTarget(null)}
         onConfirm={() => {
           const device = signOutTarget;
-          setSessions((cur) => cur.filter((s) => s.device !== device));
+          setSessions((cur) => cur.filter((x) => x.device !== device));
           setSignOutTarget(null);
           notifySuccess("Session signed out", device ?? undefined);
         }}

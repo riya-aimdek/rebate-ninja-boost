@@ -93,7 +93,7 @@ function MemberEligibilityPage() {
         <button
           type="button"
           onClick={() => setProgram(r.program)}
-          className="text-brand font-medium hover:underline text-left"
+          className="hit text-brand font-medium hover:underline text-left"
           aria-label={`Filter by program ${r.program}`}
           title="Filter by this program"
         >

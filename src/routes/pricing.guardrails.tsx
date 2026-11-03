@@ -65,6 +65,13 @@ const toForm = (g?: Guardrail): Form => ({
   reasonText: "",
 });
 
+/** Guardrails store a product by name or SKU; resolve either. */
+const productOf = (v: string) => PRODUCTS.find((p) => p.name === v || p.sku === v || p.productId === v);
+const productLabel = (v: string) => {
+  const p = productOf(v);
+  return p ? `${p.sku} · ${p.name}` : v;
+};
+
 const num = (s: string) => (s.trim() === "" ? undefined : Number(s));
 const SPECIFICITY = { CUSTOMER: 3, SEGMENT: 2, GLOBAL: 1 } as const;
 const TODAY = "2026-10-29";
@@ -97,10 +104,15 @@ const STATUSES: Status[] = ["ACTIVE", "SCHEDULED", "SUPERSEDED"];
 const ENFORCEMENT_TONE: Record<Enforcement, Tone> = { HARD_BLOCK: "danger", REQUIRE_APPROVAL: "info", WARN: "warning" };
 
 /** Field errors keyed by input id, in visual order (first key is focused on save). */
-function validateForm(f: Form): Record<string, string> {
+function validateForm(f: Form, all: Guardrail[], editingId?: string): Record<string, string> {
   const e: Record<string, string> = {};
+  // One guardrail per scope + product: two would apply different limits to the same price.
+  const scope = f.scopeLevel === "GLOBAL" ? "All customers" : f.scope;
+  const target = productOf(f.product)?.productId ?? f.product;
+  const clash = scope && f.product ? all.find((g) => g.id !== editingId && g.status !== "SUPERSEDED" && g.scopeLevel === f.scopeLevel && g.scope === scope && (productOf(g.product)?.productId ?? g.product) === target) : undefined;
   if (f.scopeLevel !== "GLOBAL" && !f.scope) e["gr-scope"] = `Select the ${f.scopeLevel === "CUSTOMER" ? "customer" : "segment"} this guardrail covers.`;
   if (!f.product) e["gr-product"] = "Select a product, or All products.";
+  else if (clash) e["gr-product"] = `${clash.id} already covers ${scope} · ${productLabel(f.product)}. Edit ${clash.id} instead, or choose a different product.`;
   const floor = num(f.priceFloor);
   const ceil = num(f.priceCeiling);
   const margin = num(f.minMarginPct);
@@ -164,9 +176,9 @@ function Page() {
     setError(null);
   };
 
-  const errs = validateForm(form);
+  const errs = validateForm(form, rows, editing && editing !== "new" ? editing.id : undefined);
   // Contradictions (floor > ceiling, approval > max discount, end < start) show as soon as both values exist.
-  const LIVE = ["gr-ceiling", "gr-maxdisc-na", "gr-to"];
+  const LIVE = ["gr-ceiling", "gr-maxdisc-na", "gr-to", "gr-product"];
   const fe = (k: string) => (submitted || (LIVE.includes(k) && errs[k] && !errs[k].startsWith("Enter")) ? errs[k] : undefined);
   const dirty = editing !== null && JSON.stringify(form) !== origin;
 
@@ -178,6 +190,8 @@ function Page() {
       return { errorClass: "VALIDATION", code: "FLOOR_ABOVE_CEILING", message: `The price floor (${form.priceFloor}) is above the ceiling (${form.priceCeiling}). Lower the floor or raise the ceiling.`, field: "priceCeiling" };
     if ([form.priceFloor, form.priceCeiling, form.minMarginPct, form.maxDiscountPct, form.maxDiscountNoApprovalPct].every((x) => x.trim() === ""))
       return { errorClass: "VALIDATION", code: "GUARDRAIL_NEEDS_LIMIT", message: "Set at least one limit: a floor, ceiling, minimum margin or discount limit.", field: "limits" };
+    if (errs["gr-product"]?.includes("already covers"))
+      return { errorClass: "BUSINESS_RULE", code: "GUARDRAIL_DUPLICATE_SCOPE", message: errs["gr-product"], field: "product" };
     const missing = [
       form.scopeLevel !== "GLOBAL" && !form.scope && "scope",
       !form.product && "product",
@@ -251,6 +265,17 @@ function Page() {
   };
 
   const fmtLimit = (v: number | undefined, kind: "money" | "pct", cur: string) => (v === undefined ? <span className="text-muted-foreground">—</span> : <span className="tabular-nums">{kind === "money" ? money(v, cur) : `${v}%`}</span>);
+  /** Only the limits that are set, in a fixed order, for the table's Limits column. */
+  const limitsOf = (g: Guardrail): Array<[string, string]> =>
+    (
+      [
+        ["Floor", g.priceFloor !== undefined ? money(g.priceFloor, g.currency) : undefined],
+        ["Ceiling", g.priceCeiling !== undefined ? money(g.priceCeiling, g.currency) : undefined],
+        ["Min margin", g.minMarginPct !== undefined ? `${g.minMarginPct}%` : undefined],
+        ["Max discount", g.maxDiscountPct !== undefined ? `${g.maxDiscountPct}%` : undefined],
+        ["No approval up to", g.maxDiscountNoApprovalPct !== undefined ? `${g.maxDiscountNoApprovalPct}%` : undefined],
+      ] as Array<[string, string | undefined]>
+    ).filter((x): x is [string, string] => x[1] !== undefined);
   const versionsOf = (g: Guardrail): HistoryRow[] => history[g.id] ?? [{ ...g, changedFields: "Initial version" }];
   const reasonLabel = (r: string) => (r.startsWith("OTHER: ") ? `Other: ${r.slice(7)}` : humanize(r));
 
@@ -345,45 +370,42 @@ function Page() {
             header: "Product",
             className: "whitespace-nowrap",
             cell: (g) => {
-              const p = PRODUCTS.find((x) => x.name === g.product);
+              const p = productOf(g.product);
               return p ? (
                 <span onClick={(e) => e.stopPropagation()}>
                   <RecordLink to="/pricing/products/$id" params={{ id: p.productId }}>
-                    {g.product}
+                    {p.sku} · {p.name}
                   </RecordLink>
                 </span>
               ) : (
-                g.product
+                <span className="text-muted-foreground">{g.product}</span>
               );
             },
           },
-          { key: "floor", header: "Floor", align: "right", cell: (g) => fmtLimit(g.priceFloor, "money", g.currency) },
-          { key: "ceil", header: "Ceiling", align: "right", cell: (g) => fmtLimit(g.priceCeiling, "money", g.currency) },
-          { key: "mm", header: "Min margin", align: "right", cell: (g) => fmtLimit(g.minMarginPct, "pct", g.currency) },
-          { key: "md", header: "Max discount", align: "right", cell: (g) => fmtLimit(g.maxDiscountPct, "pct", g.currency) },
-          { key: "mdna", header: <span className="inline-block whitespace-normal w-32 text-right leading-tight">Max discount without approval</span>, align: "right", cell: (g) => fmtLimit(g.maxDiscountNoApprovalPct, "pct", g.currency) },
+          {
+            key: "limits",
+            header: "Limits",
+            className: "min-w-52",
+            cell: (g) => {
+              const set = limitsOf(g);
+              return set.length ? (
+                <ul className="space-y-0.5">
+                  {set.map(([label, value]) => (
+                    <li key={label} className="flex justify-between gap-4 whitespace-nowrap">
+                      <span className="text-muted-foreground">{label}</span>
+                      <span className="tabular-nums font-medium">{value}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <span className="text-muted-foreground">—</span>
+              );
+            },
+          },
           { key: "enf", header: "Enforcement", className: "whitespace-nowrap", cell: (g) => <Tag tone={ENFORCEMENT_TONE[g.enforcement]}>{humanize(g.enforcement)}</Tag> },
           { key: "eff", header: "Effective from", cell: (g) => <span className="tabular-nums whitespace-nowrap">{g.effectiveFrom}</span> },
           { key: "v", header: "Version", align: "right", cell: (g) => <span className="tabular-nums">v{g.version}</span> },
           { key: "st", header: "Status", cell: (g) => <StatusPill status={g.status} /> },
-          {
-            key: "act",
-            header: <span className="sr-only">Actions</span>,
-            cell: (g) => (
-              <button
-                type="button"
-                aria-label={`Edit ${g.id}`}
-                title="Edit"
-                className="size-10 grid place-items-center rounded-lg hover:bg-muted"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  open(g);
-                }}
-              >
-                <Pencil className="size-4" aria-hidden />
-              </button>
-            ),
-          },
         ]}
       />
 
@@ -431,7 +453,7 @@ function Page() {
                 <option value="">Select…</option>
                 <option>All products</option>
                 {PRODUCTS.map((p) => (
-                  <option key={p.productId} value={p.name}>
+                  <option key={p.productId} value={form.product === p.sku ? p.sku : p.name}>
                     {p.sku} · {p.name}
                   </option>
                 ))}
@@ -452,6 +474,13 @@ function Page() {
             <legend className="text-sm font-semibold px-0">Limits</legend>
             <p className="text-xs text-muted-foreground mb-4">Set at least one. Leave a limit blank to not enforce it.</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <Field label="Currency" hint="Used for the price floor and ceiling" className="md:col-span-2 md:max-w-[calc(50%-0.75rem)]">
+                <select className={inputCls} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
+                  {["GBP", "USD", "EUR", "INR"].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </Field>
               <Field label={`Price floor (${form.currency})`} error={fe("gr-floor")}>
                 <input id="gr-floor" type="number" inputMode="decimal" min={0} step="0.01" className={inputCls} value={form.priceFloor} onChange={(e) => setForm({ ...form, priceFloor: e.target.value })} placeholder="e.g. 36.00" />
               </Field>
@@ -466,13 +495,6 @@ function Page() {
               </Field>
               <Field label="Maximum discount without approval (%)" hint="Discounts above this go to approval" error={fe("gr-maxdisc-na")}>
                 <input id="gr-maxdisc-na" type="number" inputMode="decimal" min={0} max={num(form.maxDiscountPct) ?? 100} step="0.1" className={inputCls} value={form.maxDiscountNoApprovalPct} onChange={(e) => setForm({ ...form, maxDiscountNoApprovalPct: e.target.value })} placeholder="e.g. 8" />
-              </Field>
-              <Field label="Currency">
-                <select className={inputCls} value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
-                  {["GBP", "USD", "EUR", "INR"].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
               </Field>
             </div>
           </fieldset>
@@ -514,7 +536,7 @@ function Page() {
         subtitle={
           preview && (
             <span className="flex flex-wrap items-center gap-2">
-              <span>{preview.product}</span>
+              <span>{productLabel(preview.product)}</span>
               <StatusPill status={preview.status} />
               <Tag tone={ENFORCEMENT_TONE[preview.enforcement]}>{humanize(preview.enforcement)}</Tag>
             </span>

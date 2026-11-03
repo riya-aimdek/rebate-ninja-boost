@@ -22,7 +22,7 @@ import {
   notifyUndo,
   type ApiError,
 } from "@/components/pricing/kit";
-import { FORMULAS, FORMULA_RECALC_LOG, FORMULA_SOURCE_TYPES, RECALC_TRIGGERS, ROUNDING_MODES, type Formula, type FormulaVar } from "@/lib/pricing/data";
+import { COST_TYPES, FORMULAS, FORMULA_RECALC_LOG, FORMULA_SOURCE_TYPES, PRICE_LISTS, RECALC_TRIGGERS, ROUNDING_MODES, type Formula, type FormulaVar } from "@/lib/pricing/data";
 import { applyRounding, divideByZeroRisks, evaluate, FormulaError, parse, toText, topTerms, variablesUsed } from "@/lib/pricing/formula";
 
 export const Route = createFileRoute("/pricing/formulas")({
@@ -32,6 +32,23 @@ export const Route = createFileRoute("/pricing/formulas")({
 
 const CURRENCY_UNITS = ["GBP", "USD", "EUR", "INR"];
 const EXAMPLE = "CommodityIndex + Freight + MAX(ProcessingCost, 0.5) * 1.1";
+const UNIT_OPTIONS = [...CURRENCY_UNITS, "rate", "%", "factor"];
+
+type SourceType = FormulaVar["sourceType"];
+/** Where each source type's value comes from. Constants carry their own value instead of a source. */
+const SOURCE_OPTIONS: Record<Exclude<SourceType, "CONSTANT">, (self: string) => Array<{ value: string; label: string }>> = {
+  COST_TYPE: () => COST_TYPES.map((c) => ({ value: c, label: humanize(c) })),
+  INDEX: () => ["LME Copper (GBP/kg)", "LME Aluminium (GBP/kg)", "Brent Crude (USD/bbl)", "UK CPI"].map((v) => ({ value: v, label: v })),
+  ATTRIBUTE: () => ["Weight (kg)", "Pack size", "Length (m)", "List price"].map((v) => ({ value: v, label: `Product attribute · ${v}` })),
+  FX_RATE: () => ["ECB daily", "Bank of England daily", "Month-end treasury rate"].map((v) => ({ value: v, label: v })),
+  // Another formula's output is referenced as "Formula F-xx output" (used by the circular-reference check).
+  PRICE_LIST: (self) => [
+    ...FORMULAS.filter((f) => f.id !== self).map((f) => ({ value: `Formula ${f.id} output`, label: `Formula ${f.id} output · ${f.name}` })),
+    ...PRICE_LISTS.map((l) => ({ value: l.name, label: `Price list · ${l.name}` })),
+  ],
+};
+const SOURCE_LABEL: Record<SourceType, string> = { COST_TYPE: "Cost type", INDEX: "Index feed", CONSTANT: "Value", ATTRIBUTE: "Attribute", FX_RATE: "FX rate source", PRICE_LIST: "Price list or formula" };
+const defaultUnit = (t: SourceType, currency: string) => (t === "FX_RATE" ? "rate" : t === "ATTRIBUTE" ? "factor" : currency);
 
 type TestResult = { ok: boolean; terms: Array<{ label: string; sign: string; value: number }>; raw: number; final: number; capped: boolean; floored?: boolean; error?: string };
 type RecalcEntry = (typeof FORMULA_RECALC_LOG)[number];
@@ -125,6 +142,11 @@ function Page() {
   const updateVar = (i: number, patch: Partial<FormulaVar>) =>
     setDraft((d) => ({ ...d, testsPassed: 0, variables: d.variables.map((v, j) => (j === i ? { ...v, ...patch } : v)) }));
 
+  /** Changing the source type changes what the source means, so source and unit start fresh. */
+  const setSourceType = (i: number, t: SourceType) => updateVar(i, { sourceType: t, source: "", unit: defaultUnit(t, draft.currency), ...(t === "CONSTANT" ? { sample: 0 } : {}) });
+  const addVar = (name = "") =>
+    setDraft((d) => ({ ...d, testsPassed: 0, variables: [...d.variables, { name, sourceType: "COST_TYPE", source: "", sample: 0, unit: d.currency }] }));
+
   const removeVar = (i: number) => {
     const before = draft.variables;
     const name = before[i]?.name || `variable ${i + 1}`;
@@ -146,6 +168,18 @@ function Page() {
     }
   }, [draft.expression]);
 
+  // Expression <-> variables: names used but not defined, and variables the expression never uses.
+  const used = useMemo(() => {
+    try {
+      return [...variablesUsed(parse(draft.expression))];
+    } catch {
+      return [];
+    }
+  }, [draft.expression]);
+  const definedNames = new Set(draft.variables.map((v) => v.name));
+  const missing = used.filter((n) => !definedNames.has(n));
+  const usedSet = new Set(used);
+
   const fieldErrs: Record<string, string> = {};
   if (!draft.name.trim()) fieldErrs["formula-name"] = "Enter a formula name, e.g. Commodity pricing.";
   if (!draft.expression.trim()) fieldErrs["formula-expression"] = `Enter an expression, e.g. ${EXAMPLE}.`;
@@ -155,6 +189,12 @@ function Page() {
   if (draft.maxResult !== undefined && draft.maxResult < 0) fieldErrs["formula-max"] = "The maximum price can't be negative.";
   else if (draft.minResult !== undefined && draft.maxResult !== undefined && draft.minResult > draft.maxResult)
     fieldErrs["formula-max"] = `Max result must be at least the min result (${draft.minResult}).`;
+  draft.variables.forEach((v, i) => {
+    if (!v.name.trim()) fieldErrs[`formula-var-${i}-name`] = "Enter a name used in the expression.";
+    else if (draft.variables.findIndex((x) => x.name === v.name) !== i) fieldErrs[`formula-var-${i}-name`] = "This name is already used by another variable.";
+    if (v.sourceType === "CONSTANT" ? !v.source.trim() || !Number.isFinite(Number(v.source)) : !v.source)
+      fieldErrs[`formula-var-${i}-source`] = v.sourceType === "CONSTANT" ? "Enter a number, e.g. 15.00." : `Choose a ${SOURCE_LABEL[v.sourceType].toLowerCase()}.`;
+  });
   const fe = (k: string) => (submitted || (k === "formula-expression" && exprTouched) ? fieldErrs[k] : undefined);
   const limitsInvalid = !!(fieldErrs["formula-decimals"] || fieldErrs["formula-min"] || fieldErrs["formula-max"]);
 
@@ -235,8 +275,10 @@ function Page() {
       setBusy(null);
       try {
         const tree = parse(draft.expression);
-        const terms = topTerms(tree).map((t) => ({ label: toText(t.node), sign: t.sign, value: evaluate(t.node, samples) }));
-        const raw = evaluate(tree, samples);
+        // Constants always use their own value; the other inputs come from the sample fields.
+        const inputs = { ...samples, ...Object.fromEntries(draft.variables.filter((v) => v.sourceType === "CONSTANT").map((v) => [v.name, Number(v.source)])) };
+        const terms = topTerms(tree).map((t) => ({ label: toText(t.node), sign: t.sign, value: evaluate(t.node, inputs) }));
+        const raw = evaluate(tree, inputs);
         let final = applyRounding(raw, draft.rounding.decimals, draft.rounding.mode);
         let capped = false;
         if (draft.maxResult !== undefined && final > draft.maxResult) {
@@ -294,6 +336,15 @@ function Page() {
     toast("Changes discarded");
   };
 
+  /** Top-level terms of the current expression, for the test panel before a run. */
+  const previewTerms = useMemo(() => {
+    try {
+      return topTerms(parse(draft.expression)).map((t) => ({ label: toText(t.node), sign: t.sign }));
+    } catch {
+      return [];
+    }
+  }, [draft.expression]);
+
   const canActivate = draft.testsPassed > 0 && draft.status !== "ACTIVE";
   const rows = useMemo(() => formulas.filter((f) => !search || `${f.id} ${f.name}`.toLowerCase().includes(search.toLowerCase())), [formulas, search]);
 
@@ -314,7 +365,9 @@ function Page() {
       />
 
       <div className="grid grid-cols-1 xl:grid-cols-[360px_1fr] gap-6">
-        <nav aria-label="Formulas" className="space-y-3 min-w-0">
+        {/* Two-column layout: the list stays in view below the 72px top bar while the editor scrolls; it scrolls itself if taller than the screen.
+            p-1/-m-1 keeps the selected card's ring from being clipped by the scroll container. */}
+        <nav aria-label="Formulas" className="space-y-3 min-w-0 xl:sticky xl:top-24 xl:self-start xl:max-h-[calc(100vh-7.5rem)] xl:overflow-y-auto xl:p-1 xl:-m-1">
           {rows.length === 0 && (
             <EmptyState title={search ? `No formulas match “${search}”` : "No formulas yet"} action={search ? <Btn variant="subtle" onClick={() => setSearch("")}>Clear search</Btn> : undefined} />
           )}
@@ -369,8 +422,8 @@ function Page() {
                     {savedVersion ? "Discard changes" : "Cancel"}
                   </Btn>
                 )}
-                <Btn variant="outline" icon={Save} type="submit" loading={busy === "save"} disabled={!!busy && busy !== "save"}>
-                  Save draft
+                <Btn variant="outline" icon={Save} type="submit" loading={busy === "save"} disabled={!dirty || (!!busy && busy !== "save")} title={!dirty ? "No changes to save" : undefined}>
+                  {draft.status === "ACTIVE" ? "Save changes" : "Save draft"}
                 </Btn>
                 {draft.status !== "ACTIVE" && (
                   <Btn icon={Zap} onClick={requestActivate} disabled={!canActivate || !!busy} aria-describedby={!canActivate ? "formula-activate-why" : undefined}>
@@ -421,9 +474,30 @@ function Page() {
                 />
               </Field>
               {draft.expression.trim() && !syntaxError && (
-                <p className="md:col-span-3 -mt-2 text-xs text-success flex items-center gap-1" role="status">
-                  <CheckCircle2 className="size-3.5" aria-hidden /> Syntax OK
-                </p>
+                <div className="md:col-span-3 -mt-2 flex flex-wrap items-center gap-2 text-xs" role="status">
+                  <span className="text-success inline-flex items-center gap-1 font-medium">
+                    <CheckCircle2 className="size-3.5" aria-hidden /> Syntax OK
+                  </span>
+                  {used.length > 0 && <span className="text-muted-foreground">· Uses</span>}
+                  {used.map((n) =>
+                    definedNames.has(n) ? (
+                      <code key={n} className="rounded bg-muted px-1.5 py-0.5">
+                        {n}
+                      </code>
+                    ) : (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => addVar(n)}
+                        className="hit inline-flex items-center gap-1 rounded border border-warning/60 bg-warning-soft px-1.5 py-0.5 font-mono text-warning-foreground hover:border-warning"
+                        title={`${n} is not defined — add it as a variable`}
+                      >
+                        <Plus className="size-3" aria-hidden /> {n}
+                      </button>
+                    ),
+                  )}
+                  {missing.length > 0 && <span className="text-warning-foreground">{missing.length === 1 ? "is" : "are"} not defined yet — click to add.</span>}
+                </div>
               )}
               <Field label="Recalculation trigger" required>
                 <select className={inputCls} value={draft.trigger} onChange={(e) => setDraft({ ...draft, trigger: e.target.value as Formula["trigger"] })}>
@@ -473,18 +547,9 @@ function Page() {
             </div>
           </Card>
 
-          <Card
-            title="Variables"
-            subtitle="To reference another formula, use source type Price list with source “Formula F-xx output”."
-            actions={
-              <Btn variant="outline" size="sm" icon={Plus} onClick={() => setDraft((d) => ({ ...d, testsPassed: 0, variables: [...d.variables, { name: "", sourceType: "CONSTANT", source: "", sample: 0, unit: d.currency }] }))}>
-                Add variable
-              </Btn>
-            }
-            padded={false}
-          >
+          <Card title="Variables" subtitle="One row for each name in the expression. Pick where its value comes from." padded={false}>
             <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Formula variables">
-              <table className="w-full text-sm min-w-[640px]">
+              <table className="w-full text-sm min-w-[720px]">
                 <caption className="sr-only">Formula variables</caption>
                 <thead>
                   <tr className="bg-navy text-navy-foreground">
@@ -506,35 +571,107 @@ function Page() {
                       </td>
                     </tr>
                   )}
-                  {draft.variables.map((v, i) => (
-                    <tr key={i}>
-                      <td className="px-4 py-2">
-                        <input aria-label={`Variable ${i + 1} name`} className={`${inputCls} font-mono`} value={v.name} placeholder="e.g. Freight" onChange={(e) => updateVar(i, { name: e.target.value.replace(/\s/g, "") })} />
-                      </td>
-                      <td className="px-4 py-2">
-                        <select aria-label={`Variable ${i + 1} source type`} className={inputCls} value={v.sourceType} onChange={(e) => updateVar(i, { sourceType: e.target.value as FormulaVar["sourceType"] })}>
-                          {FORMULA_SOURCE_TYPES.map((s) => (
-                            <option key={s} value={s}>
-                              {humanize(s)}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-4 py-2">
-                        <input aria-label={`Variable ${i + 1} source`} className={inputCls} value={v.source} onChange={(e) => updateVar(i, { source: e.target.value })} />
-                      </td>
-                      <td className="px-4 py-2 w-32">
-                        <input aria-label={`Variable ${i + 1} unit`} className={inputCls} value={v.unit} onChange={(e) => updateVar(i, { unit: e.target.value })} />
-                      </td>
-                      <td className="px-4 py-2 w-14">
-                        <button type="button" aria-label={`Remove variable ${v.name || i + 1}`} className="size-10 grid place-items-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted" onClick={() => removeVar(i)}>
-                          <Trash2 className="size-4" aria-hidden />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {draft.variables.map((v, i) => {
+                    const nameErr = fe(`formula-var-${i}-name`);
+                    const srcErr = fe(`formula-var-${i}-source`);
+                    const opts = v.sourceType === "CONSTANT" ? [] : SOURCE_OPTIONS[v.sourceType](draft.id);
+                    const legacy = !!v.source && v.sourceType !== "CONSTANT" && !opts.some((o) => o.value === v.source);
+                    return (
+                      <tr key={i} className="align-top">
+                        <td className="px-4 py-2">
+                          <input
+                            id={`formula-var-${i}-name`}
+                            aria-label={`Variable ${i + 1} name`}
+                            aria-invalid={!!nameErr || undefined}
+                            className={`${inputCls} font-mono`}
+                            value={v.name}
+                            placeholder="e.g. Freight"
+                            onChange={(e) => updateVar(i, { name: e.target.value.replace(/[^A-Za-z0-9_]/g, "") })}
+                          />
+                          {nameErr && <p className="text-xs text-destructive mt-1">{nameErr}</p>}
+                          {!nameErr && v.name && used.length > 0 && !usedSet.has(v.name) && <p className="text-xs text-muted-foreground mt-1">Not used in the expression</p>}
+                        </td>
+                        <td className="px-4 py-2">
+                          <select aria-label={`Variable ${i + 1} source type`} className={inputCls} value={v.sourceType} onChange={(e) => setSourceType(i, e.target.value as SourceType)}>
+                            {FORMULA_SOURCE_TYPES.map((t) => (
+                              <option key={t} value={t}>
+                                {humanize(t)}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-4 py-2">
+                          {v.sourceType === "CONSTANT" ? (
+                            <input
+                              id={`formula-var-${i}-source`}
+                              type="number"
+                              inputMode="decimal"
+                              step="0.01"
+                              aria-label={`Variable ${i + 1} value`}
+                              aria-invalid={!!srcErr || undefined}
+                              className={`${inputCls} tabular-nums`}
+                              value={v.source}
+                              placeholder="e.g. 15.00"
+                              onChange={(e) => {
+                                updateVar(i, { source: e.target.value, sample: Number(e.target.value) || 0 });
+                                setSamples((cur) => ({ ...cur, [v.name]: Number(e.target.value) || 0 }));
+                              }}
+                            />
+                          ) : (
+                            <select
+                              id={`formula-var-${i}-source`}
+                              aria-label={`Variable ${i + 1} ${SOURCE_LABEL[v.sourceType].toLowerCase()}`}
+                              aria-invalid={!!srcErr || undefined}
+                              className={inputCls}
+                              value={v.source}
+                              onChange={(e) => updateVar(i, { source: e.target.value })}
+                            >
+                              <option value="">Choose {SOURCE_LABEL[v.sourceType].toLowerCase()}…</option>
+                              {legacy && <option value={v.source}>{v.source}</option>}
+                              {opts.map((o) => (
+                                <option key={o.value} value={o.value}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {srcErr && <p className="text-xs text-destructive mt-1">{srcErr}</p>}
+                        </td>
+                        <td className="px-4 py-2 w-32">
+                          <select
+                            aria-label={`Variable ${i + 1} unit`}
+                            className={inputCls}
+                            value={v.unit}
+                            onChange={(e) => updateVar(i, { unit: e.target.value })}
+                            disabled={v.sourceType === "FX_RATE"}
+                            title={v.sourceType === "FX_RATE" ? "FX rates are always a rate" : undefined}
+                          >
+                            {!UNIT_OPTIONS.includes(v.unit) && <option value={v.unit}>{v.unit}</option>}
+                            {UNIT_OPTIONS.map((u) => (
+                              <option key={u}>{u}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-4 py-2 w-14">
+                          <button
+                            type="button"
+                            aria-label={`Remove variable ${v.name || i + 1}`}
+                            className="size-10 grid place-items-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted"
+                            onClick={() => removeVar(i)}
+                          >
+                            <Trash2 className="size-4" aria-hidden />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+            </div>
+            <div className="px-6 py-4 border-t border-border">
+              <Btn variant="outline" size="sm" icon={Plus} onClick={() => addVar()}>
+                Add variable
+              </Btn>
             </div>
           </Card>
 
@@ -545,30 +682,67 @@ function Page() {
               </span>
             }
             subtitle="Evaluate the formula on sample inputs. The formula can't be activated until at least one test has passed."
-            actions={
-              <Btn variant="outline" icon={FlaskConical} onClick={runTest} loading={busy === "test"} disabled={!!syntaxError || !draft.expression.trim()}>
-                Run test
-              </Btn>
-            }
           >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {draft.variables.map((v, i) => (
-                  <Field key={`${v.name}-${i}`} label={`${v.name || `Variable ${i + 1}`} (${v.unit})`}>
-                    <input type="number" inputMode="decimal" step="any" className={inputCls} value={samples[v.name] ?? 0} onChange={(e) => setSamples({ ...samples, [v.name]: Number(e.target.value) })} />
-                  </Field>
-                ))}
-                {draft.variables.length === 0 && <p className="text-sm text-muted-foreground">Add variables to enter sample inputs.</p>}
+              <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {draft.variables.map((v, i) =>
+                    v.sourceType === "CONSTANT" ? (
+                      <Field key={`${v.name}-${i}`} label={`${v.name || `Variable ${i + 1}`} (${v.unit})`} hint="Constant — edit it in Variables">
+                        <input className={`${inputCls} bg-muted tabular-nums`} value={v.source} readOnly />
+                      </Field>
+                    ) : (
+                      <Field key={`${v.name}-${i}`} label={`${v.name || `Variable ${i + 1}`} (${v.unit})`}>
+                        <input type="number" inputMode="decimal" step="any" className={inputCls} value={samples[v.name] ?? 0} onChange={(e) => setSamples({ ...samples, [v.name]: Number(e.target.value) })} />
+                      </Field>
+                    ),
+                  )}
+                  {draft.variables.length === 0 && <p className="text-sm text-muted-foreground">Add variables to enter sample inputs.</p>}
+                </div>
+                <Btn
+                  variant="outline"
+                  icon={FlaskConical}
+                  className="mt-4"
+                  onClick={runTest}
+                  loading={busy === "test"}
+                  disabled={!!syntaxError || !draft.expression.trim() || missing.length > 0}
+                  title={missing.length ? `Define ${missing.join(", ")} first` : undefined}
+                >
+                  Run test
+                </Btn>
+                {missing.length > 0 && <p className="text-xs text-muted-foreground mt-2">Define {missing.join(", ")} in Variables before testing.</p>}
               </div>
               <div className="rounded-xl border border-border bg-muted/30 p-4" role="status" aria-live="polite">
-                {!test && <p className="text-sm text-muted-foreground">Run a test to see each intermediate term and the result.</p>}
+                {!test && (
+                  // Same layout as a result, with blanks — shows what the test will produce before it runs.
+                  <div className="space-y-2 text-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Not tested yet</p>
+                    {previewTerms.map((t, i) => (
+                      <div key={i} className="flex justify-between gap-4">
+                        <span className="font-mono text-muted-foreground">
+                          {i === 0 ? "" : t.sign} {t.label}
+                        </span>
+                        <span className="tabular-nums text-muted-foreground">—</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between border-t border-border pt-2 text-base font-bold">
+                      <span>Calculated price</span>
+                      <span className="tabular-nums text-muted-foreground">—</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Enter sample inputs and select Run test to fill these in.</p>
+                  </div>
+                )}
+                {/* Any edit to the expression or variables resets testsPassed, so an earlier result no longer applies. */}
+                {test?.ok && draft.testsPassed === 0 && (
+                  <p className="text-sm text-muted-foreground">The expression or variables changed since the last test. Run the test again to see the new result.</p>
+                )}
                 {test && !test.ok && (
                   <div className="text-sm text-destructive">
                     <p className="font-semibold">Test failed</p>
                     <p className="text-foreground mt-1">{test.error ?? "The formula couldn't be evaluated."} Check the sample inputs and variable names, then run the test again.</p>
                   </div>
                 )}
-                {test?.ok && (
+                {test?.ok && draft.testsPassed > 0 && (
                   <div className="space-y-2 text-sm">
                     {test.terms.map((t, i) => (
                       <div key={i} className="flex justify-between gap-4">

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { AlertTriangle, ArrowLeft, Lock, Pencil } from "lucide-react";
+import { AlertTriangle, ArrowLeft, History, Lock, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -19,13 +19,20 @@ import {
   PricingLayout,
   RecordLink,
   StatusPill,
-  Tag,
+  RecordId,
   humanize,
   inputCls,
 } from "@/components/pricing/kit";
 import { COSTS, PRICE_LISTS, PRODUCT_SEGMENTS, PRODUCTS, type CostRecord } from "@/lib/pricing/data";
 
+type TabKey = "details" | "costs" | "lists" | "source";
+const TABS: TabKey[] = ["details", "costs", "lists", "source"];
+
 export const Route = createFileRoute("/pricing/products/$id")({
+  // Tab lives in the URL so Back and shared links return to the same view.
+  validateSearch: (s: Record<string, unknown>): { tab?: TabKey } => ({
+    tab: TABS.includes(s.tab as TabKey) && s.tab !== "details" ? (s.tab as TabKey) : undefined,
+  }),
   head: ({ params }) => {
     const p = PRODUCTS.find((x) => x.productId === params.id || x.sku === params.id);
     return { meta: [{ title: `${p?.name ?? "Product"} · Products · Rebate Ninja` }] };
@@ -33,9 +40,9 @@ export const Route = createFileRoute("/pricing/products/$id")({
   component: Page,
 });
 
-type EditErrors = { segment?: string; minOrderMultiple?: string };
-
-type TabKey = "details" | "costs" | "lists" | "source";
+type EditErrors = { segment?: string; minOrderMultiple?: string; reason?: string };
+/** Live lists first, then upcoming, then history. */
+const LIST_ORDER = ["ACTIVE", "SCHEDULED", "APPROVED", "SUBMITTED", "DRAFT", "SUPERSEDED", "EXPIRED", "CANCELLED"];
 
 const ErpValue = Locked;
 
@@ -43,11 +50,13 @@ function Page() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const product = PRODUCTS.find((p) => p.productId === id || p.sku === id);
-  const [tab, setTab] = useState<TabKey>("details");
+  const tab = Route.useSearch().tab ?? "details";
+  const setTab = (t: TabKey) =>
+    navigate({ to: "/pricing/products/$id", params: { id }, search: { tab: t === "details" ? undefined : t }, replace: true });
   const [segment, setSegment] = useState(product?.productSegment ?? "");
   const [ext, setExt] = useState({ pricingFamily: "Core range", minOrderMultiple: "1" });
   const [editOpen, setEditOpen] = useState(false);
-  const [draft, setDraft] = useState({ segment, ...ext });
+  const [draft, setDraft] = useState({ segment, ...ext, reason: "" });
   const [errors, setErrors] = useState<EditErrors>({});
   const [saving, setSaving] = useState(false);
 
@@ -68,8 +77,12 @@ function Page() {
     );
   }
 
-  const costs = COSTS.filter((c) => c.sku === product.sku);
-  const lines = PRICE_LISTS.flatMap((l) => l.lines.filter((ln) => ln.sku === product.sku || ln.sku === product.productId).map((ln) => ({ list: l, line: ln })));
+  // Grouped by cost type, newest record first within each type.
+  const costs = COSTS.filter((c) => c.sku === product.sku).sort((a, b) => a.costType.localeCompare(b.costType) || b.effectiveFrom.localeCompare(a.effectiveFrom));
+  const lines = PRICE_LISTS.flatMap((l) => l.lines.filter((ln) => ln.sku === product.sku || ln.sku === product.productId).map((ln) => ({ list: l, line: ln }))).sort(
+    (a, b) => LIST_ORDER.indexOf(a.list.status) - LIST_ORDER.indexOf(b.list.status),
+  );
+  const segmentChanged = draft.segment !== segment;
   const dirty = draft.segment !== segment || draft.pricingFamily !== ext.pricingFamily || draft.minOrderMultiple !== ext.minOrderMultiple;
 
   const save = () => {
@@ -77,10 +90,12 @@ function Page() {
     if (!draft.segment) e.segment = "Choose a product segment.";
     const mom = Number(draft.minOrderMultiple);
     if (!draft.minOrderMultiple || !Number.isInteger(mom) || mom < 1) e.minOrderMultiple = "Enter a whole number of 1 or more.";
+    // A manual segment change is an override and needs a reason (US-ST-02 AC#7).
+    if (segmentChanged && !draft.reason.trim()) e.reason = "Explain why the segment is changing — it's kept as an override in the audit log.";
     setErrors(e);
-    if (e.segment || e.minOrderMultiple) {
+    if (e.segment || e.minOrderMultiple || e.reason) {
       // Focus the first invalid field so keyboard and screen-reader users land on the fix.
-      document.getElementById(e.segment ? "pa-segment" : "pa-mom")?.focus();
+      document.getElementById(e.segment ? "pa-segment" : e.minOrderMultiple ? "pa-mom" : "pa-reason")?.focus();
       return;
     }
     setSaving(true);
@@ -89,7 +104,9 @@ function Page() {
       setExt({ pricingFamily: draft.pricingFamily, minOrderMultiple: draft.minOrderMultiple });
       setSaving(false);
       setEditOpen(false);
-      toast.success("Pricing attributes saved", { description: "Audit entry written (who, what, when)." });
+      toast.success("Pricing attributes saved", {
+        description: segmentChanged ? `Segment ${segment} → ${draft.segment}, flagged as an override. Audit entry written.` : "Audit entry written (who, what, when).",
+      });
     }, 500);
   };
 
@@ -97,16 +114,15 @@ function Page() {
     <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Products", to: "/pricing/products" }, { label: product.name }]}>
       <DetailTitle
         title={product.name}
-        subtitle={`${product.productId} · SKU ${product.sku}`}
+        meta={[<RecordId key="id">{product.productId}</RecordId>, <span key="sku">SKU <RecordId>{product.sku}</RecordId></span>, `Owner ${product.owner}`, `Updated ${product.lastUpdated}`]}
         status={product.lifecycleStatus}
-        chips={
-          <>
-            <Tag>{product.category}</Tag>
-            <Tag tone="brand">{segment}</Tag>
-          </>
-        }
+        attributes={[
+          { label: "Category", value: product.category },
+          { label: "Brand", value: product.brand },
+          { label: "Segment", value: segment },
+        ]}
         actions={
-          <Btn icon={Pencil} onClick={() => { setDraft({ segment, ...ext }); setErrors({}); setEditOpen(true); }}>
+          <Btn icon={Pencil} onClick={() => { setDraft({ segment, ...ext, reason: "" }); setErrors({}); setEditOpen(true); }}>
             Edit pricing attributes
           </Btn>
         }
@@ -183,6 +199,15 @@ function Page() {
       )}
 
       {tab === "costs" && (
+        <>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <p className="text-sm text-muted-foreground">Effective-dated; a new cost closes the previous record instead of overwriting it.</p>
+          {costs.length > 0 && (
+            <LinkBtn to="/pricing/costs" search={{ tab: "history", sku: product.sku }} variant="outline" size="sm" icon={History}>
+              View cost history
+            </LinkBtn>
+          )}
+        </div>
         <DataTable<CostRecord>
           caption={`Cost records for ${product.name}`}
           rows={costs}
@@ -198,6 +223,7 @@ function Page() {
             { key: "st", header: "Status", cell: (c) => <StatusPill status={c.status} /> },
           ]}
         />
+        </>
       )}
 
       {tab === "lists" && (
@@ -243,7 +269,7 @@ function Page() {
             <Btn variant="subtle" onClick={() => setEditOpen(false)} disabled={saving}>
               Cancel
             </Btn>
-            <Btn type="submit" form="pricing-attributes" loading={saving}>
+            <Btn type="submit" form="pricing-attributes" loading={saving} disabled={!dirty} title={!dirty ? "No changes to save" : undefined}>
               Save
             </Btn>
           </>
@@ -284,9 +310,11 @@ function Page() {
               onChange={(e) => setDraft({ ...draft, minOrderMultiple: e.target.value })}
             />
           </Field>
-          <Field label="Description" hint="Owned by ERP — read-only">
-            <input className={`${inputCls} bg-muted`} value={product.description} readOnly />
-          </Field>
+          {segmentChanged && (
+            <Field label="Reason for segment change" required error={errors.reason} hint={`${segment} → ${draft.segment}. Saved as a manual override.`}>
+              <textarea id="pa-reason" rows={2} className={`${inputCls} h-auto py-2`} value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} placeholder="e.g. Discontinued by supplier — moving to End-of-Life pricing" />
+            </Field>
+          )}
         </form>
       </Modal>
     </PricingLayout>

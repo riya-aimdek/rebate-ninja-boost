@@ -10,7 +10,6 @@ import {
   DetailGrid,
   ErrorBanner,
   Field,
-  InfoBanner,
   ListHeader,
   Modal,
   PricingLayout,
@@ -384,10 +383,10 @@ function Page() {
                     if (dragIdx !== null) move(dragIdx, i);
                     setDragIdx(null);
                   }}
-                  className={`flex flex-wrap sm:flex-nowrap items-center gap-3 rounded-xl border px-4 py-3 bg-card ${locked ? "border-dashed bg-muted/40" : "border-border hover:border-brand/50 cursor-grab"}`}
+                  className={`flex items-center gap-3 rounded-xl border px-3 sm:px-4 py-3 bg-card ${locked ? "border-dashed bg-muted/40" : "border-border hover:border-brand/50 cursor-grab"}`}
                 >
-                  {locked ? <Lock className="size-4 text-muted-foreground" aria-label="Locked" /> : <GripVertical className="size-4 text-muted-foreground" aria-hidden />}
-                  <span className="size-8 rounded-full bg-navy text-navy-foreground grid place-items-center text-sm font-bold" aria-hidden>
+                  {locked ? <Lock className="size-4 shrink-0 text-muted-foreground" aria-label="Locked" /> : <GripVertical className="hidden sm:block size-4 shrink-0 text-muted-foreground" aria-hidden />}
+                  <span className="size-8 shrink-0 rounded-full bg-navy text-navy-foreground grid place-items-center text-sm font-bold" aria-hidden>
                     {i + 1}
                   </span>
                   <div className="flex-1 min-w-0">
@@ -399,7 +398,7 @@ function Page() {
                   </div>
                   {active.order[i] !== tier && <Tag tone="brand">Changed</Tag>}
                   {!locked && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2 shrink-0">
                       <button
                         type="button"
                         aria-label={`Move ${TIER_LABEL[tier]} up`}
@@ -425,9 +424,31 @@ function Page() {
               );
             })}
           </ol>
+          {/* Default order sits with the list it describes, so the two columns stay balanced. */}
+          <div className="mt-4 pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3 text-sm">
+            <p className="text-muted-foreground min-w-0 flex-1">
+              <span className="font-medium text-foreground">Default order:</span> {PRECEDENCE_TIERS.map((t) => TIER_LABEL[t]).join(" → ")}.
+            </p>
+            {order.join() !== PRECEDENCE_TIERS.join() && (
+              <Btn
+                variant="ghost"
+                size="sm"
+                icon={RotateCcw}
+                onClick={() => {
+                  setHistory((h) => [...h, order]);
+                  setOrder([...PRECEDENCE_TIERS]);
+                  setError(null);
+                  setAnnounce("Order set to the default.");
+                }}
+              >
+                Use default order
+              </Btn>
+            )}
+          </div>
         </Card>
 
-        <div className="space-y-6 min-w-0">
+        <div className="space-y-6 min-w-0 xl:sticky xl:top-6">
+
           <Card title="Change details" subtitle="Changing the order is a governed change: versioned, effective-dated and audited.">
             <div className="space-y-4">
               <p className="text-xs text-muted-foreground">
@@ -473,9 +494,6 @@ function Page() {
               )}
             </div>
           </Card>
-          <InfoBanner title="Default order">
-            {PRECEDENCE_TIERS.map((t) => TIER_LABEL[t]).join(" → ")}. Standard list price is always last.
-          </InfoBanner>
         </div>
       </form>
 

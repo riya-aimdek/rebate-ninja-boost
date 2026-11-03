@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ArrowRight,
@@ -10,11 +10,13 @@ import {
   GitCompare,
   PencilLine,
   PlayCircle,
+  Plus,
   Send,
+  ShieldCheck,
   Undo2,
   XCircle,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -22,11 +24,13 @@ import {
   DataTable,
   DetailGrid,
   DetailTitle,
+  RecordId,
   EmptyState,
   ErrorBanner,
   Field,
   Flag,
   InfoBanner,
+  KpiTile,
   LinkBtn,
   Modal,
   PillTabs,
@@ -55,8 +59,14 @@ import {
   LIST_APPROVAL_TRAIL,
   LIST_VERSIONS,
   PRICE_LISTS,
+  PRODUCTS,
   REASON_CODES,
+  UOMS,
+  createDraftVersion,
+  duplicatePriceList,
+  openDraftOf,
   priceListById,
+  savePriceList,
   productBySku,
   type ApprovalEvent,
   type ListStatus,
@@ -192,31 +202,25 @@ function Page() {
 }
 
 function Detail({ source }: { source: PriceList }) {
+  const navigate = useNavigate();
   const [list, setList] = useState<PriceList>(() => ({
     ...source,
     lines: source.lines.map((l) => ({ ...l })),
   }));
+  // Keep the mock store in step so the list page and the related version see this session's changes.
+  useEffect(() => savePriceList(list), [list]);
+  const draftOf = list.draftOf ? priceListById(list.draftOf) : undefined;
+  const openDraft = list.status === "ACTIVE" ? openDraftOf(list.id) : undefined;
+  // The list and its draft versions share one family (drafts point at the list via draftOf).
+  const familyId = list.draftOf ?? list.id;
+  const listVersions = PRICE_LISTS.filter((l) => l.id === familyId || l.draftOf === familyId).map((l) => (l.id === list.id ? list : l));
   const [tab, setTab] = useState<TabKey>("details");
   const [error, setError] = useState<ApiError | null>(null);
   const [actor, setActor] = useState<string>(ME);
   const [events, setEvents] = useState<ApprovalEvent[]>(
     () =>
-      LIST_APPROVAL_TRAIL[source.id] ?? [
-        { at: source.lastUpdated, actor: source.owner, action: "CREATE", from: "—", to: "DRAFT" },
-        ...(source.status !== "DRAFT"
-          ? [
-              {
-                at: source.lastUpdated,
-                actor: source.submittedBy ?? source.owner,
-                action: "SUBMIT",
-                from: "DRAFT" as const,
-                to: "SUBMITTED" as const,
-              },
-            ]
-          : []),
-      ],
+      LIST_APPROVAL_TRAIL[source.id] ?? lifecycleTrail(source),
   );
-  const [pendingDraft, setPendingDraft] = useState<number | null>(null);
   const [taskState, setTaskState] = useState<"PENDING" | "COMPLETED" | "CANCELLED" | null>(
     source.status === "SUBMITTED" ? "PENDING" : null,
   );
@@ -238,7 +242,8 @@ function Detail({ source }: { source: PriceList }) {
     setComment("");
     setStaleDemo(false);
     setActionErr({});
-    setScheduleAt(list.effectiveFrom);
+    // A draft version inherits a past start date; default its activation to today or later.
+    setScheduleAt(list.effectiveFrom < TODAY ? TODAY : list.effectiveFrom);
     if (a === "APPROVE" && list.submittedBy === actor) {
       setError({
         errorClass: "AUTHORIZATION",
@@ -311,6 +316,9 @@ function Detail({ source }: { source: PriceList }) {
         comment: comment || undefined,
       },
     ]);
+    // A draft version going live supersedes the version it was opened from (US-PL-04 AC#3).
+    if (actionModal === "ACTIVATE" && draftOf && draftOf.status === "ACTIVE")
+      savePriceList({ ...draftOf, status: "SUPERSEDED", lastUpdated: NOW });
     if (actionModal === "SUBMIT") setTaskState("PENDING");
     if (actionModal === "APPROVE") setTaskState("COMPLETED");
     if (
@@ -329,7 +337,9 @@ function Detail({ source }: { source: PriceList }) {
       SEND_BACK: "Sent back to Draft for changes.",
       REVOKE: "Revoked. List returned to Draft and the approval task was cancelled.",
       SCHEDULE: `Scheduled. Becomes Active on ${scheduleAt} (${list.timeZone}); the previous list becomes Superseded.`,
-      ACTIVATE: "Activation job ran. List is Active; the previous list is now Superseded.",
+      ACTIVATE: draftOf
+        ? `Activation job ran. v${list.version} is Active; v${draftOf.version} is now Superseded.`
+        : "Activation job ran. List is Active; the previous list is now Superseded.",
       CANCEL: "Price list cancelled.",
     };
     toast.success(msg[actionModal]);
@@ -348,7 +358,11 @@ function Detail({ source }: { source: PriceList }) {
   const secondary = available.filter((a) => !PRIMARY.includes(a));
   const inline = secondary.length <= 1 ? secondary : secondary.filter((a) => a === "REJECT");
   const overflow = secondary.filter((a) => !inline.includes(a));
-  const duplicate = () => notifySuccess(`${list.name} duplicated`, "Created as a new draft.");
+  const duplicate = () => {
+    const copy = duplicatePriceList(list, ME, NOW);
+    notifySuccess(`${list.name} duplicated`, `Created ${copy.id} as draft v1.`);
+    navigate({ to: "/pricing/price-lists/$id", params: { id: copy.id } });
+  };
 
   const tabs: Array<{ key: TabKey; label: string; count?: number }> = [
     { key: "details", label: "Details" },
@@ -372,41 +386,45 @@ function Detail({ source }: { source: PriceList }) {
       <DetailTitle
         title={list.name}
         status={list.status}
-        subtitle={
-          <>
-            {list.id} · Version v{list.version} · {humanize(list.type)} list · Owner {list.owner} ·
-            Last updated {list.lastUpdated}
-          </>
-        }
-        chips={
-          <>
-            <Tag>Currency: {list.currency}</Tag>
-            <Tag>Region: {list.region}</Tag>
-            <Tag>Channel: {list.channel}</Tag>
-            <Tag tone="brand">Segment: {list.segment}</Tag>
-          </>
-        }
+        meta={[
+          <RecordId key="id">{list.id}</RecordId>,
+          listVersions.length > 1 ? null : `v${list.version}`,
+          `Owner ${list.owner}`,
+          `Updated ${list.lastUpdated}`,
+        ]}
+        attributes={[
+          { label: "Type", value: humanize(list.type) },
+          { label: "Currency", value: list.currency },
+          { label: "Region", value: list.region },
+          { label: "Channel", value: list.channel },
+          { label: "Segment", value: list.segment },
+        ]}
+        versions={listVersions.map((v) => ({
+          key: v.id,
+          version: v.version,
+          status: v.status,
+          to: "/pricing/price-lists/$id",
+          params: { id: v.id },
+          current: v.id === list.id,
+        }))}
         actions={
           <>
             {list.status === "ACTIVE" && (
               <Btn
                 variant="outline"
                 icon={PencilLine}
-                disabled={pendingDraft !== null}
-                title={
-                  pendingDraft !== null
-                    ? `Draft v${pendingDraft} is already in progress`
-                    : undefined
-                }
                 onClick={() => {
-                  setPendingDraft(list.version + 1);
+                  const draft = createDraftVersion(list, ME, NOW);
                   notifySuccess(
-                    `Draft v${list.version + 1} created`,
-                    `Active v${list.version} continues to price quotes until the draft is approved and active.`,
+                    openDraft
+                      ? `Opening draft v${draft.version}`
+                      : `Draft v${draft.version} created`,
+                    `Active v${list.version} continues to price quotes until v${draft.version} is approved and active.`,
                   );
+                  navigate({ to: "/pricing/price-lists/$id", params: { id: draft.id } });
                 }}
               >
-                Edit draft
+                {openDraft ? `Open draft v${openDraft.version}` : "Edit draft"}
               </Btn>
             )}
             {inline.map((a) => (
@@ -477,10 +495,25 @@ function Detail({ source }: { source: PriceList }) {
           require a new draft version.
         </InfoBanner>
       )}
-      {pendingDraft && (
-        <InfoBanner tone="brand" title={`Draft v${pendingDraft} in progress`}>
-          Edits happen in draft v{pendingDraft}. Active v{list.version} stays read-only and
-          continues to price quotes until v{pendingDraft} is approved and active.
+      {openDraft && (
+        <InfoBanner tone="brand" title={`Draft v${openDraft.version} in progress`}>
+          Edits happen in{" "}
+          <RecordLink to="/pricing/price-lists/$id" params={{ id: openDraft.id }}>
+            draft v{openDraft.version}
+          </RecordLink>{" "}
+          ({humanize(openDraft.status)}). Active v{list.version} stays read-only and continues to
+          price quotes until v{openDraft.version} is approved and active.
+        </InfoBanner>
+      )}
+      {draftOf && list.status !== "ACTIVE" && list.status !== "CANCELLED" && (
+        <InfoBanner tone="brand" title={`Draft version v${list.version}`}>
+          Opened from{" "}
+          <RecordLink to="/pricing/price-lists/$id" params={{ id: draftOf.id }}>
+            {draftOf.name} v{draftOf.version}
+          </RecordLink>
+          , which is {humanize(draftOf.status)}
+          {draftOf.status === "ACTIVE" ? " and keeps pricing quotes" : ""} until this version is
+          approved and active. It then becomes Superseded.
         </InfoBanner>
       )}
 
@@ -649,7 +682,7 @@ function DetailsTab({ list }: { list: PriceList }) {
           { label: "Customer segment", value: list.segment },
           { label: "Unit of measure", value: list.uom },
           { label: "Time zone", value: list.timeZone },
-          { label: "Rounding rule", value: list.rounding },
+          { label: "Rounding rule", value: list.rounding.replace(/\b[A-Z_]{3,}\b/g, (m) => humanize(m).toLowerCase()) },
           {
             label: "Parent list",
             value: parent ? (
@@ -663,7 +696,13 @@ function DetailsTab({ list }: { list: PriceList }) {
           {
             label: "Adjustment",
             value: list.adjustmentType
-              ? `${humanize(list.adjustmentType)} ${list.adjustmentValue ?? ""}${list.adjustmentType === "PERCENT" ? "%" : ""}`
+              ? list.adjustmentType === "NONE"
+                ? "None — same prices as the parent"
+                : list.adjustmentType === "PERCENT"
+                  ? `${(list.adjustmentValue ?? 0) > 0 ? "+" : ""}${list.adjustmentValue ?? 0}% on the parent price`
+                  : list.adjustmentType === "ABSOLUTE"
+                    ? `${(list.adjustmentValue ?? 0) > 0 ? "+" : ""}${money(list.adjustmentValue ?? 0, list.currency)} on the parent price`
+                    : humanize(list.adjustmentType)
               : "—",
           },
           {
@@ -695,10 +734,69 @@ function LinesTab({
   setList: React.Dispatch<React.SetStateAction<PriceList>>;
 }) {
   const derived = !!list.parentId;
+  const editable = list.status === "DRAFT" && !derived;
   const [overrideFor, setOverrideFor] = useState<PriceLine | null>(null);
+  const [priceFor, setPriceFor] = useState<PriceLine | null>(null);
+  const [lineErr, setLineErr] = useState<Record<string, string>>({});
+  const [validating, setValidating] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  /** US-PL-01 AC#2/#5 + US-MD-01 AC#9 checks, run on demand. */
+  const validate = () => {
+    setValidating(true);
+    setTimeout(() => {
+      const errs: Record<string, string> = {};
+      const seen = new Set<string>();
+      for (const l of list.lines) {
+        const k = `${l.sku}|${l.uom}|${l.minQty}`;
+        if (productBySku(l.sku)?.lifecycleStatus === "BLOCKED")
+          errs[l.id] = "PRODUCT_BLOCKED — product is blocked; remove this line";
+        else if (seen.has(k))
+          errs[l.id] = "DUPLICATE_LINE — same product, UoM and min qty as another line";
+        else if (l.price === null && !l.allowZeroPrice)
+          errs[l.id] = "Missing price — select Edit price to add one";
+        seen.add(k);
+      }
+      setLineErr(errs);
+      setValidating(false);
+      const n = Object.keys(errs).length;
+      if (n)
+        toast.error(`${n} invalid ${n === 1 ? "line" : "lines"} highlighted`, {
+          description: "The list can't be submitted until they are corrected.",
+        });
+      else notifySuccess("All lines valid", "The list can be submitted for approval.");
+    }, 400);
+  };
+
+  const editCol: Column<PriceLine> = {
+    key: "edit",
+    header: <span className="sr-only">Actions</span>,
+    align: "right",
+    className: "whitespace-nowrap",
+    cell: (l) => (
+      <Btn
+        size="sm"
+        variant="subtle"
+        icon={PencilLine}
+        onClick={() => setPriceFor(l)}
+        aria-label={`Edit price for ${productBySku(l.sku)?.name ?? l.sku}`}
+      >
+        Edit price
+      </Btn>
+    ),
+  };
 
   const plain: Column<PriceLine>[] = [
-    { key: "sku", header: "Product", cell: (l) => <ProductCell sku={l.sku} /> },
+    {
+      key: "sku",
+      header: "Product",
+      cell: (l) => (
+        <div>
+          <ProductCell sku={l.sku} />
+          {lineErr[l.id] && <div className="mt-1 text-xs text-destructive">{lineErr[l.id]}</div>}
+        </div>
+      ),
+    },
     {
       key: "price",
       header: "Price",
@@ -822,22 +920,97 @@ function LinesTab({
     },
   ];
 
-  const missing = list.lines.filter((l) => l.price === null).length;
+  const missing = list.lines.filter((l) => l.price === null && !l.allowZeroPrice).length;
   return (
     <>
       {missing > 0 && (
         <InfoBanner tone="danger" title={`${missing} invalid ${missing === 1 ? "line" : "lines"}`}>
           Lines with a missing price are highlighted. The list cannot be submitted until they are
-          corrected.
+          corrected{editable ? " — select Edit price on each one." : "."}
         </InfoBanner>
+      )}
+      {list.status === "DRAFT" && (
+        <div className="flex flex-wrap justify-end gap-2 mb-3">
+          {editable && (
+            <Btn variant="outline" icon={Plus} onClick={() => setAdding(true)}>
+              Add product line
+            </Btn>
+          )}
+          <Btn variant="outline" icon={ShieldCheck} loading={validating} onClick={validate}>
+            Validate
+          </Btn>
+        </div>
       )}
       <DataTable
         caption={`Lines on ${list.name}`}
-        columns={derived ? derivedCols : plain}
+        // Overrides and price edits only on drafts — submitted or later lists are locked.
+        columns={derived ? derivedCols.filter((c) => c.key !== "act" || list.status === "DRAFT") : editable ? [...plain, editCol] : plain}
         rows={list.lines}
         rowKey={(l) => l.id}
-        rowClassName={(l) => (l.price === null ? "!bg-danger-soft" : "")}
-        empty="No product lines yet."
+        rowClassName={(l) =>
+          (l.price === null && !l.allowZeroPrice) || lineErr[l.id] ? "!bg-danger-soft" : ""
+        }
+        empty={editable ? "No product lines yet — select Add product line." : "No product lines yet."}
+      />
+      <AddLineModal
+        open={adding}
+        list={list}
+        onClose={() => setAdding(false)}
+        onAdd={(line) => {
+          setList((cur) => ({ ...cur, lastUpdated: NOW, lines: [...cur.lines, line] }));
+          AUDIT_LOG.unshift({
+            id: `AU-${78000 + AUDIT_LOG.length}`,
+            at: NOW,
+            actor: ME,
+            entity: "Price List",
+            record: `${list.name} · ${line.sku}`,
+            action: "LINE_ADDED",
+            field: "price",
+            before: "—",
+            after: line.price === null ? "—" : line.price.toFixed(2),
+            version: `v${list.version}`,
+            correlationId: `c-${Math.random().toString(16).slice(2, 8)}`,
+          });
+          setAdding(false);
+          notifySuccess(`${productBySku(line.sku)?.name ?? line.sku} added`, "Saved on the draft. Validate before submitting.");
+        }}
+      />
+      <PriceEditModal
+        line={priceFor}
+        list={list}
+        onClose={() => setPriceFor(null)}
+        onSave={(price, reasonCode, reasonText) => {
+          const line = priceFor;
+          if (!line) return;
+          setList((cur) => ({
+            ...cur,
+            lastUpdated: NOW,
+            lines: cur.lines.map((x) => (x.id === line.id ? { ...x, price } : x)),
+          }));
+          // US-PL-05 AC#1/#5: user, timestamp, before, after, reason code, list version.
+          AUDIT_LOG.unshift({
+            id: `AU-${78000 + AUDIT_LOG.length}`,
+            at: NOW,
+            actor: ME,
+            entity: "Price List",
+            record: `${list.name} · ${line.sku}`,
+            action: "PRICE_CHANGE",
+            field: "price",
+            before: line.price === null ? "—" : line.price.toFixed(2),
+            after: price.toFixed(2),
+            reasonCode,
+            reasonText: reasonText || undefined,
+            version: `v${list.version}`,
+            correlationId: `c-${Math.random().toString(16).slice(2, 8)}`,
+          });
+          setLineErr((e) => {
+            const next = { ...e };
+            delete next[line.id];
+            return next;
+          });
+          setPriceFor(null);
+          notifySuccess("Price saved", `${humanize(reasonCode)} recorded in the audit trail.`);
+        }}
       />
       <OverrideModal
         line={overrideFor}
@@ -908,6 +1081,134 @@ function ProductCell({ sku }: { sku: string }) {
   );
 }
 
+/** Draft line price change; every change needs a reason code (US-PL-05 AC#1, AC#4). */
+function PriceEditModal({
+  line,
+  list,
+  onClose,
+  onSave,
+}: {
+  line: PriceLine | null;
+  list: PriceList;
+  onClose: () => void;
+  onSave: (price: number, reasonCode: string, reasonText: string) => void;
+}) {
+  const [price, setPrice] = useState("");
+  const [reason, setReason] = useState("");
+  const [text, setText] = useState("");
+  const [err, setErr] = useState<{ price?: string; reason?: string; text?: string }>({});
+  const [lastId, setLastId] = useState<string | null>(null);
+  if (line && line.id !== lastId) {
+    setLastId(line.id);
+    setPrice(line.price?.toString() ?? "");
+    setReason("");
+    setText("");
+    setErr({});
+  }
+  if (!line && lastId !== null) setLastId(null);
+  const dirty = !!line && (price !== (line.price?.toString() ?? "") || !!reason || !!text);
+
+  const save = () => {
+    const e: typeof err = {};
+    const n = Number(price);
+    if (price === "") e.price = "Enter the new price.";
+    else if (!Number.isFinite(n) || n < 0) e.price = "Enter a price of 0 or more, e.g. 95.00.";
+    else if (n === 0 && !line?.allowZeroPrice)
+      e.price = "Zero price isn't allowed on this line — enter a price above 0.";
+    if (!reason) e.reason = "Choose a reason code — every price change is audited.";
+    else if (reason === "OTHER" && !text.trim())
+      e.text = "Describe the reason — required when the code is Other.";
+    setErr(e);
+    const first = e.price ? "pe-price" : e.reason ? "pe-reason" : e.text ? "pe-text" : null;
+    if (first) {
+      document.getElementById(first)?.focus();
+      return;
+    }
+    onSave(n, reason, text.trim());
+  };
+
+  return (
+    <Modal
+      open={!!line}
+      title="Edit line price"
+      subtitle={
+        line
+          ? `${productBySku(line.sku)?.name ?? line.sku} · current ${line.price === null ? "no price" : money(line.price, list.currency)}`
+          : ""
+      }
+      onClose={onClose}
+      dismissible={!dirty}
+      footer={
+        <>
+          <Btn variant="subtle" onClick={onClose}>
+            Cancel
+          </Btn>
+          <Btn type="submit" form="price-edit-form">
+            Save price
+          </Btn>
+        </>
+      }
+    >
+      <form
+        id="price-edit-form"
+        noValidate
+        className="grid sm:grid-cols-2 gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <Field label={`New price (${list.currency})`} required error={err.price}>
+          <input
+            id="pe-price"
+            type="number"
+            min={0}
+            step="0.01"
+            inputMode="decimal"
+            className={inputCls}
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="e.g. 95.00"
+          />
+        </Field>
+        <Field label="Reason code" required error={err.reason}>
+          <select
+            id="pe-reason"
+            className={inputCls}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          >
+            <option value="">Select reason…</option>
+            {REASON_CODES.map((r) => (
+              <option key={r} value={r}>
+                {humanize(r)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="Reason text"
+          required={reason === "OTHER"}
+          error={err.text}
+          hint={reason === "OTHER" ? "Required when the code is Other" : "Optional"}
+          className="sm:col-span-2"
+        >
+          <input
+            id="pe-text"
+            className={inputCls}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </Field>
+      </form>
+      <p className="text-xs text-muted-foreground mt-3">
+        The audit trail stores you, the time, the before and after price, the reason and list
+        version v{list.version}.
+      </p>
+    </Modal>
+  );
+}
+
 function OverrideModal({
   line,
   list,
@@ -923,13 +1224,20 @@ function OverrideModal({
 }) {
   const [price, setPrice] = useState("");
   const [reason, setReason] = useState("");
+  const [reasonText, setReasonText] = useState("");
   const [expires, setExpires] = useState("");
-  const [err, setErr] = useState<{ price?: string; reason?: string; expires?: string }>({});
+  const [err, setErr] = useState<{
+    price?: string;
+    reason?: string;
+    reasonText?: string;
+    expires?: string;
+  }>({});
   const [lastId, setLastId] = useState<string | null>(null);
   if (line && line.id !== lastId) {
     setLastId(line.id);
     setPrice(line.overridePrice?.toString() ?? "");
     setReason(line.overrideReason ?? "");
+    setReasonText(line.overrideReasonText ?? "");
     setExpires(line.overrideExpires ?? "");
     setErr({});
   }
@@ -938,6 +1246,7 @@ function OverrideModal({
     !!line &&
     (price !== (line.overridePrice?.toString() ?? "") ||
       reason !== (line.overrideReason ?? "") ||
+      reasonText !== (line.overrideReasonText ?? "") ||
       expires !== (line.overrideExpires ?? ""));
 
   const save = () => {
@@ -946,6 +1255,8 @@ function OverrideModal({
     else if (!Number.isFinite(Number(price)) || Number(price) < 0)
       e.price = "Enter a price of 0 or more, e.g. 95.00.";
     if (!reason) e.reason = "Choose a reason code — every override is audited.";
+    else if (reason === "OTHER" && !reasonText.trim())
+      e.reasonText = "Describe the reason — required when the code is Other.";
     if (expires && expires < TODAY && expires !== line?.overrideExpires)
       e.expires = `Choose ${TODAY} or later, or leave blank for no expiry.`;
     setErr(e);
@@ -955,7 +1266,9 @@ function OverrideModal({
         ? "ovr-expires"
         : e.reason
           ? "ovr-reason"
-          : null;
+          : e.reasonText
+            ? "ovr-reason-text"
+            : null;
     if (first) {
       document.getElementById(first)?.focus();
       return;
@@ -963,6 +1276,7 @@ function OverrideModal({
     onSave({
       overridePrice: Number(price),
       overrideReason: reason,
+      overrideReasonText: reason === "OTHER" ? reasonText.trim() : undefined,
       overrideExpires: expires || undefined,
     });
     toast.success("Override saved", {
@@ -1047,6 +1361,22 @@ function OverrideModal({
             ))}
           </select>
         </Field>
+        {reason === "OTHER" && (
+          <Field
+            label="Reason text"
+            required
+            error={err.reasonText}
+            hint="Required when the code is Other"
+            className="sm:col-span-2"
+          >
+            <input
+              id="ovr-reason-text"
+              className={inputCls}
+              value={reasonText}
+              onChange={(e) => setReasonText(e.target.value)}
+            />
+          </Field>
+        )}
       </form>
       <p className="text-xs text-muted-foreground mt-3">
         Deliberate overrides are kept when the parent price changes. After expiry the final price
@@ -1057,6 +1387,25 @@ function OverrideModal({
 }
 
 /* ---------------- Derivation ---------------- */
+
+/** Lifecycle events implied by a list's status, for lists without a recorded trail. */
+function lifecycleTrail(l: PriceList): ApprovalEvent[] {
+  const submitter = l.submittedBy ?? l.owner;
+  const approver = submitter === "Priya Nair" ? "Tom Hale" : "Priya Nair"; // never the submitter (segregation of duties)
+  const reached = (...st: ListStatus[]) => st.includes(l.status);
+  const ev: ApprovalEvent[] = [{ at: l.lastUpdated, actor: l.owner, action: "CREATE", from: "—", to: "DRAFT" }];
+  if (l.status === "DRAFT") return ev;
+  if (l.status === "CANCELLED") return [...ev, { at: l.lastUpdated, actor: l.owner, action: "CANCEL", from: "DRAFT", to: "CANCELLED" }];
+  ev.push({ at: l.lastUpdated, actor: submitter, action: "SUBMIT", from: "DRAFT", to: "SUBMITTED" });
+  if (reached("APPROVED", "SCHEDULED", "ACTIVE", "SUPERSEDED", "EXPIRED")) ev.push({ at: l.lastUpdated, actor: approver, action: "APPROVE", from: "SUBMITTED", to: "APPROVED" });
+  if (reached("SCHEDULED", "ACTIVE", "SUPERSEDED", "EXPIRED")) ev.push({ at: l.lastUpdated, actor: approver, action: "SCHEDULE", from: "APPROVED", to: "SCHEDULED" });
+  // Activation runs at the effective date, or straight after approval when that date has already passed.
+  const activatedAt = `${l.effectiveFrom} 00:00` > l.lastUpdated ? `${l.effectiveFrom} 00:00` : l.lastUpdated;
+  if (reached("ACTIVE", "SUPERSEDED", "EXPIRED")) ev.push({ at: activatedAt, actor: "System (activation job)", action: "ACTIVATE", from: "SCHEDULED", to: "ACTIVE" });
+  if (l.status === "SUPERSEDED") ev.push({ at: l.lastUpdated, actor: "System (activation job)", action: "SUPERSEDE", from: "ACTIVE", to: "SUPERSEDED" });
+  if (l.status === "EXPIRED") ev.push({ at: `${l.effectiveTo ?? l.lastUpdated} 23:59`, actor: "System", action: "EXPIRE", from: "ACTIVE", to: "EXPIRED" });
+  return ev;
+}
 
 function DerivationTab({
   list,
@@ -1135,7 +1484,13 @@ function DerivationTab({
             </div>
           ))}
         </div>
-        {list.parentId && (
+        {list.parentId && list.status !== "DRAFT" && (
+          <p className="mt-5 text-sm text-muted-foreground">
+            Inheritance mode: <span className="font-medium text-foreground">{list.inheritanceMode === "LIVE_LINK" ? "Live link (recalculates on parent change)" : "Snapshot (copied once, then independent)"}</span>
+            {" "}— change it in a new draft version.
+          </p>
+        )}
+        {list.parentId && list.status === "DRAFT" && (
           <div className="mt-5 flex flex-wrap items-center gap-4">
             <span className="text-sm text-muted-foreground">Inheritance mode for this list</span>
             <Toggle
@@ -1185,7 +1540,7 @@ function DerivationTab({
               onChange={(e) => setNewBase(e.target.value)}
             />
           </Field>
-          <Btn icon={ArrowRight} onClick={() => setRan(true)}>
+          <Btn variant="outline" icon={ArrowRight} onClick={() => setRan(true)}>
             Recalculate chain
           </Btn>
         </div>
@@ -1316,7 +1671,12 @@ function DerivationTab({
               align: "right",
               cell: (l) => money(l.overridePrice, list.currency),
             },
-            { key: "r", header: "Reason", cell: (l) => humanize(l.overrideReason ?? "") },
+            {
+              key: "r",
+              header: "Reason",
+              cell: (l) =>
+                `${humanize(l.overrideReason ?? "")}${l.overrideReasonText ? ` — ${l.overrideReasonText}` : ""}`,
+            },
             {
               key: "e",
               header: "Expires",
@@ -1511,6 +1871,7 @@ function VersionsTab({ list }: { list: PriceList }) {
             </select>
           </Field>
           <Btn
+            variant="outline"
             icon={GitCompare}
             disabled={sameVersion}
             title={
@@ -1536,16 +1897,20 @@ function VersionsTab({ list }: { list: PriceList }) {
           <div className="mt-5 space-y-4" role="status">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {counts.map(([k, n]) => (
-                <div key={k} className="rounded-lg border border-border p-4 bg-card">
-                  <div className="text-sm font-medium text-foreground">
-                    {humanize(k)}
-                  </div>
-                  <div
-                    className={`text-2xl font-bold tabular-nums ${k === "added" ? "text-success" : k === "removed" ? "text-destructive" : k === "changed" ? "text-brand" : ""}`}
-                  >
-                    {n}
-                  </div>
-                </div>
+                <KpiTile
+                  key={k}
+                  label={humanize(k)}
+                  value={n}
+                  tone={
+                    k === "added"
+                      ? "success"
+                      : k === "removed"
+                        ? "danger"
+                        : k === "changed"
+                          ? "brand"
+                          : "neutral"
+                  }
+                />
               ))}
             </div>
             <DataTable
@@ -1651,7 +2016,116 @@ function AuditTab({ list }: { list: PriceList }) {
       ]}
       rows={rows}
       rowKey={(e) => e.id}
-      empty="No audit entries for this list yet."
+      empty="No price changes recorded on this list yet. Lifecycle events (submit, approve, activate) are on the Approval tab."
     />
+  );
+}
+
+/** Add a product line to a draft list (US-PL-01 AC#5 duplicate line, US-MD-01 AC#8/#9 lifecycle checks). */
+function AddLineModal({ open, list, onClose, onAdd }: { open: boolean; list: PriceList; onClose: () => void; onAdd: (l: PriceLine) => void }) {
+  const blank = { sku: "", price: "", uom: list.uom ?? "EA", minQty: "1", maxQty: "", allowZero: false };
+  const [f, setF] = useState(blank);
+  const [submitted, setSubmitted] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setF({ ...blank, uom: list.uom ?? "EA" });
+      setSubmitted(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const product = PRODUCTS.find((p) => p.sku === f.sku);
+  const min = Number(f.minQty);
+  const max = f.maxQty === "" ? undefined : Number(f.maxQty);
+  const e: Record<string, string> = {};
+  if (!f.sku) e["al-product"] = "Choose a product.";
+  else if (product?.lifecycleStatus === "BLOCKED") e["al-product"] = "PRODUCT_BLOCKED — this product is blocked in the ERP and can't be priced.";
+  else if (list.lines.some((l) => l.sku === f.sku && l.uom === f.uom && l.minQty === min))
+    e["al-minqty"] = "DUPLICATE_LINE — this product already has a line with the same UoM and min qty. Change the min qty for a new tier.";
+  if (!f.allowZero && (f.price === "" || Number(f.price) <= 0)) e["al-price"] = "Enter a price above 0, or allow a zero price.";
+  else if (f.price !== "" && Number(f.price) < 0) e["al-price"] = "The price can't be negative.";
+  if (!Number.isInteger(min) || min < 1) e["al-minqty"] = e["al-minqty"] ?? "Enter a whole number of 1 or more.";
+  if (max !== undefined && (!Number.isInteger(max) || max < min)) e["al-maxqty"] = "Max qty must be a whole number at least the min qty.";
+  const fe = (k: string) => (submitted || (k === "al-product" && e[k]?.startsWith("PRODUCT_BLOCKED")) ? e[k] : undefined);
+
+  const save = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setSubmitted(true);
+    const first = Object.keys(e)[0];
+    if (first) {
+      document.getElementById(first)?.focus();
+      return;
+    }
+    onAdd({
+      id: `${list.id}-L${list.lines.length + 1}-${Date.now().toString(36)}`,
+      sku: f.sku,
+      price: f.price === "" ? (f.allowZero ? 0 : null) : Number(f.price),
+      uom: f.uom,
+      minQty: min,
+      maxQty: max,
+      effectiveFrom: list.effectiveFrom,
+      allowZeroPrice: f.allowZero,
+    });
+  };
+  const dirty = JSON.stringify(f) !== JSON.stringify({ ...blank, uom: list.uom ?? "EA" });
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      dismissible={!dirty}
+      title="Add product line"
+      subtitle={`${list.name} · ${list.currency} · effective ${list.effectiveFrom} → list end`}
+      footer={
+        <>
+          <Btn variant="subtle" onClick={onClose}>
+            Cancel
+          </Btn>
+          <Btn type="submit" form="add-line-form" icon={Plus}>
+            Add line
+          </Btn>
+        </>
+      }
+    >
+      <form id="add-line-form" noValidate onSubmit={save} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <p className="sm:col-span-2 text-xs text-muted-foreground">
+          <span className="text-destructive" aria-hidden>*</span> Required
+        </p>
+        <Field label="Product" required error={fe("al-product")} className="sm:col-span-2">
+          <select id="al-product" className={inputCls} value={f.sku} onChange={(ev) => setF({ ...f, sku: ev.target.value })}>
+            <option value="">Choose a product…</option>
+            {PRODUCTS.map((p) => (
+              <option key={p.sku} value={p.sku}>
+                {p.sku} · {p.name}
+                {p.lifecycleStatus === "BLOCKED" ? " (blocked)" : p.lifecycleStatus === "END_OF_LIFE" ? " (end of life)" : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {product?.lifecycleStatus === "END_OF_LIFE" && (
+          <div className="sm:col-span-2 -mt-2">
+            <Flag tone="warning">End-of-life product — the line is allowed, with a warning on the list.</Flag>
+          </div>
+        )}
+        <Field label={`Price (${list.currency})`} required={!f.allowZero} error={fe("al-price")}>
+          <input id="al-price" type="number" inputMode="decimal" min={0} step="0.01" className={inputCls} value={f.price} onChange={(ev) => setF({ ...f, price: ev.target.value })} placeholder="e.g. 95.00" />
+        </Field>
+        <Field label="Unit of measure" required>
+          <select className={inputCls} value={f.uom} onChange={(ev) => setF({ ...f, uom: ev.target.value })}>
+            {UOMS.map((u) => (
+              <option key={u}>{u}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Min qty" required error={fe("al-minqty")}>
+          <input id="al-minqty" type="number" inputMode="numeric" min={1} step={1} className={inputCls} value={f.minQty} onChange={(ev) => setF({ ...f, minQty: ev.target.value })} />
+        </Field>
+        <Field label="Max qty" hint="Leave blank for no upper limit" error={fe("al-maxqty")}>
+          <input id="al-maxqty" type="number" inputMode="numeric" min={Number(f.minQty) || 1} step={1} className={inputCls} value={f.maxQty} onChange={(ev) => setF({ ...f, maxQty: ev.target.value })} />
+        </Field>
+        <div className="sm:col-span-2">
+          <Toggle checked={f.allowZero} onChange={(v) => setF({ ...f, allowZero: v })} label="Allow a zero price on this line" />
+        </div>
+      </form>
+    </Modal>
   );
 }

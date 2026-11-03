@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Coins, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -32,18 +32,26 @@ import {
   COST_TYPES,
   CURRENCIES,
   MARGIN_COST_DEFINITION,
+  PRODUCTS,
   REJECTED_COST_PAYLOADS,
   type CostRecord,
   type CostType,
 } from "@/lib/pricing/data";
 import { TODAY } from "@/lib/pricing/csv";
 
+type TabKey = "records" | "history" | "config";
+const TABS: TabKey[] = ["records", "history", "config"];
+type CostSearch = { tab?: TabKey; sku?: string };
+
 export const Route = createFileRoute("/pricing/costs")({
+  // `?tab=history&sku=A-100` lets product pages open the cost history for one SKU.
+  validateSearch: (s: Record<string, unknown>): CostSearch => ({
+    tab: TABS.includes(s.tab as TabKey) && s.tab !== "records" ? (s.tab as TabKey) : undefined,
+    sku: typeof s.sku === "string" && s.sku ? s.sku : undefined,
+  }),
   head: () => ({ meta: [{ title: "Cost data · Rebate Ninja" }] }),
   component: Page,
 });
-
-type TabKey = "records" | "timeline" | "config";
 
 type Draft = { sku: string; plant: string; costType: string; amount: string; currency: string; effectiveFrom: string; effectiveTo: string; source: string; supersede: boolean };
 const EMPTY: Draft = { sku: "", plant: "", costType: "", amount: "", currency: "GBP", effectiveFrom: "", effectiveTo: "", source: "SAP ERP", supersede: false };
@@ -71,12 +79,16 @@ const dayBefore = (d: string) => {
 function Page() {
   const [costs, setCosts] = useState<CostRecord[]>(COSTS);
   const [rejected, setRejected] = useState(REJECTED_COST_PAYLOADS);
-  const [tab, setTab] = useState<TabKey>("records");
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: "/pricing/costs" });
+  const tab = search.tab ?? "records";
+  const timelineSku = search.sku ?? "A-100";
+  const setTab = (t: TabKey) => navigate({ search: (s) => ({ ...s, tab: t === "records" ? undefined : t }), replace: true });
+  const setTimelineSku = (sku: string) => navigate({ search: (s) => ({ ...s, sku }), replace: true });
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
   const [plant, setPlant] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
-  const [timelineSku, setTimelineSku] = useState("A-100");
   const [marginDef, setMarginDef] = useState<CostType[]>(MARGIN_COST_DEFINITION);
   const [savedMarginDef, setSavedMarginDef] = useState<CostType[]>(MARGIN_COST_DEFINITION);
   const [savingMargin, setSavingMargin] = useState(false);
@@ -118,6 +130,12 @@ function Page() {
     if (first) {
       setError(null);
       document.getElementById(fid(first))?.focus();
+      return;
+    }
+    if (!PRODUCTS.some((p) => p.sku === draft.sku.trim())) {
+      setFieldErr({ sku: `No product with SKU ${draft.sku.trim()}. Check the SKU in Products, e.g. A-100.` });
+      setError({ errorClass: "VALIDATION", code: "PRODUCT_NOT_FOUND", message: `Payload rejected — SKU "${draft.sku.trim()}" is not in the product master. No record was created.`, field: "sku" });
+      document.getElementById(fid("sku"))?.focus();
       return;
     }
     if (!APPROVED_COST_SOURCES.some((s) => s.source === draft.source)) {
@@ -186,6 +204,15 @@ function Page() {
 
   const timelineRows = costs.filter((c) => c.sku === timelineSku);
   const typesForSku = Array.from(new Set(timelineRows.map((c) => c.costType)));
+  const productName = (sku: string) => PRODUCTS.find((p) => p.sku === sku)?.name;
+  // Change log: each record compared with the previous record of the same type and plant, newest first.
+  const changes = [...timelineRows]
+    .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))
+    .map((c, i, all) => {
+      const prev = all.slice(0, i).reverse().find((p) => p.costType === c.costType && p.plant === c.plant);
+      return { rec: c, prev, delta: prev ? c.amount - prev.amount : undefined };
+    })
+    .reverse();
   const axisFrom = new Date("2026-01-01").getTime();
   const axisTo = new Date("2027-12-31").getTime();
   const pos = (d: string) => Math.max(0, Math.min(100, ((new Date(d).getTime() - axisFrom) / (axisTo - axisFrom)) * 100));
@@ -238,7 +265,7 @@ function Page() {
         onChange={setTab}
         tabs={[
           { key: "records", label: "Cost records", count: costs.length },
-          { key: "timeline", label: "Timeline by SKU" },
+          { key: "history", label: "Cost history" },
           { key: "config", label: "Margin definition & sources" },
         ]}
       />
@@ -295,7 +322,18 @@ function Page() {
               </EmptyState>
             }
             columns={[
-              { key: "sku", header: "SKU", cell: (c) => <span className="whitespace-nowrap"><RecordLink to="/pricing/products/$id" params={{ id: c.sku }}>{c.sku}</RecordLink></span> },
+              {
+                key: "sku",
+                header: "Product",
+                cell: (c) => (
+                  <div className="whitespace-nowrap">
+                    <RecordLink to="/pricing/products/$id" params={{ id: c.sku }}>
+                      {c.sku}
+                    </RecordLink>
+                    {productName(c.sku) && <div className="text-xs text-muted-foreground">{productName(c.sku)}</div>}
+                  </div>
+                ),
+              },
               { key: "plant", header: "Plant", cell: (c) => <span className="whitespace-nowrap">{c.plant}</span> },
               { key: "type", header: "Cost type", cell: (c) => humanize(c.costType) },
               { key: "amt", header: "Amount", align: "right", cell: (c) => <Price value={c.amount} currency={c.currency} /> },
@@ -309,17 +347,28 @@ function Page() {
         </>
       )}
 
-      {tab === "timeline" && (
-        <Card
-          title="Effective-dated cost timeline"
-          subtitle="Jan 2026 – Dec 2027. Each bar is one cost record; bars of the same type never overlap."
-          actions={
-            <select className={`${inputCls} w-full sm:w-48`} value={timelineSku} onChange={(e) => setTimelineSku(e.target.value)} aria-label="SKU shown on timeline">
+      {tab === "history" && (
+        <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <Field label="Product" className="w-full sm:w-80">
+            <select className={inputCls} value={timelineSku} onChange={(e) => setTimelineSku(e.target.value)}>
               {skus.map((s) => (
-                <option key={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                  {productName(s) ? ` — ${productName(s)}` : ""}
+                </option>
               ))}
             </select>
-          }
+          </Field>
+          {productName(timelineSku) && (
+            <RecordLink to="/pricing/products/$id" params={{ id: timelineSku }}>
+              Open {productName(timelineSku)}
+            </RecordLink>
+          )}
+        </div>
+        <Card
+          title="Timeline"
+          subtitle="Jan 2026 – Dec 2027. Each bar is one cost record; records of the same type never overlap."
         >
           {/* Fixed-width chart scrolls inside the card on narrow screens. */}
           <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label={`Cost timeline for ${timelineSku}`}>
@@ -366,6 +415,46 @@ function Page() {
           </div>
           </div>
         </Card>
+        <section aria-labelledby="cost-changes-h">
+          <h2 id="cost-changes-h" className="text-lg font-semibold tracking-tight">
+            Change log
+          </h2>
+          <p className="text-sm text-muted-foreground mt-0.5 mb-4">Newest first. Each change is a new record; the previous one is closed, never overwritten.</p>
+          <DataTable
+            caption={`Cost changes for ${timelineSku}`}
+            rows={changes}
+            rowKey={(r) => r.rec.id}
+            empty="No cost records received for this product."
+            columns={[
+              { key: "from", header: "Effective from", cell: (r) => <span className="whitespace-nowrap tabular-nums">{r.rec.effectiveFrom}</span> },
+              { key: "type", header: "Cost type", cell: (r) => <span className="whitespace-nowrap">{humanize(r.rec.costType)} · {r.rec.plant}</span> },
+              {
+                key: "prev",
+                header: "Previous",
+                align: "right",
+                cell: (r) => (r.prev ? <span className="text-muted-foreground"><Price value={r.prev.amount} currency={r.prev.currency} /></span> : <span className="text-muted-foreground">First record</span>),
+              },
+              { key: "amt", header: "New", align: "right", cell: (r) => <Price value={r.rec.amount} currency={r.rec.currency} /> },
+              {
+                key: "delta",
+                header: "Change",
+                align: "right",
+                cell: (r) =>
+                  r.delta === undefined || !r.prev ? (
+                    "—"
+                  ) : (
+                    <span className={`whitespace-nowrap tabular-nums font-medium ${r.delta > 0 ? "text-destructive" : r.delta < 0 ? "text-success" : ""}`}>
+                      {r.delta > 0 ? "▲ +" : r.delta < 0 ? "▼ " : ""}
+                      {money(r.delta, r.rec.currency)} ({((r.delta / r.prev.amount) * 100).toFixed(1)}%)
+                    </span>
+                  ),
+              },
+              { key: "src", header: "Source", cell: (r) => <span className="whitespace-nowrap">{r.rec.source}</span> },
+              { key: "st", header: "Status", cell: (r) => <StatusPill status={r.rec.status} /> },
+            ]}
+          />
+        </section>
+        </div>
       )}
 
       {tab === "config" && (

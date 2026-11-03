@@ -132,7 +132,17 @@ function CompetitivePage() {
         </div>
       ),
     },
-    { key: "ours", header: "Our price", align: "right", cell: (o) => <Price value={ourPrice(o.sku)} currency="GBP" uom={productBySku(o.sku)?.uom} /> },
+    {
+      key: "ours",
+      header: "Our price",
+      align: "right",
+      cell: (o) =>
+        ourPrice(o.sku) == null ? (
+          <span className="text-xs text-muted-foreground">Not on UK Base list</span>
+        ) : (
+          <Price value={ourPrice(o.sku)} currency="GBP" uom={productBySku(o.sku)?.uom} />
+        ),
+    },
     {
       key: "comp",
       header: "Competitor",
@@ -376,7 +386,7 @@ function CompetitivePage() {
                 </div>
                 {feedResult.unmapped.map((s) => (
                   <div key={s} className="rounded-lg border border-destructive/30 bg-danger-soft px-3 py-2">
-                    <b className="text-destructive">Unmapped competitor SKU</b> — {s} is not mapped to any product. Row written to the{" "}
+                    <b className="text-destructive">UNMAPPED_COMPETITOR_SKU</b> — {s} is not mapped to any product. Row written to the{" "}
                     <Link to="/pricing/data-quality" className="text-brand font-semibold hover:underline">
                       data quality log
                     </Link>
