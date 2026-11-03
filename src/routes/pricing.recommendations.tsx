@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { TODAY } from "@/lib/pricing/csv";
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, RefreshCw, Settings2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
@@ -178,6 +179,24 @@ function RecommendationsPage() {
     items.forEach((i) => addLog(i.id, `Undone · decision reverted to ${humanize(i.prev).toLowerCase()}`));
   };
 
+  /** Regenerate an expired item: reopens it with a fresh expiry so it can be decided again. */
+  const [regenerating, setRegenerating] = useState<string | null>(null);
+  const regenerate = (rec: Recommendation) => {
+    setRegenerating(rec.id);
+    setTimeout(() => {
+      const d = new Date(`${TODAY}T00:00:00`);
+      d.setDate(d.getDate() + expiryDays);
+      const p = (n: number) => String(n).padStart(2, "0");
+      const expiresAt = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+      const fresh: Recommendation = { ...rec, expired: false, status: "OPEN", expiresAt };
+      setRecs((rs) => rs.map((r) => (r.id === rec.id ? fresh : r)));
+      setOpen((o) => (o?.id === rec.id ? fresh : o));
+      addLog(rec.id, `Regenerated from ${rec.runId} · new expiry ${fmtDate(expiresAt)}`);
+      setRegenerating(null);
+      toast.success(`${rec.id} regenerated`, { description: `Open for review until ${fmtDate(expiresAt)}.` });
+    }, 700);
+  };
+
   /** Single accept: no modal — act immediately and offer Undo. */
   const acceptOne = (rec: Recommendation) => {
     const prev = rec.status;
@@ -190,7 +209,7 @@ function RecommendationsPage() {
     if (rec.expired && kind !== "REJECT") {
       toast.error("RECOMMENDATION_EXPIRED", {
         description: `${rec.id} passed its expiry and cannot be ${kind === "ACCEPT" ? "accepted" : "modified"}. Regenerate it from the latest optimization run.`,
-        action: { label: "Regenerate", onClick: () => toast.success(`Regeneration queued for ${rec.id}`) },
+        action: { label: "Regenerate", onClick: () => regenerate(rec) },
       });
       return;
     }
@@ -245,39 +264,43 @@ function RecommendationsPage() {
     {
       key: "sel",
       header: (
-        <input
-          type="checkbox"
-          aria-label="Select all open recommendations shown"
-          checked={allVisibleSelected}
-          disabled={selectableVisible.length === 0}
-          onChange={(e) => toggleAllVisible(e.target.checked)}
-          className="size-4 accent-[var(--brand)]"
-        />
+        <label className="hit inline-flex cursor-pointer">
+          <input
+            type="checkbox"
+            aria-label="Select all open recommendations shown"
+            checked={allVisibleSelected}
+            disabled={selectableVisible.length === 0}
+            onChange={(e) => toggleAllVisible(e.target.checked)}
+            className="size-4 accent-[var(--brand)]"
+          />
+        </label>
       ),
       cell: (r) => (
-        <input
-          type="checkbox"
-          aria-label={`Select ${r.id}`}
-          disabled={r.status !== "OPEN"}
-          title={
-            r.status !== "OPEN"
-              ? "Already decided"
-              : eligibleBulk(r)
-                ? "Eligible for bulk accept or reject"
-                : "Can be bulk rejected; bulk accept only for high-confidence ML items inside guardrails"
-          }
-          checked={selected.has(r.id)}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) =>
-            setSelected((s) => {
-              const n = new Set(s);
-              if (e.target.checked) n.add(r.id);
-              else n.delete(r.id);
-              return n;
-            })
-          }
-          className="size-4 accent-[var(--brand)]"
-        />
+        // `hit` label widens the 16px checkbox to a ~40px target without moving the layout.
+        <label className="hit inline-flex cursor-pointer" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            aria-label={`Select ${r.id}`}
+            disabled={r.status !== "OPEN"}
+            title={
+              r.status !== "OPEN"
+                ? "Already decided"
+                : eligibleBulk(r)
+                  ? "Eligible for bulk accept or reject"
+                  : "Can be bulk rejected; bulk accept only for high-confidence ML items inside guardrails"
+            }
+            checked={selected.has(r.id)}
+            onChange={(e) =>
+              setSelected((s) => {
+                const n = new Set(s);
+                if (e.target.checked) n.add(r.id);
+                else n.delete(r.id);
+                return n;
+              })
+            }
+            className="size-4 accent-[var(--brand)]"
+          />
+        </label>
       ),
     },
     {
@@ -490,7 +513,14 @@ function RecommendationsPage() {
         </ul>
       </Card>
 
-      <RecDrawer rec={open} threshold={threshold} onClose={() => setOpen(null)} onDecide={(k) => open && startDecision(open, k)} />
+      <RecDrawer
+        rec={open}
+        threshold={threshold}
+        onClose={() => setOpen(null)}
+        onDecide={(k) => open && startDecision(open, k)}
+        regenerating={!!open && regenerating === open.id}
+        onRegenerate={() => open && regenerate(open)}
+      />
 
       {decision && (
         <DecisionModal
@@ -562,11 +592,15 @@ function RecDrawer({
   threshold,
   onClose,
   onDecide,
+  regenerating,
+  onRegenerate,
 }: {
   rec: Recommendation | null;
   threshold: number;
   onClose: () => void;
   onDecide: (k: Decision) => void;
+  regenerating: boolean;
+  onRegenerate: () => void;
 }) {
   if (!rec) return null;
   const low = rec.confidence < threshold;
@@ -599,11 +633,16 @@ function RecDrawer({
       }
     >
       {rec.expired && (
-        <InfoBanner tone="danger" title="Recommendation expired">
-          This recommendation passed its expiry ({fmtDate(rec.expiresAt)}). Regenerate it before acting.{" "}
-          <button type="button" className="text-brand font-semibold inline-flex items-center gap-1" onClick={() => toast.success(`Regeneration queued for ${rec.id}`)}>
-            <RefreshCw className="size-3.5" aria-hidden /> Regenerate
-          </button>
+        <InfoBanner
+          tone="danger"
+          title="Recommendation expired"
+          action={
+            <Btn variant="outline" size="sm" icon={RefreshCw} loading={regenerating} onClick={onRegenerate}>
+              {regenerating ? "Regenerating…" : "Regenerate"}
+            </Btn>
+          }
+        >
+          This recommendation passed its expiry ({fmtDate(rec.expiresAt)}). Regenerate it before acting.
         </InfoBanner>
       )}
       <p className="text-sm flex flex-wrap gap-x-4 gap-y-1">
@@ -754,6 +793,7 @@ function DecisionModal({
       title={title}
       subtitle={`${rec.product} · ${rec.customer}`}
       onClose={onClose}
+      dismissible={!modified && !reason && !reasonText}
       footer={
         <>
           <Btn variant="subtle" onClick={onClose}>

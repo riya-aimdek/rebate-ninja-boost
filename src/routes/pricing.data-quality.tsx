@@ -54,6 +54,10 @@ import {
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 export const Route = createFileRoute("/pricing/data-quality")({
+  // `?status=OPEN` lets the pricing dashboard open the list its "open issues" count summarises.
+  validateSearch: (s: Record<string, unknown>): { status?: DqStatus } => ({
+    status: DQ_STATUSES.includes(s.status as DqStatus) ? (s.status as DqStatus) : undefined,
+  }),
   head: () => ({ meta: [{ title: "Data quality log · Rebate Ninja" }] }),
   component: Page,
 });
@@ -108,7 +112,7 @@ function Page() {
   const [log, setLog] = useState<DqEntry[]>(DQ_LOG);
   const [q, setQ] = useState("");
   const [entity, setEntity] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState<string>(Route.useSearch().status ?? "all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -157,6 +161,8 @@ function Page() {
         message: "Add a resolution note explaining why this record can be ignored.",
         field: "resolutionNote",
       });
+      // Land keyboard and screen-reader users on the field to fix.
+      document.getElementById("dq-note")?.focus();
       return;
     }
     const snap = [selected];
@@ -360,7 +366,7 @@ function Page() {
     },
     {
       key: "occ",
-      header: <span title="Occurrence count">Count</span>,
+      header: "Occurrences",
       align: "right",
       cell: (d) => <span className="tabular-nums">{d.occurrenceCount}</span>,
     },
@@ -637,6 +643,8 @@ function Page() {
       <Drawer
         open={!!selected}
         onClose={() => setSelectedId(null)}
+        // A typed but unapplied note isn't lost to Esc or a backdrop click.
+        dismissible={note === (selected?.resolutionNote ?? "")}
         title={selected ? `${selected.code}` : ""}
         subtitle={
           selected ? `${selected.id} · ${selected.entity} · ${selected.sourceSystem}` : undefined
@@ -760,6 +768,7 @@ function Page() {
               }
             >
               <textarea
+                id="dq-note"
                 className={`${inputCls} h-24 py-2`}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}

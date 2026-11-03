@@ -261,6 +261,7 @@ function Page() {
       )}
 
       <PillTabs<TabKey>
+        idPrefix="costs"
         active={tab}
         onChange={setTab}
         tabs={[
@@ -270,6 +271,8 @@ function Page() {
         ]}
       />
 
+      {/* One tabpanel wraps whichever tab is showing, so screen readers hear which tab owns the content. */}
+      <div role="tabpanel" id={`costs-panel-${tab}`} aria-labelledby={`costs-tab-${tab}`}>
       {tab === "records" && (
         <>
           <FilterPills<CostType>
@@ -370,7 +373,10 @@ function Page() {
           title="Timeline"
           subtitle="Jan 2026 – Dec 2027. Each bar is one cost record; records of the same type never overlap."
         >
-          {/* Fixed-width chart scrolls inside the card on narrow screens. */}
+          {typesForSku.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No cost records received for {timelineSku}. Choose another product above.</p>
+          ) : (
+          /* Fixed-width chart scrolls inside the card on narrow screens. */
           <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label={`Cost timeline for ${timelineSku}`}>
           <div className="relative min-w-[640px]">
             <div className="flex justify-between text-xs text-muted-foreground mb-2 pl-40" aria-hidden>
@@ -414,6 +420,7 @@ function Page() {
             </div>
           </div>
           </div>
+          )}
         </Card>
         <section aria-labelledby="cost-changes-h">
           <h2 id="cost-changes-h" className="text-lg font-semibold tracking-tight">
@@ -470,7 +477,7 @@ function Page() {
                     Cancel
                   </Btn>
                 )}
-                <Btn size="sm" onClick={saveMargin} loading={savingMargin} disabled={!marginDirty}>
+                <Btn size="sm" onClick={saveMargin} loading={savingMargin} disabled={!marginDirty} title={!marginDirty ? "No changes to save" : undefined}>
                   Save
                 </Btn>
               </>
@@ -533,6 +540,7 @@ function Page() {
           </section>
         </div>
       )}
+      </div>
 
       <Modal
         open={open}
@@ -543,6 +551,11 @@ function Page() {
         subtitle="Simulates a payload from an integration — validation runs exactly as the API would."
         footer={
           <>
+            {draftDirty && (
+              <span role="status" className="mr-auto self-center text-xs font-medium text-warning-foreground">
+                Unsaved changes
+              </span>
+            )}
             <Btn variant="subtle" onClick={() => setOpen(false)} disabled={importing}>
               Cancel
             </Btn>
@@ -608,6 +621,11 @@ function Page() {
                 className={inputCls}
                 value={draft.amount}
                 onChange={(e) => setField({ amount: e.target.value })}
+                onBlur={() => {
+                  // Inline validation on blur, same rule as on submit.
+                  const v = draft.amount.trim();
+                  if (v && (!Number.isFinite(Number(v)) || Number(v) < 0)) setFieldErr((fe) => ({ ...fe, amount: "Enter an amount of 0 or more, e.g. 76.50." }));
+                }}
                 placeholder="e.g. 76.50"
               />
             </Field>
@@ -630,6 +648,10 @@ function Page() {
               className={inputCls}
               value={draft.effectiveTo}
               onChange={(e) => setField({ effectiveTo: e.target.value })}
+              onBlur={() => {
+                if (draft.effectiveFrom && draft.effectiveTo && draft.effectiveTo <= draft.effectiveFrom)
+                  setFieldErr((fe) => ({ ...fe, effectiveTo: "End date must be after the start date. Choose a later date or leave blank for open-ended." }));
+              }}
             />
           </Field>
           <Field label="Source system" required error={fieldErr.source} hint="Must be a registered source">

@@ -1,7 +1,7 @@
-import { Download, XCircle } from "lucide-react";
+import { Download, X, XCircle } from "lucide-react";
 import { Children, cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from "react";
 import { AppLayout } from "@/components/AppShell";
-import { BackLink, Btn, KpiTile, ListHeader, money, type Tone } from "@/components/pricing/kit";
+import { BackLink, Btn, DataAsOf, KpiTile, ListHeader, money, type Tone } from "@/components/pricing/kit";
 
 export type ReportKpi = {
   label: string;
@@ -15,7 +15,7 @@ export type ReportKpi = {
 
 /**
  * Frame for every report page — same Option C layout as the pricing list pages:
- * breadcrumb → ListHeader (h1 + subtitle, actions on the right) → KPI tiles → content.
+ * breadcrumb → ListHeader (h1 + subtitle, "Data as of", actions, Export right-most) → KPI tiles → content.
  */
 export function ReportShell({
   title,
@@ -27,6 +27,7 @@ export function ReportShell({
   actions,
   search,
   onSearch,
+  asOf,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -43,10 +44,13 @@ export function ReportShell({
   /** Optional header search (ListHeader pattern). */
   search?: string;
   onSearch?: (v: string) => void;
+  /** Data freshness shown in the header: omit = time the page loaded the data, a Date = when it was run, false = hide (non-data pages). */
+  asOf?: Date | false;
 }) {
   const headerActions =
-    actions || onExport ? (
+    actions || onExport || asOf !== false ? (
       <>
+        {asOf !== false && <DataAsOf at={asOf} />}
         {actions}
         {onExport && (
           <Btn variant="outline" icon={Download} onClick={onExport}>
@@ -73,10 +77,24 @@ export function ReportShell({
   );
 }
 
-export function FilterBar({ children }: { children: ReactNode }) {
+/** Report filter bar. Pass `onSubmit` on run-style reports so Enter in any field runs the report (Run button is `type="submit"`). */
+export function FilterBar({ children, onSubmit }: { children: ReactNode; onSubmit?: () => void }) {
+  const body = <div className="flex flex-wrap items-start gap-4">{children}</div>;
   return (
     <section aria-label="Filters" className="bg-card border border-border rounded-xl p-5 mb-6 shadow-sm">
-      <div className="flex flex-wrap items-start gap-4">{children}</div>
+      {onSubmit ? (
+        <form
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSubmit();
+          }}
+        >
+          {body}
+        </form>
+      ) : (
+        body
+      )}
     </section>
   );
 }
@@ -136,6 +154,33 @@ export function Field({
 /** Right-aligned status + actions slot at the end of a FilterBar (keeps it level with the fields). */
 export function FilterBarEnd({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto sm:ml-auto sm:self-end">{children}</div>;
+}
+
+/** Standard FilterBar end: live "Showing x of y" count + "Clear filters (n)" — identical on every report. */
+export function FilterResult({
+  shown,
+  total,
+  noun,
+  activeCount,
+  onClear,
+}: {
+  shown: number;
+  total: number;
+  /** Plural noun, e.g. "accounts". */
+  noun: string;
+  activeCount: number;
+  onClear: () => void;
+}) {
+  return (
+    <FilterBarEnd>
+      <span role="status" className="text-sm text-muted-foreground tabular-nums">
+        Showing {shown.toLocaleString("en-GB")} of {total.toLocaleString("en-GB")} {noun}
+      </span>
+      <Btn variant="subtle" icon={X} onClick={onClear} disabled={activeCount === 0} title={activeCount === 0 ? "No filters applied" : undefined}>
+        Clear filters{activeCount > 0 && ` (${activeCount})`}
+      </Btn>
+    </FilterBarEnd>
+  );
 }
 
 export const inputCls =

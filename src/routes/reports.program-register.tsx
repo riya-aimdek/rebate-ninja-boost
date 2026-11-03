@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { SearchX, X } from "lucide-react";
 import { toast } from "sonner";
-import { ReportShell, FilterBar, FilterBarEnd, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
+import { ReportShell, FilterBar, FilterResult, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
 import { Btn, DataTable, EmptyState, StatusPill, notifySuccess, type Column } from "@/components/pricing/kit";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
@@ -71,7 +71,8 @@ function ProgramRegisterPage() {
     }),
     { revenue: 0, accrued: 0, claim: 0, paid: 0 },
   );
-  const active = PROGRAMS.filter((p) => p.status === "Active").length;
+  // KPIs follow the filters, like every other report.
+  const active = filtered.filter((p) => p.status === "Active").length;
   const outstanding = totals.claim - totals.paid;
 
   const fmt = (n: number) => usd(n);
@@ -149,7 +150,7 @@ function ProgramRegisterPage() {
       subtitle="Revenue, accrued rebate, claim rebate and outstanding settlement for every rebate program."
       onExport={exportCsv}
       kpis={[
-        { label: "Total programs", value: `${PROGRAMS.length}` },
+        { label: "Programs", value: `${filtered.length}` },
         { label: "Active programs", value: `${active}`, tone: "success" },
         { label: "Total accrued", value: fmt(totals.accrued) },
         { label: "Outstanding", value: fmt(outstanding), tone: "warning", hint: "Claimed but not yet paid" },
@@ -188,14 +189,7 @@ function ProgramRegisterPage() {
         <Field label="Active to" error={dateError}>
           <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={inputCls} />
         </Field>
-        <FilterBarEnd>
-          <span role="status" className="text-sm text-muted-foreground">
-            Showing {filtered.length} of {PROGRAMS.length} programs
-          </span>
-          <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={activeCount === 0}>
-            Clear filters{activeCount > 0 && ` (${activeCount})`}
-          </Btn>
-        </FilterBarEnd>
+        <FilterResult shown={filtered.length} total={PROGRAMS.length} noun="programs" activeCount={activeCount} onClear={clearFilters} />
       </FilterBar>
 
       <DataTable

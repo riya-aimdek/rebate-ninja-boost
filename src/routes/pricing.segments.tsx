@@ -673,6 +673,11 @@ function Page() {
           rows={history}
           rowKey={(h) => `${h.customerId}-${h.segment}-${h.from}`}
           pageSize={10}
+          empty={
+            <EmptyState title="No assignment history yet">
+              Assignments appear here after a re-evaluation or a manual override.
+            </EmptyState>
+          }
           columns={[
             {
               key: "c",
@@ -689,6 +694,7 @@ function Page() {
       </section>
 
       <Card className="mt-6" title="Segment lists" subtitle={`Names offered when creating ${tab === "CUSTOMER" ? "customer" : "product"} segments.`}>
+        {lists[tab].length === 0 && <p className="text-sm text-muted-foreground">No list values yet — add the first one below.</p>}
         <ul className="flex flex-wrap gap-2" aria-label={`${tab === "CUSTOMER" ? "Customer" : "Product"} segment list`}>
           {lists[tab].map((n) => (
             <li key={n} className="inline-flex items-center gap-1 rounded-full bg-muted pl-3 pr-1 py-1 text-sm">
@@ -897,7 +903,7 @@ function Page() {
                 <fieldset className="max-h-56 overflow-y-auto space-y-1">
                   <legend className="sr-only">Choose members</legend>
                   {(draft.kind === "CUSTOMER" ? CUSTOMERS.map((c) => ({ k: c.id, n: c.name })) : PRODUCTS.map((p) => ({ k: p.productId, n: `${p.sku} · ${p.name}` }))).map((o) => (
-                    <label key={o.k} className="flex items-center gap-2 text-sm min-h-8">
+                    <label key={o.k} className="flex items-center gap-2 text-sm min-h-10 cursor-pointer">
                       <input type="checkbox" className="size-4" checked={draft.manualMembers.includes(o.k)} onChange={(e) => { setDraft({ ...draft, manualMembers: e.target.checked ? [...draft.manualMembers, o.k] : draft.manualMembers.filter((x) => x !== o.k) }); setPreviewed(false); }} />
                       {o.n}
                     </label>

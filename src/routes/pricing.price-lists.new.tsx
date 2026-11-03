@@ -658,7 +658,7 @@ function Page() {
               </Field>
             </div>
             <details className="mt-6 rounded-lg border border-border px-4 py-2">
-              <summary className="cursor-pointer text-sm font-semibold py-1">
+              <summary className="cursor-pointer text-sm font-semibold py-2.5 min-h-10">
                 Advanced: time zone and rounding
               </summary>
               <div className="grid md:grid-cols-2 gap-x-6 gap-y-4 py-4">
@@ -1126,8 +1126,8 @@ function Page() {
               </table>
             </div>
             <div className="px-6 py-3 text-xs text-muted-foreground border-t border-border">
-              Line dates default to the list dates when blank. Try: duplicate A-100 / EA / min qty 1
-              → DUPLICATE_LINE · select A-200 → PRODUCT_BLOCKED.
+              Line dates default to the list dates when blank. Each product can appear once per UoM
+              and min qty; blocked products can't be priced.
             </div>
           </Card>
         )}
@@ -1222,7 +1222,7 @@ function Page() {
 
         <div className="flex flex-wrap items-center gap-3 pb-6">
           <Btn
-            variant="ghost"
+            variant="subtle"
             onClick={() => navigate({ to: "/pricing/price-lists" })}
             disabled={saving}
           >

@@ -40,10 +40,11 @@ const DEFAULT_CRITERIA: Criteria = { from: "2026-07-01", to: "2026-07-21", regio
 const REGIONS = ["North", "West", "South", "East"];
 
 function NewProductPurchasePage() {
-  // Draft criteria are edited in the filter bar; "Generate report" applies them.
+  // Draft criteria are edited in the filter bar; "Run report" applies them.
   const [draft, setDraft] = useState<Criteria>(DEFAULT_CRITERIA);
   const [applied, setApplied] = useState<Criteria>(DEFAULT_CRITERIA);
   const [generating, setGenerating] = useState(false);
+  const [ranAt, setRanAt] = useState<Date | undefined>(undefined);
   const [touched, setTouched] = useState(false);
   const [q, setQ] = useState("");
 
@@ -81,8 +82,9 @@ function NewProductPurchasePage() {
     setGenerating(true);
     window.setTimeout(() => {
       setApplied(draft);
+      setRanAt(new Date());
       setGenerating(false);
-      notifySuccess("Report generated", `${fmtDate(draft.from)} to ${draft.to ? fmtDate(draft.to) : "today"}${draft.region !== "all" ? ` · ${draft.region}` : ""}`);
+      notifySuccess("Report updated", `${fmtDate(draft.from)} to ${draft.to ? fmtDate(draft.to) : "today"}${draft.region !== "all" ? ` · ${draft.region}` : ""}`);
     }, 400);
   };
 
@@ -147,6 +149,7 @@ function NewProductPurchasePage() {
       title="New product purchases"
       subtitle="Products bought in the selected range that the account had not bought before — use it to track new-product incentives."
       onExport={exportCsv}
+      asOf={ranAt}
       kpis={[
         { label: "Purchase lines", value: `${filtered.length}` },
         { label: "Accounts", value: `${uniqueAccounts}` },
@@ -154,7 +157,7 @@ function NewProductPurchasePage() {
         { label: "New purchase value", value: usd(totalAmount), tone: "success" },
       ]}
     >
-      <FilterBar>
+      <FilterBar onSubmit={generate}>
         <Field label="From date" required error={touched ? fromError : undefined}>
           <input
             type="date"
@@ -181,14 +184,14 @@ function NewProductPurchasePage() {
         <FilterBarEnd>
           {dirty && (
             <span role="status" className="text-sm text-warning-foreground">
-              Criteria changed — generate to update
+              Filters changed — run the report to update results
             </span>
           )}
           <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={isDefault(draft) && isDefault(applied) && !q}>
             Clear filters
           </Btn>
-          <Btn icon={Play} onClick={generate} loading={generating}>
-            Generate report
+          <Btn type="submit" icon={Play} loading={generating}>
+            Run report
           </Btn>
         </FilterBarEnd>
       </FilterBar>

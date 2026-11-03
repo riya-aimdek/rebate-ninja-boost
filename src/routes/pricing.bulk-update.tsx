@@ -242,8 +242,8 @@ function Page() {
           setError({
             errorClass: "VALIDATION",
             code: "VALIDATION_REQUIRED",
-            message: "Adjustment Value is required. Enter a value to continue.",
-            field: "Adjustment Value",
+            message: `Enter an adjustment value to continue. ${rule.label}.`,
+            field: "Adjustment value",
           });
         else if (negative)
           setError({
@@ -401,6 +401,7 @@ function Page() {
       cell: (j) => (
         <div className="min-w-[160px] space-y-1">
           <ProgressBar
+            label={`${j.id} progress`}
             value={((j.succeeded + j.failed) / j.total) * 100}
             tone={
               j.status === "FAILED"
@@ -893,14 +894,20 @@ function Page() {
         selectedKey={openJob?.id ?? null}
         pageSize={10}
         empty={
-          <EmptyState
-            title="No jobs match this status"
-            action={
-              <Btn variant="subtle" onClick={() => setJobStatus([])}>
-                Clear filters
-              </Btn>
-            }
-          />
+          jobStatus.length ? (
+            <EmptyState
+              title="No jobs match this status"
+              action={
+                <Btn variant="subtle" onClick={() => setJobStatus([])}>
+                  Clear filters
+                </Btn>
+              }
+            />
+          ) : (
+            <EmptyState title="No bulk jobs yet">
+              Jobs appear here once you apply a bulk update above.
+            </EmptyState>
+          )
         }
       />
 
@@ -917,7 +924,7 @@ function Page() {
 
 const FAIL_REASONS = [
   ["VALIDATION_REQUIRED", "Unit of Measure missing on target line"],
-  ["PRODUCT_BLOCKED", "Product A-200 has lifecycle status BLOCKED"],
+  ["PRODUCT_BLOCKED", "Product A-200 is blocked (lifecycle status)"],
   ["GUARDRAIL_BREACH", "New price below Distributor floor (FAIL handling)"],
   ["ADJUSTMENT_RESULT_NEGATIVE", "Result below zero after adjustment"],
   ["DUPLICATE_LINE", "Same SKU, UoM and Min Qty already in draft"],
@@ -1074,6 +1081,7 @@ function JobDrawer({
           />
           <div className="mt-4">
             <ProgressBar
+              label={`${job.id} progress`}
               value={((job.succeeded + job.failed) / job.total) * 100}
               tone={job.failed ? "warning" : "success"}
             />

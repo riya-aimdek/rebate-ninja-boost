@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { SearchX, X } from "lucide-react";
 import { toast } from "sonner";
-import { ReportShell, usd } from "@/components/ReportShell";
+import { ReportShell, FilterBar, FilterResult, Field, inputCls, usd } from "@/components/ReportShell";
 import { Btn, DataTable, EmptyState, notifySuccess, type Column } from "@/components/pricing/kit";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
@@ -29,7 +29,11 @@ const ROWS: Row[] = [
 
 function ProductPerformancePage() {
   const [q, setQ] = useState("");
-  const filtered = useMemo(() => ROWS.filter((r) => !q || r.name.toLowerCase().includes(q.toLowerCase())), [q]);
+  // Ranked by eligible amount (highest first) — the # column is the rank.
+  const filtered = useMemo(
+    () => ROWS.filter((r) => !q || r.name.toLowerCase().includes(q.toLowerCase())).sort((a, b) => b.eligible - a.eligible),
+    [q],
+  );
   const totals = filtered.reduce(
     (a, r) => ({ qty: a.qty + r.qty, eligible: a.eligible + r.eligible, rebate: a.rebate + r.rebate }),
     { qty: 0, eligible: 0, rebate: 0 },
@@ -39,6 +43,7 @@ function ProductPerformancePage() {
   const fmt = (n: number) => usd(n);
   const share = (r: Row) => (totals.rebate ? (r.rebate / totals.rebate) * 100 : 0);
 
+  const activeCount = q.trim() !== "" ? 1 : 0;
   const clearFilters = () => setQ("");
 
   const exportCsv = () => {
@@ -88,8 +93,6 @@ function ProductPerformancePage() {
       title="Product performance"
       subtitle="Products ranked by eligible purchase amount, with quantity sold and attributed rebate."
       onExport={exportCsv}
-      search={q}
-      onSearch={setQ}
       kpis={[
         { label: "Products", value: `${filtered.length}` },
         { label: "Qty sold", value: totals.qty.toLocaleString("en-GB") },
@@ -97,6 +100,13 @@ function ProductPerformancePage() {
         { label: "Attributed rebate", value: fmt(totals.rebate), tone: "success" },
       ]}
     >
+      <FilterBar>
+        <Field label="Product">
+          <input type="search" data-page-search aria-keyshortcuts="/" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Product name" className={inputCls} />
+        </Field>
+        <FilterResult shown={filtered.length} total={ROWS.length} noun="products" activeCount={activeCount} onClear={clearFilters} />
+      </FilterBar>
+
       <DataTable
         caption="Product performance, ranked by eligible amount"
         columns={columns}

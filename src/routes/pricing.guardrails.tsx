@@ -349,12 +349,11 @@ function Page() {
               const c = g.scopeLevel === "CUSTOMER" ? CUSTOMERS.find((x) => x.name === g.scope) : undefined;
               return (
                 <div className="min-w-40">
+                  {/* RecordLink stops propagation itself, so the link doesn't also open the row preview. */}
                   {c ? (
-                    <span onClick={(e) => e.stopPropagation()}>
-                      <RecordLink to="/pricing/customers/$id" params={{ id: c.id }}>
-                        {g.scope}
-                      </RecordLink>
-                    </span>
+                    <RecordLink to="/pricing/customers/$id" params={{ id: c.id }}>
+                      {g.scope}
+                    </RecordLink>
                   ) : (
                     <span className="font-medium">{g.scope}</span>
                   )}
@@ -372,11 +371,9 @@ function Page() {
             cell: (g) => {
               const p = productOf(g.product);
               return p ? (
-                <span onClick={(e) => e.stopPropagation()}>
-                  <RecordLink to="/pricing/products/$id" params={{ id: p.productId }}>
-                    {p.sku} · {p.name}
-                  </RecordLink>
-                </span>
+                <RecordLink to="/pricing/products/$id" params={{ id: p.productId }}>
+                  {p.sku} · {p.name}
+                </RecordLink>
               ) : (
                 <span className="text-muted-foreground">{g.product}</span>
               );

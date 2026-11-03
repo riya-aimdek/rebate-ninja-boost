@@ -30,6 +30,7 @@ import {
   ConfirmDialog,
   EmptyState,
   Flag,
+  Tag,
   notifySuccess,
   notifyUndo,
 } from "@/components/pricing/kit";
@@ -38,13 +39,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 export const Route = createFileRoute("/rebate-modeling")({
   head: () => ({
     meta: [
-      { title: "Rebate Modeling · Rebate Ninja" },
+      { title: "Rebate modelling · Rebate Ninja" },
       {
         name: "description",
         content:
           "Model multi-layer rebate agreements, save scenarios, and compare variance with live Gross Profit impact.",
       },
-      { property: "og:title", content: "Rebate Modeling Calculator · Rebate Ninja" },
+      { property: "og:title", content: "Rebate modelling calculator · Rebate Ninja" },
       {
         property: "og:description",
         content:
@@ -250,6 +251,8 @@ function RebateModeling() {
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   const [activeScenarioIdx, setActiveScenarioIdx] = useState(0);
+  // Variance column C edits, kept here so they survive switching tabs. null = C follows B (no edits).
+  const [proposedEdits, setProposedEdits] = useState<Record<string, number> | null>(null);
 
   // Persistence
   const STORAGE_KEY = "rebate-ninja:modeling:v5";
@@ -363,6 +366,7 @@ function RebateModeling() {
     setActual(defaultScenario({ name: "Actual" }));
     setScenarios(initialScenarios());
     setActiveScenarioIdx(0);
+    setProposedEdits(null);
     setLoadedScenarioName(null);
     setCalculated(false);
     setCalculatedAt(null);
@@ -602,9 +606,10 @@ function RebateModeling() {
         ]}
         active={activeView}
         onChange={setActiveView}
+        idPrefix="rm"
       />
 
-      <div role="tabpanel" aria-label={activeView === "modelling" ? "Scenario modelling" : "Variance analysis"} className="space-y-6">
+      <div role="tabpanel" id={`rm-panel-${activeView}`} aria-labelledby={`rm-tab-${activeView}`} className="space-y-6">
       {activeView === "modelling" ? (
         <>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -668,6 +673,8 @@ function RebateModeling() {
           nbuTurnover={nbuTurnover} nbuCost={nbuCost}
           settlementDiscount={settlementDiscount}
           onPrint={() => setPrintConfirmOpen(true)}
+          proposedEdits={proposedEdits}
+          setProposedEdits={setProposedEdits}
         />
       )}
       </div>
@@ -679,6 +686,8 @@ function RebateModeling() {
             resultsVisible ? "opacity-0 translate-y-4 pointer-events-none" : "opacity-100 translate-y-0"
           }`}
           aria-hidden={resultsVisible || undefined}
+          // inert also removes the hidden bar's button from the Tab order (aria-hidden alone doesn't).
+          inert={resultsVisible || undefined}
         >
           <BottomKPIBar
             totals={totals}
@@ -835,7 +844,7 @@ function PageHeader(props: {
       <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
         <div className="flex items-start gap-3 min-w-0">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight leading-tight">Rebate modeling calculator</h1>
+            <h1 className="text-2xl font-bold tracking-tight leading-tight">Rebate modelling calculator</h1>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 <Lock className="size-3.5" aria-hidden />
@@ -860,9 +869,18 @@ function PageHeader(props: {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Btn variant="subtle" icon={Upload} onClick={props.onUploadExcel} title="Upload an Excel (.xlsx, .xls) or CSV file, up to 10 MB">
+          {/* Excel import isn't connected yet: disabled with a stated reason rather than a click that changes nothing.
+              Re-enable (onClick={props.onUploadExcel}) once parsing into the inputs is built. */}
+          <Btn
+            variant="subtle"
+            icon={Upload}
+            disabled
+            title="Excel import is coming soon"
+            aria-describedby="rm-upload-soon"
+          >
             Upload Excel
           </Btn>
+          <span id="rm-upload-soon" className="sr-only">Coming soon: Excel import isn't available yet.</span>
           <Popover open={props.savedOpen} onOpenChange={props.setSavedOpen}>
             <PopoverTrigger asChild>
               <Btn variant="subtle" aria-label={`Saved scenarios, ${props.savedCount} of 5`}>
@@ -939,7 +957,7 @@ function PageHeader(props: {
             >
               {Object.keys(ACCOUNTS).map((k) => <option key={k} value={k}>{k} — {ACCOUNTS[k].full}</option>)}
             </select>
-            <span className="px-2 py-0.5 rounded-full bg-brand-soft text-foreground text-xs font-semibold border border-brand/20">{acc.code}</span>
+            <Tag tone="brand">{acc.code}</Tag>
           </div>
           {acc.hasYesss && (
             <div role="group" aria-label="Electrical Wholesale turnover basis" className="flex flex-col gap-1">
@@ -1467,10 +1485,10 @@ function ResultsArea({
       {/* Formula footnote */}
       <div className="text-xs text-muted-foreground leading-relaxed bg-muted/30 border border-border rounded-lg p-4 space-y-1">
         <div><strong>Projected turnover</strong> = Prior-year turnover × (1 + Growth %)</div>
-        <div><strong>GP (£)</strong> = Turnover − Cost + Total rebate + Settlement discount</div>
+        <div><strong>GP (£)</strong> = Turnover − Cost − Total rebate (total rebate includes the settlement discount)</div>
         <div><strong>GP %</strong> = GP (£) ÷ Turnover</div>
         <div><strong>MVHR rebate</strong> = MVHR turnover × MVHR rate (not applied to full EW)</div>
-        <div><strong>National growth rebate</strong>: retrospective — if growth % ≥ threshold then rate × full turnover (not just the increment), else £0</div>
+        <div><strong>National growth rebate</strong>: retrospective — if projected EW turnover ≥ the target threshold then rate × full turnover (not just the increment), else £0</div>
         <div>Models are isolated per account. No cross-account data.</div>
       </div>
     </section>
@@ -1779,8 +1797,11 @@ const VARIANCE_ROWS: VarianceRow[] = [
 function VarianceAnalysis({
   actual, ewResults, socResults, nbuResults, totals,
   ewTurnover, ewCost, socTurnover, socCost, nbuTurnover, nbuCost, settlementDiscount, onPrint,
+  proposedEdits, setProposedEdits,
 }: {
   onPrint: () => void;
+  proposedEdits: Record<string, number> | null;
+  setProposedEdits: (p: Record<string, number> | null) => void;
   actual: Scenario;
   ewResults: { cols: ColResult[] };
   socResults: { cols: ColResult[] };
@@ -1823,15 +1844,8 @@ function VarianceAnalysis({
     };
   }, [totals, ewResults, actual]);
 
-  type ProposedShape = Record<string, number>;
-  const [proposed, setProposed] = useState<ProposedShape>(() => ({ ...current }));
-  const initRef = useRef(false);
-  useEffect(() => {
-    if (!initRef.current) {
-      setProposed({ ...current });
-      initRef.current = true;
-    }
-  }, [current]);
+  // Until a value is edited, column C mirrors column B (and keeps following it as inputs change).
+  const proposed: Record<string, number> = proposedEdits ?? current;
 
   /** Rebate lines not editable in column C (SOC, NBU, regional growth, marketing) carry over unchanged, so C = B until a value is edited. */
   const fixedOtherRebate = useMemo(
@@ -1857,7 +1871,12 @@ function VarianceAnalysis({
 
   const fmt = (k: string, n: number) => k === "gpPct" ? fmtPct(n) : fmtGBP(n);
 
-  const setField = (k: string, n: number) => setProposed((p) => ({ ...p, [k]: n }));
+  const setField = (k: string, n: number) => setProposedEdits({ ...proposed, [k]: n });
+  const resetProposed = () => {
+    const before = proposedEdits;
+    setProposedEdits(null);
+    notifyUndo("Proposed agreement reset", () => setProposedEdits(before), "Column C now matches the current agreement.");
+  };
 
   return (
     <section aria-labelledby="rm-variance-title" className="space-y-4">
@@ -1868,9 +1887,16 @@ function VarianceAnalysis({
             Compare the current agreement's projected results with a proposed new agreement to show the financial impact of changes. Column A (prior-year actual) comes from Sage and is locked.
           </p>
         </div>
-        <Btn variant="outline" icon={Printer} onClick={onPrint} title="Print or save as PDF">
-          Print comparison
-        </Btn>
+        <div className="flex flex-wrap items-center gap-2">
+          {proposedEdits && (
+            <Btn variant="subtle" icon={RotateCcw} onClick={resetProposed}>
+              Reset proposed
+            </Btn>
+          )}
+          <Btn variant="outline" icon={Printer} onClick={onPrint} title="Print or save as PDF">
+            Print comparison
+          </Btn>
+        </div>
       </div>
 
       <section aria-label="Variance table" className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">

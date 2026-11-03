@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ArrowUpRight, ArrowDownRight, SearchX, X } from "lucide-react";
 import { toast } from "sonner";
-import { ReportShell, FilterBar, FilterBarEnd, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
+import { ReportShell, FilterBar, FilterResult, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
 import { Btn, DataTable, EmptyState, notifySuccess, type Column } from "@/components/pricing/kit";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
@@ -154,14 +154,7 @@ function AccountActivityPage() {
         <Field label="Last activity to" error={dateError}>
           <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={inputCls} />
         </Field>
-        <FilterBarEnd>
-          <span role="status" className="text-sm text-muted-foreground">
-            Showing {filtered.length} of {ROWS.length} accounts
-          </span>
-          <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={activeCount === 0}>
-            Clear filters{activeCount > 0 && ` (${activeCount})`}
-          </Btn>
-        </FilterBarEnd>
+        <FilterResult shown={filtered.length} total={ROWS.length} noun="accounts" activeCount={activeCount} onClear={clearFilters} />
       </FilterBar>
 
       <DataTable

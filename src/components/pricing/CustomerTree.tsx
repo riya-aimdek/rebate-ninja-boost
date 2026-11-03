@@ -1,10 +1,10 @@
 import { useMemo, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "@tanstack/react-router";
 import { Building2, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Star } from "lucide-react";
-import { Btn, StatusPill } from "@/components/pricing/kit";
+import { Btn, StatusPill, Tag } from "@/components/pricing/kit";
 import { MAX_HIERARCHY_DEPTH, type Customer } from "@/lib/pricing/data";
 
-type Row = { c: Customer; depth: number; guides: boolean[]; last: boolean; kids: Customer[] };
+type Row = { c: Customer; depth: number; guides: boolean[]; last: boolean; kids: Customer[]; pos: number; size: number };
 
 /**
  * Customer hierarchy as an expandable tree (WAI-ARIA tree pattern).
@@ -48,7 +48,7 @@ export function CustomerTree({
     list.forEach((c, i) => {
       const last = i === list.length - 1;
       const kids = kidsOf.get(c.id) ?? [];
-      rows.push({ c, depth, guides, last, kids });
+      rows.push({ c, depth, guides, last, kids, pos: i + 1, size: list.length });
       // Roots draw no connector column; deeper levels carry a guide line while their ancestor has later siblings.
       if (kids.length && !collapsed.has(c.id)) walk(kids, depth + 1, depth === 0 ? [] : [...guides, !last]);
     });
@@ -130,6 +130,8 @@ export function CustomerTree({
                 id={`ctree-${r.c.id}`}
                 role="treeitem"
                 aria-level={r.depth + 1}
+                aria-setsize={r.size}
+                aria-posinset={r.pos}
                 aria-expanded={r.kids.length ? open : undefined}
                 aria-selected={isSelected || isCurrent}
                 aria-current={isCurrent ? "page" : undefined}
@@ -154,7 +156,7 @@ export function CustomerTree({
                   <div
                     className={`flex items-center gap-2 sm:gap-3 rounded-xl border px-2 sm:px-3 py-2.5 transition group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2 ${
                       isCurrent ? "border-brand bg-brand-soft" : isSelected ? "border-brand/60 bg-card shadow-sm" : "border-border bg-card hover:border-brand/50"
-                    } ${dim ? "opacity-60" : ""}`}
+                    } ${dim ? "border-dashed bg-muted/40" : ""}`}
                   >
                     {r.kids.length ? (
                       <button
@@ -187,7 +189,9 @@ export function CustomerTree({
                           {name(r.c.name)}
                         </Link>
                         {r.c.strategic && <Star className="size-3.5 shrink-0 text-brand fill-brand" role="img" aria-label="Strategic customer" />}
-                        {isCurrent && <span className="text-xs font-semibold rounded-full bg-brand text-white px-2 py-0.5">This customer</span>}
+                        {isCurrent && <Tag tone="brand">This customer</Tag>}
+                        {/* Ancestors shown only to keep the path visible: said in text, not by fading (contrast). */}
+                        {dim && <span className="text-xs text-muted-foreground">Parent of a match</span>}
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5 truncate">
                         <span className="font-mono">{r.c.id}</span> · L{r.c.level} · {r.c.segment} · {r.c.geography} · {r.c.tier}

@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useBlocker } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, ChevronDown, FlaskConical, Plus, RefreshCw, Save, Trash2, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -110,6 +110,8 @@ function Page() {
 
   const savedVersion = formulas.find((f) => f.id === draft.id);
   const dirty = savedVersion ? JSON.stringify({ ...savedVersion, testsPassed: 0 }) !== JSON.stringify({ ...draft, testsPassed: 0 }) : draft.name !== "" || draft.expression !== "" || draft.variables.length > 0;
+  // Warn before leaving the page (route change or tab close) with unsaved formula edits.
+  const blocker = useBlocker({ shouldBlockFn: () => dirty, enableBeforeUnload: () => dirty, withResolver: true });
 
   const load = (f: Formula) => {
     setSelectedId(f.id);
@@ -330,10 +332,17 @@ function Page() {
     }, 600);
   };
 
+  // Discarding is reversible for a few seconds → undo toast restores the edits.
   const discard = () => {
+    const before = { draft, samples, test };
     if (savedVersion) load(savedVersion);
     else load(formulas[0]);
-    toast("Changes discarded");
+    notifyUndo(savedVersion ? "Changes discarded" : "New formula discarded", () => {
+      setSelectedId(before.draft.id);
+      setDraft(before.draft);
+      setSamples(before.samples);
+      setTest(before.test);
+    });
   };
 
   /** Top-level terms of the current expression, for the test panel before a run. */
@@ -583,12 +592,13 @@ function Page() {
                             id={`formula-var-${i}-name`}
                             aria-label={`Variable ${i + 1} name`}
                             aria-invalid={!!nameErr || undefined}
+                            aria-describedby={nameErr ? `formula-var-${i}-name-msg` : undefined}
                             className={`${inputCls} font-mono`}
                             value={v.name}
                             placeholder="e.g. Freight"
                             onChange={(e) => updateVar(i, { name: e.target.value.replace(/[^A-Za-z0-9_]/g, "") })}
                           />
-                          {nameErr && <p className="text-xs text-destructive mt-1">{nameErr}</p>}
+                          {nameErr && <p id={`formula-var-${i}-name-msg`} className="text-xs text-destructive mt-1">{nameErr}</p>}
                           {!nameErr && v.name && used.length > 0 && !usedSet.has(v.name) && <p className="text-xs text-muted-foreground mt-1">Not used in the expression</p>}
                         </td>
                         <td className="px-4 py-2">
@@ -609,6 +619,7 @@ function Page() {
                               step="0.01"
                               aria-label={`Variable ${i + 1} value`}
                               aria-invalid={!!srcErr || undefined}
+                              aria-describedby={srcErr ? `formula-var-${i}-source-msg` : undefined}
                               className={`${inputCls} tabular-nums`}
                               value={v.source}
                               placeholder="e.g. 15.00"
@@ -622,6 +633,7 @@ function Page() {
                               id={`formula-var-${i}-source`}
                               aria-label={`Variable ${i + 1} ${SOURCE_LABEL[v.sourceType].toLowerCase()}`}
                               aria-invalid={!!srcErr || undefined}
+                              aria-describedby={srcErr ? `formula-var-${i}-source-msg` : undefined}
                               className={inputCls}
                               value={v.source}
                               onChange={(e) => updateVar(i, { source: e.target.value })}
@@ -635,7 +647,7 @@ function Page() {
                               ))}
                             </select>
                           )}
-                          {srcErr && <p className="text-xs text-destructive mt-1">{srcErr}</p>}
+                          {srcErr && <p id={`formula-var-${i}-source-msg`} className="text-xs text-destructive mt-1">{srcErr}</p>}
                         </td>
                         <td className="px-4 py-2 w-32">
                           <select
@@ -852,6 +864,17 @@ function Page() {
           else if (target) load(target);
         }}
         onCancel={() => setConfirmSwitch(null)}
+      />
+
+      <ConfirmDialog
+        open={blocker.status === "blocked"}
+        tone="danger"
+        title="Leave without saving?"
+        description={`Your edits to ${draft.name || "this formula"} haven't been saved and will be lost.`}
+        confirmLabel="Discard and leave"
+        cancelLabel="Keep editing"
+        onConfirm={() => blocker.proceed?.()}
+        onCancel={() => blocker.reset?.()}
       />
     </PricingLayout>
   );

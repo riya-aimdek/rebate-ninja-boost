@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Play, SearchX, X } from "lucide-react";
 import { toast } from "sonner";
 import { ReportShell, FilterBar, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
-import { Btn, DataTable, EmptyState, SearchInput, notifySuccess, type Column } from "@/components/pricing/kit";
+import { Btn, DataTable, EmptyState, FilterPills, SearchInput, notifySuccess, type Column } from "@/components/pricing/kit";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 export const Route = createFileRoute("/reports/custom")({
@@ -93,6 +93,7 @@ function CustomReportPage() {
   const [draft, setDraft] = useState<Config>(DEFAULT_CONFIG);
   const [applied, setApplied] = useState<Config | null>(null);
   const [running, setRunning] = useState(false);
+  const [ranAt, setRanAt] = useState<Date | null>(null);
   const [q, setQ] = useState("");
 
   const set = <K extends keyof Config>(k: K, v: Config[K]) => setDraft((d) => ({ ...d, [k]: v }));
@@ -122,16 +123,18 @@ function CustomReportPage() {
   const money2 = (n: number) => usd(n);
   const earningsLabel = applied?.earnings === "Paid" ? "Earnings (paid)" : "Earnings (accrual)";
 
-  const preview = () => {
+  const run = () => {
     if (dateError) return;
     setRunning(true);
     window.setTimeout(() => {
       setApplied(draft);
+      setRanAt(new Date());
       setRunning(false);
-      notifySuccess("Report ready", "Results updated below");
+      notifySuccess("Report updated", "Results are shown below");
     }, 400);
   };
 
+  const isDefault = JSON.stringify(draft) === JSON.stringify(DEFAULT_CONFIG) && (!applied || JSON.stringify(applied) === JSON.stringify(DEFAULT_CONFIG));
   const clearFilters = () => {
     setDraft(DEFAULT_CONFIG);
     setQ("");
@@ -169,22 +172,23 @@ function CustomReportPage() {
   return (
     <ReportShell
       title="Custom report"
-      subtitle="Choose your settings and preview an ad hoc rebate report across accounts, programs and periods."
+      subtitle="Choose your settings and run an ad hoc rebate report across accounts, programs and periods."
       onExport={applied ? exportCsv : undefined}
+      asOf={ranAt ?? false}
     >
-      <FilterBar>
-        <Field label="Group by">
+      <FilterBar onSubmit={run}>
+        <Field label="Group by" hint="Program and product grouping coming soon">
           <select value={draft.groupBy} onChange={(e) => set("groupBy", e.target.value)} className={inputCls}>
             <option>Account</option>
-            <option>Program</option>
-            <option>Product</option>
+            <option disabled>Program (coming soon)</option>
+            <option disabled>Product (coming soon)</option>
           </select>
         </Field>
-        <Field label="Frequency">
+        <Field label="Frequency" hint="Period breakdowns coming soon">
           <select value={draft.frequency} onChange={(e) => set("frequency", e.target.value)} className={inputCls}>
             <option>None (total)</option>
-            <option>Monthly</option>
-            <option>Quarterly</option>
+            <option disabled>Monthly (coming soon)</option>
+            <option disabled>Quarterly (coming soon)</option>
           </select>
         </Field>
         <Field label="Earnings">
@@ -203,40 +207,28 @@ function CustomReportPage() {
           <input type="search" value={draft.accounts} onChange={(e) => set("accounts", e.target.value)} placeholder="Name or ID" className={inputCls} />
         </Field>
 
-        {/* Quick range — sets From/To (same pill style as FilterPills) */}
-        <div role="group" aria-label="Quick date range" className="basis-full flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground mr-1" aria-hidden>
-            Quick range
-          </span>
-          {RANGES.map((r) => {
-            const on = draft.range === r;
-            return (
-              <button
-                key={r}
-                onClick={() => pickRange(r)}
-                type="button"
-                aria-pressed={on}
-                className={`h-10 px-4 rounded-full border text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
-                  on ? "bg-navy text-navy-foreground border-navy" : "bg-card border-border text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {RANGE_LABEL[r]}
-              </button>
-            );
-          })}
-        </div>
+        {/* Quick range — sets From/To */}
+        <FilterPills<Range>
+          label="Quick range"
+          multiple={false}
+          clearable={false}
+          className="basis-full"
+          selected={[draft.range]}
+          onChange={(next) => next[0] && pickRange(next[0])}
+          options={RANGES.map((r) => ({ key: r, label: RANGE_LABEL[r] }))}
+        />
 
         <div className="basis-full flex flex-wrap items-center justify-end gap-3">
           {dirty && (
             <span role="status" className="text-sm text-warning-foreground mr-auto">
-              Settings changed — preview again to update results
+              Filters changed — run the report to update results
             </span>
           )}
-          <Btn variant="subtle" icon={X} onClick={clearFilters}>
+          <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={isDefault && !q} title={isDefault && !q ? "No filters applied" : undefined}>
             Clear filters
           </Btn>
-          <Btn icon={Play} onClick={preview} loading={running} disabled={!!dateError}>
-            Preview report
+          <Btn type="submit" icon={Play} loading={running} disabled={!!dateError} title={dateError ? "Fix the date range to run the report" : undefined}>
+            Run report
           </Btn>
         </div>
       </FilterBar>
@@ -293,7 +285,7 @@ function CustomReportPage() {
       ) : (
         <div className="rounded-xl border border-dashed border-border bg-card">
           <EmptyState icon={Play} title="No results yet">
-            Choose your settings above, then select <b>Preview report</b>.
+            Choose your settings above, then select <b>Run report</b>.
           </EmptyState>
         </div>
       )}

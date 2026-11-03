@@ -459,7 +459,7 @@ function RepricingPage() {
     },
   ];
 
-  const filteredEmpty = (noun: string) =>
+  const filteredEmpty = (noun: string, action?: React.ReactNode) =>
     q ? (
       <EmptyState
         title={`No ${noun} match “${search}”`}
@@ -470,7 +470,7 @@ function RepricingPage() {
         }
       />
     ) : (
-      <EmptyState title={`No ${noun} yet`} />
+      <EmptyState title={`No ${noun} yet`} action={action} />
     );
 
   return (
@@ -543,7 +543,12 @@ function RepricingPage() {
             columns={ruleCols}
             rows={shownRules}
             rowKey={(r) => r.id}
-            empty={filteredEmpty("rules")}
+            empty={filteredEmpty(
+              "rules",
+              <Btn icon={Plus} onClick={() => setEditing("new")}>
+                Create rule
+              </Btn>,
+            )}
           />
         </>
       )}
@@ -708,6 +713,8 @@ function RepricingPage() {
       {editing && (
         <RuleModal
           rule={editing === "new" ? null : editing}
+          // Next free id from live state — the seed array never grows, so it would reuse ids and overwrite.
+          nextId={`RP-${String(Math.max(0, ...rules.map((x) => Number(x.id.replace(/\D/g, "")) || 0)) + 1).padStart(2, "0")}`}
           onClose={() => setEditing(null)}
           onSave={(r) => {
             const isNew = !rules.some((x) => x.id === r.id);
@@ -860,15 +867,17 @@ const FIELD_ORDER: Array<keyof RuleErrors> = [
 
 function RuleModal({
   rule,
+  nextId,
   onClose,
   onSave,
 }: {
   rule: RepricingRule | null;
+  nextId: string;
   onClose: () => void;
   onSave: (r: RepricingRule) => void;
 }) {
   const initial = rule ?? {
-    id: `RP-0${REPRICING_RULES.length + 1}`,
+    id: nextId,
     name: "",
     trigger: "COST_CHANGE" as RepricingRule["trigger"],
     scope: "",
@@ -913,7 +922,7 @@ function RuleModal({
       open
       size="lg"
       title={rule ? `Edit ${rule.name}` : "Create repricing rule"}
-      subtitle={dirty ? "Unsaved changes" : undefined}
+      subtitle={dirty ? <StatusPill status="PENDING" label="Unsaved changes" /> : undefined}
       onClose={onClose}
       dismissible={!dirty && !saving}
       footer={

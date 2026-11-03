@@ -112,7 +112,8 @@ function Page() {
       return;
     }
     setError(null);
-    toast.success(`Quote started for ${c.name}`, { description: "Continue in the CPQ module." });
+    // No CPQ screen exists yet, so say what passed (the blocked check) instead of claiming a quote was created.
+    toast.info(`${c.name} can be quoted`, { description: "Quotes are created in the CPQ module, which isn't available in this prototype yet." });
   };
 
   const columns: Column<Customer>[] = [
@@ -307,7 +308,7 @@ function CustomerQuickView({
               {parent && (
                 <li>
                   <span className="text-muted-foreground">Parent: </span>
-                  <button type="button" className="text-brand font-medium hover:underline" onClick={() => onSelect(parent)}>
+                  <button type="button" className="hit text-brand font-medium hover:underline" onClick={() => onSelect(parent)}>
                     {parent.name}
                   </button>
                 </li>
@@ -319,7 +320,7 @@ function CustomerQuickView({
                   : kids.map((k, i) => (
                       <span key={k.id}>
                         {i > 0 && ", "}
-                        <button type="button" className="text-brand font-medium hover:underline" onClick={() => onSelect(k)}>
+                        <button type="button" className="hit text-brand font-medium hover:underline" onClick={() => onSelect(k)}>
                           {k.name}
                         </button>
                       </span>

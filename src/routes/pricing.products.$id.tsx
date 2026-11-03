@@ -140,6 +140,7 @@ function Page() {
       )}
 
       <PillTabs<TabKey>
+        idPrefix="product"
         active={tab}
         onChange={setTab}
         tabs={[
@@ -150,6 +151,8 @@ function Page() {
         ]}
       />
 
+      {/* One tabpanel wraps whichever tab is showing, so screen readers hear which tab owns the content. */}
+      <div role="tabpanel" id={`product-panel-${tab}`} aria-labelledby={`product-tab-${tab}`}>
       {tab === "details" && (
         <div className="space-y-6">
           <Card title="Product details" subtitle={<span className="inline-flex items-center gap-1.5"><Lock className="size-3.5" aria-hidden /> Fields with a lock are owned by the ERP and are read-only here.</span>}>
@@ -257,6 +260,7 @@ function Page() {
           />
         </Card>
       )}
+      </div>
 
       <Modal
         open={editOpen}
@@ -266,6 +270,11 @@ function Page() {
         subtitle="ERP-owned fields (identity, description, UoM, base cost) cannot be edited."
         footer={
           <>
+            {dirty && (
+              <span role="status" className="mr-auto self-center text-xs font-medium text-warning-foreground">
+                Unsaved changes
+              </span>
+            )}
             <Btn variant="subtle" onClick={() => setEditOpen(false)} disabled={saving}>
               Cancel
             </Btn>
@@ -308,6 +317,12 @@ function Page() {
               className={inputCls}
               value={draft.minOrderMultiple}
               onChange={(e) => setDraft({ ...draft, minOrderMultiple: e.target.value })}
+              onBlur={() => {
+                // Inline validation on blur: tell the user the rule before they press Save.
+                const mom = Number(draft.minOrderMultiple);
+                const bad = !draft.minOrderMultiple || !Number.isInteger(mom) || mom < 1;
+                setErrors((x) => ({ ...x, minOrderMultiple: bad ? "Enter a whole number of 1 or more." : undefined }));
+              }}
             />
           </Field>
           {segmentChanged && (

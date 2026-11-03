@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { SearchX, X } from "lucide-react";
 import { toast } from "sonner";
-import { ReportShell, FilterBar, FilterBarEnd, Field, inputCls, usd } from "@/components/ReportShell";
+import { ReportShell, FilterBar, FilterResult, Field, inputCls, usd } from "@/components/ReportShell";
 import { Btn, DataTable, EmptyState, notifySuccess, type Column } from "@/components/pricing/kit";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
@@ -172,14 +172,7 @@ function SettlementStatusPage() {
             className={inputCls}
           />
         </Field>
-        <FilterBarEnd>
-          <span role="status" className="text-sm text-muted-foreground">
-            Showing {filtered.length} of {ROWS.length} balances
-          </span>
-          <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={activeCount === 0}>
-            Clear filters{activeCount > 0 && ` (${activeCount})`}
-          </Btn>
-        </FilterBarEnd>
+        <FilterResult shown={filtered.length} total={ROWS.length} noun="balances" activeCount={activeCount} onClear={clearFilters} />
       </FilterBar>
 
       {/* Settlement progress */}

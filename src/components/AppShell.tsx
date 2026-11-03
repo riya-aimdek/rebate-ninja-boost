@@ -17,6 +17,7 @@ import {
   ListOrdered,
   Menu,
   Package,
+  PieChart,
   Repeat,
   Route as RouteIcon,
   Search,
@@ -67,7 +68,7 @@ export const APP_NAV: NavSection[] = [
   {
     title: "Strategy & segmentation",
     items: [
-      { icon: Users, label: "Segments", to: "/pricing/segments" },
+      { icon: PieChart, label: "Segments", to: "/pricing/segments" },
       { icon: ListChecks, label: "Pricing rules", to: "/pricing/rules" },
       { icon: ListOrdered, label: "Rule precedence", to: "/pricing/precedence" },
       { icon: FunctionSquare, label: "Formula pricing", to: "/pricing/formulas" },

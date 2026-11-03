@@ -96,15 +96,22 @@ function actionsFor(l: PriceList): Array<{ key: string; label: string; enabled: 
 function RowMenu({ list }: { list: PriceList }) {
   const navigate = useNavigate();
   const run = (key: string) => {
-    if (
-      key === "view" ||
-      key === "compare" ||
-      key === "approve" ||
-      key === "schedule" ||
-      key === "cancel" ||
-      key === "submit"
-    ) {
+    if (key === "view") {
       navigate({ to: "/pricing/price-lists/$id", params: { id: list.id } });
+      return;
+    }
+    if (key === "compare") {
+      navigate({ to: "/pricing/price-lists/$id", params: { id: list.id }, search: { tab: "versions" } });
+      return;
+    }
+    // "…" items open their confirmation dialog straight away on the detail page.
+    const transition = { submit: "SUBMIT", approve: "APPROVE", schedule: "SCHEDULE", cancel: "CANCEL" } as const;
+    if (key in transition) {
+      navigate({
+        to: "/pricing/price-lists/$id",
+        params: { id: list.id },
+        search: { action: transition[key as keyof typeof transition] },
+      });
       return;
     }
     if (key === "edit") {

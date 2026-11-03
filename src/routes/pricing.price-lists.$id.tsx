@@ -75,7 +75,18 @@ import {
   type PriceList,
 } from "@/lib/pricing/data";
 
+type DetailSearch = { action?: ActionKey; tab?: TabKey };
+const SEARCH_ACTIONS = ["SUBMIT", "APPROVE", "SCHEDULE", "CANCEL"] as const;
+
 export const Route = createFileRoute("/pricing/price-lists/$id")({
+  // `?action=APPROVE` / `?tab=versions` let list row menus open the right dialog or tab directly.
+  validateSearch: (s: Record<string, unknown>): DetailSearch => ({
+    action:
+      typeof s.action === "string" && (SEARCH_ACTIONS as readonly string[]).includes(s.action)
+        ? (s.action as ActionKey)
+        : undefined,
+    tab: s.tab === "versions" ? "versions" : undefined,
+  }),
   head: ({ params }) => ({
     meta: [
       { title: `${priceListById(params.id)?.name ?? "Price list"} · Price lists · Rebate Ninja` },
@@ -214,7 +225,8 @@ function Detail({ source }: { source: PriceList }) {
   // The list and its draft versions share one family (drafts point at the list via draftOf).
   const familyId = list.draftOf ?? list.id;
   const listVersions = PRICE_LISTS.filter((l) => l.id === familyId || l.draftOf === familyId).map((l) => (l.id === list.id ? list : l));
-  const [tab, setTab] = useState<TabKey>("details");
+  const search = Route.useSearch();
+  const [tab, setTab] = useState<TabKey>(search.tab ?? "details");
   const [error, setError] = useState<ApiError | null>(null);
   const [actor, setActor] = useState<string>(ME);
   const [events, setEvents] = useState<ApprovalEvent[]>(
@@ -344,6 +356,21 @@ function Detail({ source }: { source: PriceList }) {
     };
     toast.success(msg[actionModal]);
   };
+
+  // Deep link from the list row menu: open the requested transition once, then drop it from the URL
+  // so Back/refresh don't reopen the dialog.
+  useEffect(() => {
+    const a = search.action;
+    if (!a) return;
+    if (TRANSITIONS[a].from.includes(list.status)) openAction(a);
+    navigate({
+      to: "/pricing/price-lists/$id",
+      params: { id: list.id },
+      search: {},
+      replace: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.action]);
 
   // Secondary actions first, the single forward (primary) action right-most.
   const available = (Object.keys(TRANSITIONS) as ActionKey[])
@@ -517,14 +544,17 @@ function Detail({ source }: { source: PriceList }) {
         </InfoBanner>
       )}
 
-      <PillTabs tabs={tabs} active={tab} onChange={setTab} />
+      <PillTabs tabs={tabs} active={tab} onChange={setTab} idPrefix="pl" />
 
-      {tab === "details" && <DetailsTab list={list} />}
-      {tab === "lines" && <LinesTab list={list} setList={setList} />}
-      {tab === "derivation" && <DerivationTab list={list} setList={setList} />}
-      {tab === "approval" && <ApprovalTab list={list} events={events} taskState={taskState} />}
-      {tab === "versions" && <VersionsTab list={list} />}
-      {tab === "audit" && <AuditTab list={list} />}
+      {/* One tabpanel wraps whichever tab is showing, so screen readers hear which tab owns the content. */}
+      <div role="tabpanel" id={`pl-panel-${tab}`} aria-labelledby={`pl-tab-${tab}`}>
+        {tab === "details" && <DetailsTab list={list} />}
+        {tab === "lines" && <LinesTab list={list} setList={setList} />}
+        {tab === "derivation" && <DerivationTab list={list} setList={setList} />}
+        {tab === "approval" && <ApprovalTab list={list} events={events} taskState={taskState} />}
+        {tab === "versions" && <VersionsTab list={list} />}
+        {tab === "audit" && <AuditTab list={list} />}
+      </div>
 
       <Modal
         open={!!actionModal}
@@ -590,8 +620,7 @@ function Detail({ source }: { source: PriceList }) {
           {actionModal === "SUBMIT" && (
             <>
               <p className="text-sm">
-                Pre-submit validation passed: no invalid lines, no overlaps, guardrail breaches
-                resolved or explained.
+                Pre-submit check passed: every line has a price (or allows a zero price).
               </p>
               <Field label="Expected version" hint="Optimistic concurrency check">
                 <input className={`${inputCls} bg-muted`} value={`v${list.version}`} readOnly />
@@ -904,7 +933,7 @@ function LinesTab({
     },
     {
       key: "act",
-      header: "",
+      header: <span className="sr-only">Actions</span>,
       align: "right",
       className: "whitespace-nowrap",
       cell: (l) => (
@@ -937,7 +966,7 @@ function LinesTab({
             </Btn>
           )}
           <Btn variant="outline" icon={ShieldCheck} loading={validating} onClick={validate}>
-            Validate
+            Validate lines
           </Btn>
         </div>
       )}
@@ -1017,10 +1046,29 @@ function LinesTab({
         list={list}
         onClose={() => setOverrideFor(null)}
         onSave={(patch) => {
+          const line = overrideFor;
+          if (!line) return;
           setList((cur) => ({
             ...cur,
-            lines: cur.lines.map((x) => (x.id === overrideFor?.id ? { ...x, ...patch } : x)),
+            lastUpdated: NOW,
+            lines: cur.lines.map((x) => (x.id === line.id ? { ...x, ...patch } : x)),
           }));
+          // US-PL-05: overrides are price changes too, so they land in the audit trail.
+          AUDIT_LOG.unshift({
+            id: `AU-${78000 + AUDIT_LOG.length}`,
+            at: NOW,
+            actor: ME,
+            entity: "Price List",
+            record: `${list.name} · ${line.sku}`,
+            action: "OVERRIDE_SET",
+            field: "overridePrice",
+            before: line.overridePrice === undefined ? "—" : line.overridePrice.toFixed(2),
+            after: patch.overridePrice === undefined ? "—" : patch.overridePrice.toFixed(2),
+            reasonCode: patch.overrideReason,
+            reasonText: patch.overrideReasonText,
+            version: `v${list.version}`,
+            correlationId: `c-${Math.random().toString(16).slice(2, 8)}`,
+          });
           setOverrideFor(null);
         }}
         onRemove={() => {
@@ -1492,23 +1540,23 @@ function DerivationTab({
         )}
         {list.parentId && list.status === "DRAFT" && (
           <div className="mt-5 flex flex-wrap items-center gap-4">
-            <span className="text-sm text-muted-foreground">Inheritance mode for this list</span>
+            {/* Switch label stays fixed; its on/off state (aria-checked) carries the mode. */}
             <Toggle
               checked={list.inheritanceMode === "LIVE_LINK"}
               onChange={(v) => {
-                setList((l) => ({ ...l, inheritanceMode: v ? "LIVE_LINK" : "SNAPSHOT" }));
-                toast.message(
+                setList((l) => ({ ...l, inheritanceMode: v ? "LIVE_LINK" : "SNAPSHOT", lastUpdated: NOW }));
+                notifySuccess(
+                  v ? "Inheritance mode set to Live link" : "Inheritance mode set to Snapshot",
                   v
-                    ? "Live link — recalculates when the parent changes"
-                    : "Snapshot — copied once; parent changes no longer apply",
+                    ? "Prices recalculate when the parent changes."
+                    : "Prices were copied once; parent changes no longer apply.",
                 );
               }}
-              label={
-                list.inheritanceMode === "LIVE_LINK"
-                  ? "Live link (recalculate on parent change)"
-                  : "Snapshot (copy once, then independent)"
-              }
+              label="Live link — recalculate when the parent changes"
             />
+            <span className="text-sm text-muted-foreground">
+              Off = Snapshot (copied once, then independent)
+            </span>
           </div>
         )}
       </Card>
@@ -1605,7 +1653,7 @@ function DerivationTab({
                           ) : i === 0 ? (
                             <Tag tone="brand">Changed</Tag>
                           ) : (
-                            <Tag tone="success">Recalculated · new draft created</Tag>
+                            <Tag tone="success">Recalculated · would create a draft</Tag>
                           )}
                         </td>
                       </tr>
@@ -1848,7 +1896,11 @@ function VersionsTab({ list }: { list: PriceList }) {
             <select
               className={`${inputCls} w-32`}
               value={a}
-              onChange={(e) => setA(Number(e.target.value))}
+              onChange={(e) => {
+                setA(Number(e.target.value));
+                // The old diff no longer matches the chosen versions; ask for a fresh compare.
+                setDiff(null);
+              }}
             >
               {versions.map((v) => (
                 <option key={v.version} value={v.version}>
@@ -1861,7 +1913,10 @@ function VersionsTab({ list }: { list: PriceList }) {
             <select
               className={`${inputCls} w-32`}
               value={b}
-              onChange={(e) => setB(Number(e.target.value))}
+              onChange={(e) => {
+                setB(Number(e.target.value));
+                setDiff(null);
+              }}
             >
               {versions.map((v) => (
                 <option key={v.version} value={v.version}>
@@ -1953,7 +2008,7 @@ function VersionsTab({ list }: { list: PriceList }) {
                   align: "right",
                   cell: (d) =>
                     d.oldP !== undefined && d.newP !== undefined
-                      ? money(r2(d.newP - d.oldP), list.currency)
+                      ? `${d.newP - d.oldP > 0 ? "+" : ""}${money(r2(d.newP - d.oldP), list.currency)}`
                       : "—",
                 },
                 {
@@ -1962,7 +2017,7 @@ function VersionsTab({ list }: { list: PriceList }) {
                   align: "right",
                   cell: (d) =>
                     d.oldP && d.newP !== undefined
-                      ? `${(((d.newP - d.oldP) / d.oldP) * 100).toFixed(2)}%`
+                      ? `${d.newP > d.oldP ? "+" : ""}${(((d.newP - d.oldP) / d.oldP) * 100).toFixed(2)}%`
                       : "—",
                 },
               ]}

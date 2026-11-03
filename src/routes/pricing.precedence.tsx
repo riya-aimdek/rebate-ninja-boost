@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useBlocker } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { ArrowDown, ArrowUp, Check, GripVertical, Lock, RotateCcw, Save, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -89,6 +89,8 @@ function Page() {
   };
 
   const dirty = order.join() !== active.order.join() || tieBreaker !== active.tieBreaker;
+  // Warn before leaving (route change or tab close) with an unsaved reorder.
+  const blocker = useBlocker({ shouldBlockFn: () => dirty, enableBeforeUnload: () => dirty, withResolver: true });
   const lastMovable = order.length - 2; // STANDARD_LIST is pinned to the last slot
   const nextVersion = Math.max(...versions.map((x) => x.version)) + 1;
 
@@ -385,7 +387,7 @@ function Page() {
                   }}
                   className={`flex items-center gap-3 rounded-xl border px-3 sm:px-4 py-3 bg-card ${locked ? "border-dashed bg-muted/40" : "border-border hover:border-brand/50 cursor-grab"}`}
                 >
-                  {locked ? <Lock className="size-4 shrink-0 text-muted-foreground" aria-label="Locked" /> : <GripVertical className="hidden sm:block size-4 shrink-0 text-muted-foreground" aria-hidden />}
+                  {locked ? <Lock className="size-4 shrink-0 text-muted-foreground" aria-hidden /> : <GripVertical className="hidden sm:block size-4 shrink-0 text-muted-foreground" aria-hidden />}
                   <span className="size-8 shrink-0 rounded-full bg-navy text-navy-foreground grid place-items-center text-sm font-bold" aria-hidden>
                     {i + 1}
                   </span>
@@ -393,6 +395,7 @@ function Page() {
                     <div className="font-semibold">
                       <span className="sr-only">Position {i + 1}: </span>
                       {TIER_LABEL[tier]}
+                      {locked && <span className="sr-only"> (locked)</span>}
                     </div>
                     <div className="text-xs text-muted-foreground">{TIER_HINT[tier]}</div>
                   </div>
@@ -527,6 +530,17 @@ function Page() {
         loading={deciding}
         onConfirm={approve}
         onCancel={() => setConfirmApprove(false)}
+      />
+
+      <ConfirmDialog
+        open={blocker.status === "blocked"}
+        tone="danger"
+        title="Leave without saving?"
+        description="Your reordered tiers haven't been submitted and will be lost. The active order stays in force."
+        confirmLabel="Discard and leave"
+        cancelLabel="Keep editing"
+        onConfirm={() => blocker.proceed?.()}
+        onCancel={() => blocker.reset?.()}
       />
 
       <Modal

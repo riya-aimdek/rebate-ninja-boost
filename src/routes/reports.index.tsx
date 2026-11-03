@@ -75,7 +75,7 @@ const CATEGORIES: Category[] = [
       {
         key: "product-performance",
         title: "Product performance",
-        desc: "Ranked view of qty sold, eligible purchase amount, and attributed rebate per product for a selected program.",
+        desc: "Ranked view of qty sold, eligible purchase amount, and attributed rebate per product.",
         icon: BarChart3,
         to: "/reports/product-performance",
       },
@@ -98,7 +98,7 @@ const CATEGORIES: Category[] = [
       {
         key: "accrual-summary",
         title: "Accrual summary by period",
-        desc: "Total revenue, eligible revenue, accrual amount and rate % per payout period and program, with per-account drill-down.",
+        desc: "Total revenue, eligible revenue, accrual amount and rate % per payout period and program.",
         icon: PieChart,
         to: "/reports/accrual-summary",
       },

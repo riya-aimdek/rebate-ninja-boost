@@ -1,5 +1,5 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { createFileRoute, Link, useBlocker, useNavigate } from "@tanstack/react-router";
+import { useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, CalendarX, Pause, Plus, Save, Trash2, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -97,6 +97,19 @@ function Editor({ id }: { id: string }) {
   const [reasonText, setReasonText] = useState("");
   const [reasonSubmitted, setReasonSubmitted] = useState(false);
 
+  const versions = rules.filter((r) => r.name === rule.name && rule.name).sort((a, b) => b.version - a.version);
+  const effective: PricingRule = rule.action.type === "APPLY_TIERS" ? { ...rule, action: { ...rule.action, value: tiersToValue(tiers) } } : rule;
+  const dirty = JSON.stringify({ rule, tiers }) !== baseline;
+
+  // Warn before leaving (route change, version link or tab close) with unsaved edits.
+  // skipBlock lets a successful save navigate to the saved record before state settles.
+  const skipBlock = useRef(false);
+  const blocker = useBlocker({
+    shouldBlockFn: () => dirty && !skipBlock.current,
+    enableBeforeUnload: () => dirty && !skipBlock.current,
+    withResolver: true,
+  });
+
   if (!isNew && !original) {
     return (
       <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Pricing rules", to: "/pricing/rules" }, { label: id }]}>
@@ -114,10 +127,6 @@ function Editor({ id }: { id: string }) {
       </PricingLayout>
     );
   }
-
-  const versions = rules.filter((r) => r.name === rule.name && rule.name).sort((a, b) => b.version - a.version);
-  const effective: PricingRule = rule.action.type === "APPLY_TIERS" ? { ...rule, action: { ...rule.action, value: tiersToValue(tiers) } } : rule;
-  const dirty = JSON.stringify({ rule, tiers }) !== baseline;
 
   const setConditions = (next: Condition[] | ((cur: Condition[]) => Condition[])) =>
     setRule((r) => ({ ...r, conditions: typeof next === "function" ? next(r.conditions) : next }));
@@ -204,6 +213,7 @@ function Editor({ id }: { id: string }) {
       setBusy(null);
       toast.success(`${saved.name} saved as draft`, { description: "No custom code required — the rule is stored as configuration." });
       // After create, land on the created record.
+      skipBlock.current = isNew;
       if (isNew) navigate({ to: "/pricing/rules/$id", params: { id: saved.id } });
     }, 400);
   };
@@ -223,6 +233,8 @@ function Editor({ id }: { id: string }) {
       setBusy(null);
       setReasonOpen(false);
       toast.success(`Version ${v.version} created as draft`, { description: `Version ${original!.version} stays active until v${v.version} is activated.` });
+      // The edits now live in the new version, so leaving this one loses nothing.
+      skipBlock.current = true;
       navigate({ to: "/pricing/rules/$id", params: { id: v.id } });
     }, 400);
   };
@@ -473,10 +485,20 @@ function Editor({ id }: { id: string }) {
                     const err = fe(`rule-tier-${i}`);
                     return (
                       <div key={i}>
-                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_40px] gap-2">
-                          <input id={`rule-tier-${i}`} type="number" inputMode="numeric" min={1} step={1} aria-label={`Tier ${i + 1} from quantity`} aria-invalid={!!err || undefined} aria-describedby={err ? `rule-tier-${i}-msg` : undefined} className={inputCls} placeholder="From qty, e.g. 100" value={t.from} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)))} disabled={readOnly} />
-                          <input type="number" inputMode="numeric" min={1} step={1} aria-label={`Tier ${i + 1} to quantity (blank for and above)`} className={inputCls} placeholder="To qty (blank = and above)" value={t.to} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)))} disabled={readOnly} />
-                          <input type="number" inputMode="decimal" min={0} max={100} step="0.1" aria-label={`Tier ${i + 1} discount (%)`} className={inputCls} placeholder="Discount %, e.g. 3" value={t.pct} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x)))} disabled={readOnly} />
+                        {/* Visible labels on every row on phones; on wider screens the first row's labels act as column headers. */}
+                        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_40px] gap-2 items-end">
+                          <label className="flex flex-col gap-1.5">
+                            <span className={`text-xs text-muted-foreground ${i > 0 ? "sm:sr-only" : ""}`}>From qty</span>
+                          <input id={`rule-tier-${i}`} type="number" inputMode="numeric" min={1} step={1} aria-label={`Tier ${i + 1} from quantity`} aria-invalid={!!err || undefined} aria-describedby={err ? `rule-tier-${i}-msg` : undefined} className={inputCls} placeholder="e.g. 100" value={t.from} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)))} disabled={readOnly} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className={`text-xs text-muted-foreground ${i > 0 ? "sm:sr-only" : ""}`}>To qty (blank = and above)</span>
+                          <input type="number" inputMode="numeric" min={1} step={1} aria-label={`Tier ${i + 1} to quantity (blank for and above)`} className={inputCls} placeholder="e.g. 499" value={t.to} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)))} disabled={readOnly} />
+                          </label>
+                          <label className="flex flex-col gap-1.5">
+                            <span className={`text-xs text-muted-foreground ${i > 0 ? "sm:sr-only" : ""}`}>Discount (%)</span>
+                          <input type="number" inputMode="decimal" min={0} max={100} step="0.1" aria-label={`Tier ${i + 1} discount (%)`} className={inputCls} placeholder="e.g. 3" value={t.pct} onChange={(e) => setTiers(tiers.map((x, j) => (j === i ? { ...x, pct: e.target.value } : x)))} disabled={readOnly} />
+                          </label>
                           {!readOnly && (
                             <button type="button" aria-label={`Remove tier ${i + 1}`} disabled={tiers.length === 1} className="size-10 grid place-items-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-muted disabled:opacity-50" onClick={() => setTiers(tiers.filter((_, j) => j !== i))}>
                               <Trash2 className="size-4" aria-hidden />
@@ -562,6 +584,17 @@ function Editor({ id }: { id: string }) {
         confirmLabel="Discard changes"
         onConfirm={discard}
         onCancel={() => setConfirmDiscard(false)}
+      />
+
+      <ConfirmDialog
+        open={blocker.status === "blocked"}
+        tone="danger"
+        title="Leave without saving?"
+        description={`Your edits to ${rule.name || "this rule"} haven't been saved and will be lost.`}
+        confirmLabel="Discard and leave"
+        cancelLabel="Keep editing"
+        onConfirm={() => blocker.proceed?.()}
+        onCancel={() => blocker.reset?.()}
       />
 
       <Modal

@@ -100,6 +100,11 @@ function ProfilePage() {
   const [touched, setTouched] = useState<Partial<Record<keyof Profile, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
+  // Notification switches live here so "saved automatically" survives switching tabs.
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(NOTIFICATION_GROUPS.flatMap((g) => g.items.map(([label, , on]) => [label, on]))),
+  );
+  const setNotifPref = (label: string, on: boolean) => setNotifPrefs((p) => ({ ...p, [label]: on }));
 
   const errors = validateProfile(draft);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
@@ -127,7 +132,9 @@ function ProfilePage() {
     setSubmitted(true);
     if (Object.keys(errors).length > 0) {
       const first = Object.keys(errors)[0];
-      formRef.current?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus();
+      // Save can be pressed from another tab; bring the form into view before focusing the first error.
+      setTab("personal");
+      requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus());
       return;
     }
     setSaving(true);
@@ -226,10 +233,11 @@ function ProfilePage() {
         tabs={TABS.map((t) => ({ key: t.key, label: t.label }))}
         active={tab}
         onChange={setTab}
+        idPrefix="profile"
       />
 
-      <div role="tabpanel" aria-label={TABS.find((t) => t.key === tab)?.label}>
-        {tab === "personal" && (
+      {/* The personal form stays mounted (hidden) so the header Save keeps working and the draft survives tab switches. */}
+      <div role="tabpanel" id="profile-panel-personal" aria-labelledby="profile-tab-personal" hidden={tab !== "personal"}>
           <form id="profile-form" ref={formRef} onSubmit={save} noValidate className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2 space-y-6">
               <Card
@@ -320,11 +328,14 @@ function ProfilePage() {
               </Card>
             </div>
           </form>
-        )}
-        {tab === "account" && <AccountTab />}
-        {tab === "notifications" && <NotificationsTab />}
-        {tab === "security" && <SecurityTab />}
       </div>
+      {tab !== "personal" && (
+        <div role="tabpanel" id={`profile-panel-${tab}`} aria-labelledby={`profile-tab-${tab}`}>
+          {tab === "account" && <AccountTab />}
+          {tab === "notifications" && <NotificationsTab prefs={notifPrefs} setPref={setNotifPref} />}
+          {tab === "security" && <SecurityTab />}
+        </div>
+      )}
     </AppLayout>
   );
 }
@@ -402,32 +413,33 @@ function AccountTab() {
   );
 }
 
-function NotificationsTab() {
-  const groups: Array<{ title: string; items: Array<[string, string, boolean]> }> = [
-    {
-      title: "Pricing activity",
-      items: [
-        ["Approval requested", "When a price list is submitted for your approval.", true],
-        ["Price list expiring", "When a price list you own is close to its end date.", true],
-        ["Guardrail breached", "When a price falls below a margin floor.", false],
-      ],
-    },
-    {
-      title: "Reporting",
-      items: [
-        ["Scheduled reports", "Email me the reports I have scheduled.", true],
-        ["Export ready", "Notify me when a large export finishes.", false],
-      ],
-    },
-  ];
+const NOTIFICATION_GROUPS: Array<{ title: string; items: Array<[string, string, boolean]> }> = [
+  {
+    title: "Pricing activity",
+    items: [
+      ["Approval requested", "When a price list is submitted for your approval.", true],
+      ["Price list expiring", "When a price list you own is close to its end date.", true],
+      ["Guardrail breached", "When a price falls below a margin floor.", false],
+    ],
+  },
+  {
+    title: "Reporting",
+    items: [
+      ["Scheduled reports", "Email me the reports I have scheduled.", true],
+      ["Export ready", "Notify me when a large export finishes.", false],
+    ],
+  },
+];
+
+function NotificationsTab({ prefs, setPref }: { prefs: Record<string, boolean>; setPref: (label: string, on: boolean) => void }) {
   return (
     <div className="space-y-6">
-      {groups.map((g) => (
+      {NOTIFICATION_GROUPS.map((g) => (
         <Card key={g.title} title={g.title} subtitle="Changes are saved automatically.">
           <ul className="divide-y divide-border">
-            {g.items.map(([label, desc, on]) => (
+            {g.items.map(([label, desc]) => (
               <li key={label} className="flex items-center justify-between gap-6 py-3 first:pt-0 last:pb-0">
-                <SwitchRow label={label} description={desc} defaultOn={on} />
+                <SwitchRow label={label} description={desc} on={!!prefs[label]} onChange={(v) => setPref(label, v)} />
               </li>
             ))}
           </ul>
@@ -549,8 +561,7 @@ function Switch({
   );
 }
 
-function SwitchRow({ label, description, defaultOn }: { label: string; description: string; defaultOn: boolean }) {
-  const [on, setOn] = useState(defaultOn);
+function SwitchRow({ label, description, on, onChange }: { label: string; description: string; on: boolean; onChange: (v: boolean) => void }) {
   const id = useId();
   return (
     <>
@@ -567,7 +578,7 @@ function SwitchRow({ label, description, defaultOn }: { label: string; descripti
         labelledBy={`${id}-l`}
         describedBy={`${id}-d`}
         onChange={(v) => {
-          setOn(v);
+          onChange(v);
           notifySuccess(`${label} ${v ? "turned on" : "turned off"}`);
         }}
       />

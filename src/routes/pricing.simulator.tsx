@@ -16,6 +16,7 @@ import {
   ListHeader,
   PricingLayout,
   RecordLink,
+  Segmented,
   Tag,
   inputCls,
   notifyUndo,
@@ -168,6 +169,8 @@ function SimulatorPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [err, setErr] = useState<ApiError | null>(null);
   const [saved, setSaved] = useState<Simulation[]>(SIMULATIONS);
+  /** ID the current results were saved as; null = results not saved yet (unsaved-changes indicator). */
+  const [savedAs, setSavedAs] = useState<string | null>(null);
 
   const sourceLabel =
     source === "MANUAL" ? "manual elasticity, not model output" : source === "DEFAULT" ? "default elasticity, not model output" : `model ${MODEL_VERSION}`;
@@ -207,6 +210,7 @@ function SimulatorPage() {
     setTimeout(() => {
       setResults(scenarios.map((s) => simulate(s, source, Number(manualE))));
       setSelected(scenarios[0]?.name ?? null);
+      setSavedAs(null);
       setRunning(false);
       setUpdatedAt(new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }));
       toast.success("Simulation completed", { description: `${scenarios.length} ${scenarios.length === 1 ? "scenario" : "scenarios"} compared with the baseline.` });
@@ -223,7 +227,7 @@ function SimulatorPage() {
 
   /** Restore default inputs and clear results; reversible via Undo. */
   const resetToBaseline = () => {
-    const snap = { name, baselineKind, period, baseList, horizon, source, manualE, scenarios, results, selected };
+    const snap = { name, baselineKind, period, baseList, horizon, source, manualE, scenarios, results, selected, savedAs };
     setName("FY27 list increase options");
     setBaselineKind("HISTORICAL");
     setPeriod("Oct 2025 – Sep 2026");
@@ -234,6 +238,7 @@ function SimulatorPage() {
     setScenarios(DEFAULT_SCENARIOS);
     setResults(null);
     setSelected(null);
+    setSavedAs(null);
     setErr(null);
     notifyUndo("Simulator reset to baseline", () => {
       setName(snap.name);
@@ -246,6 +251,7 @@ function SimulatorPage() {
       setScenarios(snap.scenarios);
       setResults(snap.results);
       setSelected(snap.selected);
+      setSavedAs(snap.savedAs);
     });
   };
 
@@ -285,11 +291,14 @@ function SimulatorPage() {
       })),
     };
     setSaved((s) => [sim, ...s]);
+    setSavedAs(sim.id);
     toast.success(`${sim.id} saved`, { description: "Stored with user, timestamp and inputs." });
   };
 
   /** Reopen a saved simulation: restores its inputs; run again to see results. */
   const openSaved = (s: Simulation) => {
+    // Opening replaces the current inputs and results, so keep a snapshot for Undo.
+    const snap = { name, baselineKind, period, baseList, horizon, source, scenarios, results, selected, savedAs };
     const hist = s.baseline.startsWith("Historical: ");
     setName(s.name);
     setBaselineKind(hist ? "HISTORICAL" : "PRICE_LIST");
@@ -308,9 +317,25 @@ function SimulatorPage() {
     );
     setResults(null);
     setSelected(null);
+    setSavedAs(null);
     setErr(null);
     window.scrollTo({ top: 0, behavior: "smooth" });
-    toast.success(`${s.id} opened`, { description: "Inputs restored. Run the simulation to see results." });
+    notifyUndo(
+      `${s.id} opened`,
+      () => {
+        setName(snap.name);
+        setBaselineKind(snap.baselineKind);
+        setPeriod(snap.period);
+        setBaseList(snap.baseList);
+        setHorizon(snap.horizon);
+        setSource(snap.source);
+        setScenarios(snap.scenarios);
+        setResults(snap.results);
+        setSelected(snap.selected);
+        setSavedAs(snap.savedAs);
+      },
+      "Inputs restored. Run the simulation to see results.",
+    );
   };
 
   const createBulk = () => {
@@ -346,8 +371,10 @@ function SimulatorPage() {
               variant="outline"
               icon={Save}
               onClick={save}
-              disabled={!results || !!nameError || running}
-              title={!results ? "Run the simulation before saving" : nameError ? "Name the simulation before saving" : undefined}
+              disabled={!results || !!nameError || running || !!savedAs}
+              title={
+                !results ? "Run the simulation before saving" : nameError ? "Name the simulation before saving" : savedAs ? `Already saved as ${savedAs}` : undefined
+              }
             >
               Save simulation
             </Btn>
@@ -374,19 +401,14 @@ function SimulatorPage() {
               <span id="sim-baseline-label" className="text-sm font-medium text-foreground">
                 Baseline
               </span>
-              <div className="flex flex-wrap gap-2">
-                {(["HISTORICAL", "PRICE_LIST"] as const).map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    aria-pressed={baselineKind === k}
-                    onClick={() => setBaselineKind(k)}
-                    className={`flex-1 min-w-[140px] h-10 rounded-lg border text-sm font-medium ${baselineKind === k ? "bg-navy text-navy-foreground border-navy" : "bg-card border-border hover:bg-muted"}`}
-                  >
-                    {k === "HISTORICAL" ? "Historical period" : "Current price list"}
-                  </button>
-                ))}
-              </div>
+              <Segmented<"HISTORICAL" | "PRICE_LIST">
+                options={[
+                  { key: "HISTORICAL", label: "Historical period", tone: "navy" },
+                  { key: "PRICE_LIST", label: "Current price list", tone: "navy" },
+                ]}
+                value={baselineKind}
+                onChange={setBaselineKind}
+              />
             </div>
             {baselineKind === "HISTORICAL" ? (
               <Field label="Historical period">
@@ -508,8 +530,9 @@ function SimulatorPage() {
             <h2 id="sim-results-h" className="text-lg font-semibold tracking-tight">
               Results
             </h2>
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               {running ? "Recalculating…" : `Updated ${updatedAt ?? "just now"} · ${results.length} ${results.length === 1 ? "scenario" : "scenarios"}`}
+              {!running && (savedAs ? <Tag tone="success">Saved as {savedAs}</Tag> : <Tag tone="warning">Not saved</Tag>)}
             </p>
           </div>
           <InfoBanner tone="warning" title="Estimate">
@@ -528,16 +551,28 @@ function SimulatorPage() {
               <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Scenario comparison table">
                 <table className="w-full text-sm">
                   <caption className="sr-only">Baseline versus each scenario: projected value and change for revenue, volume and margin</caption>
+                  {/* Column groups make each scenario header's scope="colgroup" valid (value + change columns). */}
+                  <colgroup span={2} />
+                  {results.map((r) => (
+                    <colgroup key={r.name} span={2} />
+                  ))}
                   <thead>
                     <tr className="bg-navy text-navy-foreground">
                       <th scope="col" className="px-4 py-3.5 text-left font-semibold">Metric</th>
                       <th scope="col" className="px-4 py-3.5 text-right font-semibold">Baseline</th>
                       {results.map((r) => (
-                        <th key={r.name} scope="colgroup" className="px-4 py-3.5 text-right font-semibold whitespace-nowrap" colSpan={2}>
-                          <label className="inline-flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="sel" checked={selected === r.name} onChange={() => setSelected(r.name)} className="accent-[var(--brand)]" />
+                        <th key={r.name} scope="colgroup" className="px-4 py-1.5 text-right font-semibold whitespace-nowrap" colSpan={2}>
+                          {/* Whole label is the 40px target; the radio picks the scenario for "Create bulk update". */}
+                          <label className="inline-flex items-center gap-2 min-h-10 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="sim-bulk-scenario"
+                              checked={selected === r.name}
+                              onChange={() => setSelected(r.name)}
+                              className="size-4 accent-[var(--brand)]"
+                            />
                             Scenario {r.name}
-                            <span className="sr-only">(projected value, then change)</span>
+                            <span className="sr-only">(select for bulk update; columns show projected value, then change)</span>
                           </label>
                         </th>
                       ))}
@@ -648,7 +683,8 @@ function SimulatorPage() {
         </Card>
       )}
 
-      <h2 className="text-lg font-semibold tracking-tight mb-4">Saved simulations</h2>
+      <h2 className="text-lg font-semibold tracking-tight">Saved simulations</h2>
+      <p className="text-sm text-muted-foreground mb-4">Select a row to reopen its inputs. You can undo this from the notification.</p>
       <DataTable
         caption="Saved simulations"
         numbered={false}

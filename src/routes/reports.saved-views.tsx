@@ -143,9 +143,10 @@ function SavedViewsPage() {
       subtitle="Re-open reports that you or your team saved with their filters."
       search={q}
       onSearch={setQ}
+      asOf={false}
       actions={
         <LinkBtn to="/reports/custom" variant="outline" icon={SlidersHorizontal}>
-          New custom report
+          Create custom report
         </LinkBtn>
       }
     >
@@ -203,7 +204,9 @@ function SavedViewsPage() {
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="font-semibold text-base leading-tight truncate">{v.name}</h2>
+                      <h2 className="font-semibold text-base leading-tight truncate" title={v.name}>
+                        {v.name}
+                      </h2>
                       {v.starred && (
                         <Star className="size-4 text-warning fill-warning shrink-0" aria-label="Starred" role="img" />
                       )}
@@ -241,15 +244,14 @@ function SavedViewsPage() {
                 </div>
 
                 <div className="mt-4 flex items-center gap-2">
-                  <button
-                    type="button"
+                  <Btn
+                    variant="subtle"
+                    icon={Trash2}
                     onClick={() => deleteView(v)}
-                    className="size-10 shrink-0 grid place-items-center rounded-lg border border-border bg-card text-muted-foreground hover:text-destructive hover:border-destructive/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                    className="w-10 px-0 shrink-0 text-muted-foreground hover:text-destructive hover:border-destructive/40"
                     aria-label={`Delete view ${v.name}`}
                     title="Delete view"
-                  >
-                    <Trash2 className="size-4" aria-hidden />
-                  </button>
+                  />
                   <LinkBtn to={v.baseTo} variant="outline" icon={Play} className="flex-1">
                     Open view
                   </LinkBtn>

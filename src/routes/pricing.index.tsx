@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, ChevronRight, ClipboardCheck, Database, Repeat, Sparkles, type LucideIcon } from "lucide-react";
-import { Card, DataAsOf, DetailTitle, EmptyState, FilterPills, PricingLayout, StatusPill, humanize, type Tone } from "@/components/pricing/kit";
+import { Btn, Card, DataAsOf, DetailTitle, EmptyState, FilterPills, PricingLayout, StatusPill, humanize, type Tone } from "@/components/pricing/kit";
 import { DQ_LOG, LIST_TYPES, PRICE_LISTS, PROPOSALS, RECOMMENDATIONS } from "@/lib/pricing/data";
 import { TODAY, daysBetween, downloadCsv } from "@/lib/pricing/csv";
 
@@ -170,7 +170,7 @@ function StageCard({ stage: s, compact }: { stage: Stage; compact: boolean }) {
     >
       <span className={`text-sm font-medium leading-tight ${s.primary ? "text-navy-foreground/85" : "text-muted-foreground"}`}>{s.label}</span>
       <span className="flex items-end justify-between gap-2">
-        <span className={`font-bold tabular-nums leading-none ${compact ? "text-2xl" : "text-3xl"} ${empty && !s.primary ? "text-muted-foreground/60" : ""}`}>{s.value}</span>
+        <span className={`font-bold tabular-nums leading-none ${compact ? "text-2xl" : "text-3xl"} ${empty && !s.primary ? "text-muted-foreground" : ""}`}>{s.value}</span>
         <ChevronRight
           className={`size-4 shrink-0 transition group-hover:translate-x-0.5 ${s.primary ? "" : "text-brand opacity-60 group-hover:opacity-100"}`}
           aria-hidden
@@ -225,6 +225,7 @@ function AttentionQueue() {
       detail: dqEntities.length ? `Rejected ${dqEntities.join(", ")} records from the last sync.` : "",
       action: "Resolve",
       to: "/pricing/data-quality",
+      search: { status: "OPEN" },
     },
     {
       key: "repricing",
@@ -401,7 +402,16 @@ function ExpiryTimeline({ items }: { items: Array<{ list: (typeof PRICE_LISTS)[n
     >
       {shown.length === 0 ? (
         <div className="px-6 py-6">
-          <EmptyState title={sel.length ? `No price lists expire in ${RANGES[sel[0]].text}` : `Nothing expires in the next ${WINDOW_DAYS} days`}>
+          <EmptyState
+            title={sel.length ? `No price lists expire in ${RANGES[sel[0]].text}` : `Nothing expires in the next ${WINDOW_DAYS} days`}
+            action={
+              sel.length ? (
+                <Btn variant="subtle" onClick={() => setSel([])}>
+                  Clear filter
+                </Btn>
+              ) : undefined
+            }
+          >
             {sel.length ? "Choose another range or clear the filter." : "All active and scheduled price lists run beyond this period."}
           </EmptyState>
         </div>

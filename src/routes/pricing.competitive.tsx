@@ -387,11 +387,11 @@ function CompetitivePage() {
                 {feedResult.unmapped.map((s) => (
                   <div key={s} className="rounded-lg border border-destructive/30 bg-danger-soft px-3 py-2">
                     <b className="text-destructive">UNMAPPED_COMPETITOR_SKU</b> — {s} is not mapped to any product. Row written to the{" "}
-                    <Link to="/pricing/data-quality" className="text-brand font-semibold hover:underline">
+                    <Link to="/pricing/data-quality" className="hit text-brand font-semibold hover:underline">
                       data quality log
                     </Link>
                     .{" "}
-                    <button type="button" className="text-brand font-semibold hover:underline" onClick={() => setTab("map")}>
+                    <button type="button" className="hit text-brand font-semibold hover:underline" onClick={() => setTab("map")} aria-label={`Map SKU ${s}`}>
                       Map SKU
                     </button>
                   </div>
@@ -479,6 +479,11 @@ function MappingTab({ maps, setMaps }: { maps: Mapping[]; setMaps: (fn: (m: Mapp
           ]}
           rows={maps}
           rowKey={(m) => m.competitor + m.competitorSku}
+          empty={
+            <EmptyState icon={Radar} title="No SKU mappings yet">
+              Map a competitor SKU to our SKU so its feed prices can be compared. Use Create mapping.
+            </EmptyState>
+          }
         />
       </div>
       <Card title="Create mapping">

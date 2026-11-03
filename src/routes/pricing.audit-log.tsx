@@ -352,7 +352,7 @@ function Page() {
         pageSize={25}
         empty={
           <EmptyState
-            title="No audit entries match these filters"
+            title={q ? `No audit entries match “${q}”` : "No audit entries match these filters"}
             action={
               anyFilter ? (
                 <Btn variant="subtle" icon={FilterX} onClick={clearFilters}>

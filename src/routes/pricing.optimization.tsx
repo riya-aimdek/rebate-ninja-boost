@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import {
   Btn,
   Card,
+  ConfirmDialog,
   DataTable,
   DetailGrid,
   Drawer,
@@ -72,6 +73,8 @@ function OptimizationPage() {
   const [q, setQ] = useState("");
   const [statuses, setStatuses] = useState<RunStatus[]>([]);
   const [preview, setPreview] = useState<OptRun | null>(null);
+  /** Bumped after save/cancel to start the next run from a clean form. */
+  const [formKey, setFormKey] = useState(0);
 
   const rows = useMemo(() => {
     const t = q.toLowerCase();
@@ -243,6 +246,19 @@ function OptimizationPage() {
             onRowClick={setPreview}
             selectedKey={preview?.id ?? null}
             empty={
+              runs.length === 0 ? (
+                <EmptyState
+                  icon={FlaskConical}
+                  title="No optimization runs yet"
+                  action={
+                    <Btn icon={Play} onClick={() => setTab("new")}>
+                      New run
+                    </Btn>
+                  }
+                >
+                  Choose an objective and scope to generate price recommendations within guardrails.
+                </EmptyState>
+              ) : (
               <EmptyState
                 icon={FlaskConical}
                 title={q ? `No runs match “${q}”` : "No runs match these filters"}
@@ -260,18 +276,25 @@ function OptimizationPage() {
               >
                 Try a different search term or remove a status filter.
               </EmptyState>
+              )
             }
           />
           <RunQuickView run={preview} progress={preview ? progress[preview.id] : undefined} onClose={() => setPreview(null)} />
         </>
       )}
 
-      {tab === "new" && (
+      {/* Kept mounted while on other tabs so switching tabs never loses what was typed. */}
+      <div hidden={tab !== "new"}>
         <NewRunForm
+          key={formKey}
           nextId={`RUN-${Math.max(0, ...runs.map((r) => Number(r.id.replace(/\D/g, "")) || 0)) + 1}`}
-          onCancel={() => setTab("runs")}
+          onCancel={() => {
+            setFormKey((k) => k + 1);
+            setTab("runs");
+          }}
           onSaved={(run, start) => {
             setRuns((r) => [run, ...r]);
+            setFormKey((k) => k + 1);
             setTab("runs");
             if (start) {
               setProgress((p) => ({ ...p, [run.id]: 0 }));
@@ -282,7 +305,7 @@ function OptimizationPage() {
             }
           }}
         />
-      )}
+      </div>
 
       {tab === "models" && (
         <section aria-labelledby="models-h">
@@ -329,6 +352,19 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
   const [inputs, setInputs] = useState<Record<string, boolean>>(Object.fromEntries(DEMAND_INPUTS.map((d) => [d, d !== "Inventory"])));
   const [err, setErr] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState<"draft" | "run" | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const defaultInputs = DEMAND_INPUTS.every((d) => !!inputs[d] === (d !== "Inventory"));
+  /** Anything entered beyond the defaults — drives the unsaved indicator and the discard confirmation. */
+  const dirty =
+    !!name.trim() ||
+    !!objective ||
+    !!target ||
+    scopeSeg !== "All segments" ||
+    scopeCat !== "All categories" ||
+    scopeGeo !== "UK" ||
+    !defaultInputs;
+  const cancel = () => (dirty ? setConfirmDiscard(true) : onCancel());
 
   const missing = DEMAND_INPUTS.filter((d) => !inputs[d]);
   const targetNum = Number(target);
@@ -420,6 +456,7 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
             aria-label="Optimization objective"
             aria-required="true"
             aria-invalid={err?.field === "objective" || undefined}
+            aria-describedby={err?.field === "objective" ? "objective-error" : undefined}
             onKeyDown={onObjectiveKey}
           >
             {OBJECTIVES.map((o, i) => {
@@ -445,7 +482,7 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
             })}
           </div>
           {err?.field === "objective" && (
-            <p className="text-xs text-destructive mt-3" role="alert">
+            <p id="objective-error" className="text-xs text-destructive mt-3" role="alert">
               {err.message}
             </p>
           )}
@@ -543,7 +580,7 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
             ))}
           </ul>
         </Card>
-        <Card title="Summary">
+        <Card title="Summary" actions={dirty ? <Tag tone="warning">Unsaved changes</Tag> : undefined}>
           <dl className="text-sm space-y-2">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Objective</dt>
@@ -563,7 +600,7 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
             </div>
           </dl>
           <div className="grid grid-cols-2 gap-2 mt-5">
-            <Btn variant="subtle" onClick={onCancel} disabled={!!saving}>
+            <Btn variant="subtle" onClick={cancel} disabled={!!saving}>
               Cancel
             </Btn>
             <Btn variant="outline" icon={Save} onClick={() => save(false)} loading={saving === "draft"} disabled={saving === "run"}>
@@ -580,6 +617,18 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
           )}
         </Card>
       </div>
+      <ConfirmDialog
+        open={confirmDiscard}
+        tone="danger"
+        title="Discard this run setup?"
+        description="The objective, scope and demand inputs you entered will be lost. Save draft instead to keep them."
+        confirmLabel="Discard"
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          onCancel();
+        }}
+        onCancel={() => setConfirmDiscard(false)}
+      />
     </div>
   );
 }

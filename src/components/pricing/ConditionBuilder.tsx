@@ -172,6 +172,8 @@ function OptionPicker({
     onChange((isOn(o) ? rest : [...rest, o.value]).join(", "));
   };
   const remove = (v: string) => onChange(selected.filter((x) => x !== v).join(", "));
+  // aria-label replaces the button's content for screen readers, so it must carry the selection too.
+  const selectedText = selected.length ? selected.map((v) => show({ attribute, operator: "In", value: "" }, v)).join(", ") : "none selected";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -181,7 +183,7 @@ function OptionPicker({
           type="button"
           role="combobox"
           aria-expanded={open}
-          aria-label={label}
+          aria-label={`${label}: ${selectedText}`}
           aria-invalid={invalid || undefined}
           aria-describedby={describedBy}
           className={`${inputCls} h-auto min-h-10 flex items-center gap-2 text-left py-1.5 ${invalid ? "border-destructive" : ""} disabled:cursor-not-allowed`}
@@ -198,11 +200,12 @@ function OptionPicker({
                 >
                   {/* Products show the SKU in the chip; the full name is in the tooltip and the summary. */}
                   <span className="truncate">{attribute === "Product" ? (findOption(attribute, v)?.value ?? v) : show({ attribute, operator: "In", value: "" }, v)}</span>
+                  {/* Pointer shortcut only (no nested button inside the combobox); keyboard and screen-reader
+                      users deselect by toggling the option in the list. */}
                   {!disabled && (
                     <span
-                      role="button"
-                      tabIndex={-1}
-                      aria-label={`Remove ${v}`}
+                      aria-hidden
+                      title={`Remove ${v}`}
                       className="hit rounded hover:text-destructive"
                       onPointerDown={(e) => {
                         // Remove the chip without opening the list.
@@ -240,10 +243,9 @@ function OptionPicker({
   );
 }
 
-function ValueInput({ c, i, name, onChange, disabled, err }: { c: Condition; i: number; name: string; onChange: (v: string) => void; disabled?: boolean; err?: string }) {
+function ValueInput({ c, i, name, onChange, disabled, err, describedBy }: { c: Condition; i: number; name: string; onChange: (v: string) => void; disabled?: boolean; err?: string; describedBy?: string }) {
   const m = meta(c.attribute);
   const id = `rule-cond-${i}`;
-  const describedBy = err ? `${id}-msg` : undefined;
   const typeAttr = m.kind === "number" ? "number" : m.kind === "date" ? "date" : "text";
   const numProps = m.kind === "number" ? { inputMode: (m.integer ? "numeric" : "decimal") as "numeric" | "decimal", min: m.min, step: m.integer ? 1 : "0.01" } : {};
 
@@ -340,6 +342,8 @@ export function ConditionBuilder({
     const err = showErrors ? conditionError(c) : undefined;
     const unknown = unknownValues(c);
     const blocked = blockedValues(c);
+    // Error, or the master-data warnings, describe the value input.
+    const describedBy = err ? `rule-cond-${i}-msg` : [unknown.length && `rule-cond-${i}-unknown`, blocked.length && `rule-cond-${i}-blocked`].filter(Boolean).join(" ") || undefined;
     return (
       <div key={i}>
         <div className="grid grid-cols-1 sm:grid-cols-[64px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_40px] gap-2 items-start">
@@ -357,14 +361,14 @@ export function ConditionBuilder({
             ))}
           </select>
           <div className="min-w-0">
-            <ValueInput c={c} i={i} name={name} onChange={(value) => set(i, { value })} disabled={readOnly} err={err} />
+            <ValueInput c={c} i={i} name={name} onChange={(value) => set(i, { value })} disabled={readOnly} err={err} describedBy={describedBy} />
             {err && (
               <p id={`rule-cond-${i}-msg`} className="text-xs text-destructive mt-1.5">
                 {err}
               </p>
             )}
             {!err && unknown.length > 0 && (
-              <p className="text-xs text-warning-foreground mt-1.5 flex items-start gap-1">
+              <p id={`rule-cond-${i}-unknown`} className="text-xs text-warning-foreground mt-1.5 flex items-start gap-1">
                 <AlertTriangle className="size-3.5 mt-0.5 shrink-0" aria-hidden />
                 <span>
                   {unknown.join(", ")} {unknown.length === 1 ? "is" : "are"} not in the {meta(c.attribute).noun} master, so this condition won’t match until {unknown.length === 1 ? "it is" : "they are"} synced or replaced.
@@ -372,7 +376,7 @@ export function ConditionBuilder({
               </p>
             )}
             {!err && blocked.length > 0 && (
-              <p className="text-xs text-warning-foreground mt-1.5 flex items-start gap-1">
+              <p id={`rule-cond-${i}-blocked`} className="text-xs text-warning-foreground mt-1.5 flex items-start gap-1">
                 <AlertTriangle className="size-3.5 mt-0.5 shrink-0" aria-hidden />
                 <span>
                   {blocked.join(", ")} {blocked.length === 1 ? "is" : "are"} blocked in the ERP — price list lines for {blocked.length === 1 ? "it" : "them"} are rejected (PRODUCT_BLOCKED).
@@ -410,7 +414,7 @@ export function ConditionBuilder({
                 {plainIdx.length || gi > 0 ? "And any of" : "Any of"} <span className="font-normal text-muted-foreground">· OR group {n}</span>
               </span>
               {!readOnly && (
-                <Btn variant="ghost" size="sm" icon={Trash2} onClick={() => removeGroup(g, n)} aria-label={`Remove OR group ${n}`}>
+                <Btn variant="ghost" size="sm" icon={Trash2} onClick={() => removeGroup(g, n)} aria-label={`Remove group: OR group ${n}`}>
                   Remove group
                 </Btn>
               )}

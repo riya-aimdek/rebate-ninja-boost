@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { SearchX, X } from "lucide-react";
 import { toast } from "sonner";
-import { ReportShell, FilterBar, FilterBarEnd, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
+import { ReportShell, FilterBar, FilterResult, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
 import { Btn, DataTable, EmptyState, notifySuccess, type Column } from "@/components/pricing/kit";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
@@ -171,15 +171,7 @@ function AccrualSummaryPage() {
         <Field label="To" error={dateError}>
           <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={inputCls} />
         </Field>
-        <FilterBarEnd>
-          <span role="status" className="text-sm text-muted-foreground">
-            Showing {filtered.length} of {ROWS.length} periods
-            {activeCount > 0 && ` · ${activeCount} ${activeCount === 1 ? "filter" : "filters"} active`}
-          </span>
-          <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={activeCount === 0}>
-            Clear filters
-          </Btn>
-        </FilterBarEnd>
+        <FilterResult shown={filtered.length} total={ROWS.length} noun="periods" activeCount={activeCount} onClear={clearFilters} />
       </FilterBar>
 
       <DataTable

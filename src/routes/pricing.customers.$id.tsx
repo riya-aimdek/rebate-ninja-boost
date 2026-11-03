@@ -103,6 +103,7 @@ function Page() {
       )}
 
       <PillTabs<TabKey>
+        idPrefix="customer"
         active={tab}
         onChange={setTab}
         tabs={[
@@ -113,6 +114,8 @@ function Page() {
         ]}
       />
 
+      {/* One tabpanel wraps whichever tab is showing, so screen readers hear which tab owns the content. */}
+      <div role="tabpanel" id={`customer-panel-${tab}`} aria-labelledby={`customer-tab-${tab}`}>
       {tab === "details" && (
         <Card title="Customer details" subtitle={<span className="inline-flex items-center gap-1.5"><Lock className="size-3.5" aria-hidden /> Source attributes (name, parent, geography) are read-only in the platform.</span>}>
           <DetailGrid
@@ -133,7 +136,7 @@ function Page() {
                         <span className="text-muted-foreground" aria-hidden>›</span>
                       </span>
                     ))}
-                    <span>{c.name}</span>
+                    <span aria-current="page">{c.name}</span>
                   </span>
                 ),
               },
@@ -201,6 +204,7 @@ function Page() {
           />
         </Card>
       )}
+      </div>
     </PricingLayout>
   );
 }

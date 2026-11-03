@@ -249,7 +249,7 @@ export function SearchInput({
           type="button"
           onClick={() => onChange("")}
           aria-label="Clear search"
-          className="absolute right-2 top-1/2 -translate-y-1/2 size-7 grid place-items-center rounded-md text-muted-foreground hover:bg-muted"
+          className="hit absolute right-2 top-1/2 -translate-y-1/2 size-7 grid place-items-center rounded-md text-muted-foreground hover:bg-muted"
         >
           <X className="size-4" aria-hidden />
         </button>
@@ -258,11 +258,12 @@ export function SearchInput({
   );
 }
 
-export function FilterButton({ count = 0, onClick }: { count?: number; onClick?: () => void }) {
+export function FilterButton({ count = 0, onClick, expanded }: { count?: number; onClick?: () => void; expanded?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-expanded={expanded}
       className="relative size-10 grid place-items-center rounded-lg border border-input bg-card hover:bg-muted"
       title="Filters"
       aria-label={count > 0 ? `Filters, ${count} active` : "Filters"}
@@ -357,7 +358,7 @@ export function FilterChip({ label, onRemove }: { label: string; onRemove?: () =
         <button
           type="button"
           onClick={onRemove}
-          className="size-5 rounded-full bg-brand/15 grid place-items-center hover:bg-brand/25"
+          className="hit size-5 rounded-full bg-brand/15 grid place-items-center hover:bg-brand/25"
           aria-label={`Remove filter: ${label}`}
         >
           <X className="size-3" aria-hidden />
@@ -378,6 +379,7 @@ export function ListHeader({
   onSearch,
   filterCount,
   onFilter,
+  filtersOpen,
   actions,
   noun = "item",
   nounPlural,
@@ -397,6 +399,8 @@ export function ListHeader({
   onSearch?: (v: string) => void;
   filterCount?: number;
   onFilter?: () => void;
+  /** Whether the filter panel `onFilter` toggles is open — exposed as aria-expanded. */
+  filtersOpen?: boolean;
   actions?: ReactNode;
 }) {
   return (
@@ -430,7 +434,7 @@ export function ListHeader({
                 className="flex-1"
                 placeholder={`Search ${title.toLowerCase()}`}
               />
-              {onFilter !== undefined && <FilterButton count={filterCount} onClick={onFilter} />}
+              {onFilter !== undefined && <FilterButton count={filterCount} onClick={onFilter} expanded={filtersOpen} />}
             </div>
           )}
           {actions}
@@ -676,7 +680,7 @@ export function Segmented<T extends string>({
             type="button"
             onClick={() => onChange(o.key)}
             aria-pressed={on}
-            className={`inline-flex items-center gap-2 h-10 px-4 rounded-full border text-sm font-semibold transition ${
+            className={`inline-flex items-center gap-2 h-10 px-4 rounded-full border text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${
               on ? `${tone.border} ${tone.text} ${tone.soft}` : `border-border bg-card ${tone.text}`
             }`}
           >
@@ -851,6 +855,7 @@ export function KpiTile({
   label,
   value,
   to,
+  search,
   linkLabel = "View list",
   tone = "brand",
   hint,
@@ -858,6 +863,8 @@ export function KpiTile({
   label: string;
   value: ReactNode;
   to?: string;
+  /** Search params for `to`, so a tile can open the list filtered to what it counts. */
+  search?: Record<string, unknown>;
   linkLabel?: string;
   tone?: Tone;
   hint?: ReactNode;
@@ -871,6 +878,8 @@ export function KpiTile({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         <Link
           to={to as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          search={search as any}
           aria-label={`${linkLabel}: ${label}`}
           className="mt-auto inline-flex items-center gap-0.5 self-start text-brand font-semibold text-sm hover:underline whitespace-nowrap"
         >
@@ -1602,7 +1611,16 @@ export type ApiError = {
   correlationId?: string;
 };
 
-export function ErrorBanner({ error, onClose }: { error: ApiError | null; onClose?: () => void }) {
+export function ErrorBanner({
+  error,
+  onClose,
+  note = "No record was created or changed.",
+}: {
+  error: ApiError | null;
+  onClose?: () => void;
+  /** Consequence line; override for client-side checks that never reached the server, or `false` to hide. */
+  note?: ReactNode | false;
+}) {
   if (!error) return null;
   return (
     <div
@@ -1626,17 +1644,19 @@ export function ErrorBanner({ error, onClose }: { error: ApiError | null; onClos
             </>
           )}
         </div>
-        <div className="text-xs text-muted-foreground mt-1">
-          No record was created or changed.
-          {error.correlationId && ` Correlation ID: ${error.correlationId}`}
-        </div>
+        {(note !== false || error.correlationId) && (
+          <div className="text-xs text-muted-foreground mt-1">
+            {note !== false && note}
+            {error.correlationId && ` Correlation ID: ${error.correlationId}`}
+          </div>
+        )}
       </div>
       {onClose && (
         <button
           type="button"
           onClick={onClose}
           aria-label="Dismiss error"
-          className="size-8 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-card"
+          className="size-10 grid place-items-center rounded-md text-muted-foreground hover:text-foreground hover:bg-card"
         >
           <X className="size-4" aria-hidden />
         </button>
@@ -1777,7 +1797,7 @@ export function ProgressBar({
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(Math.max(0, Math.min(100, value)))}
-      aria-label={label}
+      aria-label={label ?? "Progress"}
     >
       <div
         className={`h-full ${toneCls[tone].dot}`}

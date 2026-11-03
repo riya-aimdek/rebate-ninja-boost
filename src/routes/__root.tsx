@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
-  Link,
   createRootRouteWithContext,
   useRouter,
   HeadContent,
@@ -12,23 +11,20 @@ import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { Btn, LinkBtn } from "@/components/pricing/kit";
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
+        {/* The h1 names the page; the large code is decorative. */}
+        <p className="text-7xl font-bold text-foreground" aria-hidden>404</p>
+        <h1 className="mt-4 text-xl font-semibold text-foreground">Page not found</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           The page you're looking for doesn't exist or has been moved. Check the address, or press Ctrl K anywhere to jump to a page.
         </p>
         <div className="mt-6">
-          <Link
-            to="/pricing"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Go to dashboard
-          </Link>
+          <LinkBtn to="/pricing">Go to dashboard</LinkBtn>
         </div>
       </div>
     </div>
@@ -51,23 +47,22 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end and your data was not changed. Try again, or go back to the dashboard.
         </p>
+        {/* Secondary first, primary right-most. The dashboard link is a full reload to clear broken state. */}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
-          <button
-            type="button"
+          <a
+            href="/pricing"
+            className="inline-flex h-10 items-center justify-center rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground transition hover:bg-muted"
+          >
+            Go to dashboard
+          </a>
+          <Btn
             onClick={() => {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Try again
-          </button>
-          <a
-            href="/pricing"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-          >
-            Go to dashboard
-          </a>
+          </Btn>
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import {
   Card,
   DataTable,
   Field,
+  FilterPills,
   Flag,
   InfoBanner,
   ListHeader,
@@ -282,23 +283,20 @@ function Page() {
       <ListHeader title="Price trace" subtitle="Calculate a price and see which rule won, the tier it came from, and every rule evaluated but not applied." />
 
       <Card title="Pricing request">
-        <div className="flex flex-wrap items-center gap-2 mb-4" role="group" aria-label="Example requests">
-          <span className="text-sm text-muted-foreground mr-1">Examples</span>
-          {PRESETS.map((p) => (
-            <button
-              key={p.label}
-              type="button"
-              aria-pressed={JSON.stringify(p.ctx) === JSON.stringify(resultCtx)}
-              onClick={() => {
-                setCtx(p.ctx);
-                run(p.ctx);
-              }}
-              className="text-sm min-h-10 px-4 rounded-full border border-border bg-card text-muted-foreground font-medium hover:text-foreground aria-pressed:bg-navy aria-pressed:border-navy aria-pressed:text-navy-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        {/* Kit quick-filter pills: one example runs at a time and re-selecting it re-runs it. */}
+        <FilterPills<string>
+          label="Examples"
+          multiple={false}
+          clearable={false}
+          options={PRESETS.map((p) => ({ key: p.label, label: p.label }))}
+          selected={PRESETS.filter((p) => JSON.stringify(p.ctx) === JSON.stringify(resultCtx)).map((p) => p.label)}
+          onChange={([k]) => {
+            const p = PRESETS.find((x) => x.label === k);
+            if (!p) return;
+            setCtx(p.ctx);
+            run(p.ctx);
+          }}
+        />
         <form
           noValidate
           onSubmit={(e) => {
