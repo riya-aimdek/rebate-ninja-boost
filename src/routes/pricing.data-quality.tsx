@@ -114,7 +114,8 @@ function Page() {
   const [log, setLog] = useState<DqEntry[]>(DQ_LOG);
   const [q, setQ] = useState("");
   const [entity, setEntity] = useState("all");
-  const [status, setStatus] = useState<string>(Route.useSearch().status ?? "all");
+  const initialStatus = Route.useSearch().status;
+  const [statuses, setStatuses] = useState<DqStatus[]>(initialStatus ? [initialStatus] : []);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -138,12 +139,12 @@ function Page() {
         return (
           (!t || [d.sourceId, d.code, d.message].some((v) => v.toLowerCase().includes(t))) &&
           (entity === "all" || d.entity === entity) &&
-          (status === "all" || d.status === status) &&
+          (statuses.length === 0 || statuses.includes(d.status)) &&
           (!from || day >= from) &&
           (!to || day <= to)
         );
       }),
-    [log, q, entity, status, from, to],
+    [log, q, entity, statuses, from, to],
   );
 
   const selected = log.find((d) => d.id === selectedId) ?? null;
@@ -226,7 +227,7 @@ function Page() {
   const clearFilters = () => {
     setQ("");
     setEntity("all");
-    setStatus("all");
+    setStatuses([]);
     setFrom("");
     setTo("");
   };
@@ -384,7 +385,7 @@ function Page() {
 
   // Status has its own pill row, so the filter button counts only the panel's filters.
   const filterCount = (entity !== "all" ? 1 : 0) + (from || to ? 1 : 0);
-  const anyFilter = filterCount > 0 || status !== "all" || q !== "";
+  const anyFilter = filterCount > 0 || statuses.length > 0 || q !== "";
 
   const countOf = (s: DqStatus) => log.filter((d) => d.status === s).length;
 
@@ -500,9 +501,8 @@ function Page() {
       </h2>
       <FilterPills<DqStatus>
         label="Status"
-        multiple={false}
-        selected={status === "all" ? [] : [status as DqStatus]}
-        onChange={(next) => setStatus(next[0] ?? "all")}
+        selected={statuses}
+        onChange={setStatuses}
         options={DQ_STATUSES.map((s) => ({ key: s, label: humanize(s), count: countOf(s) }))}
       />
 

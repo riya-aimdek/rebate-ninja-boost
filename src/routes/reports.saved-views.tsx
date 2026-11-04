@@ -102,7 +102,7 @@ type ListTab = Exclude<ViewTab, "all">;
 function SavedViewsPage() {
   const [views, setViews] = useState<View[]>(VIEWS);
   const [q, setQ] = useState("");
-  const [tab, setTab] = useState<ViewTab>("all");
+  const [tabs, setTabs] = useState<ListTab[]>([]);
 
   const matchesTab = (v: View, t: ViewTab) =>
     t === "all" || (t === "starred" && v.starred) || (t === "shared" && v.shared) || (t === "mine" && v.owner === ME);
@@ -110,16 +110,16 @@ function SavedViewsPage() {
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase();
     return views.filter((v) => {
-      if (!matchesTab(v, tab)) return false;
+      if (tabs.length > 0 && !tabs.some((t) => matchesTab(v, t))) return false;
       if (ql && !v.name.toLowerCase().includes(ql) && !v.base.toLowerCase().includes(ql)) return false;
       return true;
     });
-  }, [views, q, tab]);
+  }, [views, q, tabs]);
 
-  const hasFilters = q.trim() !== "" || tab !== "all";
+  const hasFilters = q.trim() !== "" || tabs.length > 0;
   const clearFilters = () => {
     setQ("");
-    setTab("all");
+    setTabs([]);
   };
 
   const deleteView = (v: View) => {
@@ -153,10 +153,9 @@ function SavedViewsPage() {
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
         <FilterPills<ListTab>
           label="Show"
-          multiple={false}
           className=""
-          selected={tab === "all" ? [] : [tab]}
-          onChange={(next) => setTab(next[0] ?? "all")}
+          selected={tabs}
+          onChange={setTabs}
           options={[
             { key: "starred", label: "Starred", count: tabCount("starred") },
             { key: "shared", label: "Shared", count: tabCount("shared") },

@@ -26,6 +26,7 @@ import {
   Toggle,
   humanize,
   inputCls,
+  missingFields,
   type ApiError,
   type Column,
 } from "@/components/pricing/kit";
@@ -377,6 +378,12 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
     objective === "TARGET_MARGIN" && (!target || targetError) && "enter a valid target margin %",
   ].filter(Boolean) as string[];
   const blocker = todo.length ? `To continue, ${todo.join(" and ")}.` : null;
+  // Save draft needs the same required fields (emptiness only); the range check on the target runs on save.
+  const draftMissing = missingFields([
+    ["Objective", objective],
+    ["Run name", name],
+    ["Target margin %", target, objective === "TARGET_MARGIN"],
+  ]);
 
   const save = (start: boolean) => {
     setErr(null);
@@ -603,7 +610,14 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
             <Btn variant="subtle" onClick={cancel} disabled={!!saving}>
               Cancel
             </Btn>
-            <Btn variant="outline" icon={Save} onClick={() => save(false)} loading={saving === "draft"} disabled={saving === "run"}>
+            <Btn
+              variant="outline"
+              icon={Save}
+              onClick={() => save(false)}
+              loading={saving === "draft"}
+              disabled={saving === "run" || draftMissing.length > 0}
+              aria-describedby={draftMissing.length && blocker ? "run-blocker" : undefined}
+            >
               Save draft
             </Btn>
             <Btn className="col-span-2" icon={Play} onClick={() => save(true)} loading={saving === "run"} disabled={!!blocker || saving === "draft"} aria-describedby={blocker ? "run-blocker" : undefined}>

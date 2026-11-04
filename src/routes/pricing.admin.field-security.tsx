@@ -321,7 +321,7 @@ function Preview({ role, setRole, policies }: { role: Role; setRole: (r: Role) =
           <h3 id="pv-api" className="font-semibold mb-2 flex items-center gap-2">
             <Eye className="size-4 text-muted-foreground" aria-hidden /> API · GET /api/v1/quotes/Q-10231/lines/L1
           </h3>
-          <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto">{JSON.stringify(shown, null, 2)}</pre>
+          <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(shown, null, 2)}</pre>
           {omitted.length > 0 && (
             <p className="mt-2 text-sm" role="status">
               <Flag tone="info">

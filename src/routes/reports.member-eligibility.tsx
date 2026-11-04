@@ -45,10 +45,10 @@ const statusTone: Record<Status, Tone> = {
 };
 
 function MemberEligibilityPage() {
-  const [status, setStatus] = useState<"all" | Status>("all");
+  const [statuses, setStatuses] = useState<Status[]>([]);
   const [program, setProgram] = useState("all");
   const filtered = useMemo(
-    () => ROWS.filter((r) => (status === "all" || r.status === status) && (program === "all" || r.program === program)),
+    () => ROWS.filter((r) => (statuses.length === 0 || statuses.includes(r.status)) && (program === "all" || r.program === program)),
     [status, program],
   );
   const inProgram = ROWS.filter((r) => program === "all" || r.program === program);
@@ -60,10 +60,10 @@ function MemberEligibilityPage() {
   const fmt = (n: number) => usd(n, 0);
   const programs = Array.from(new Set(ROWS.map((r) => r.program)));
 
-  const activeCount = [program !== "all", status !== "all"].filter(Boolean).length;
+  const activeCount = [program !== "all", statuses.length > 0].filter(Boolean).length;
   const clearFilters = () => {
     setProgram("all");
-    setStatus("all");
+    setStatuses([]);
   };
 
   const exportCsv = () => {
@@ -150,9 +150,8 @@ function MemberEligibilityPage() {
 
       <FilterPills<Status>
         label="Eligibility"
-        multiple={false}
-        selected={status === "all" ? [] : [status]}
-        onChange={(next) => setStatus(next[0] ?? "all")}
+        selected={statuses}
+        onChange={setStatuses}
         options={STATUSES.map((s) => ({ key: s, label: s, count: inProgram.filter((r) => r.status === s).length }))}
       />
 

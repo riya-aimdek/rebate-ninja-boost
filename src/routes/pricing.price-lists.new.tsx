@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -32,6 +32,8 @@ import {
   money,
   notifyUndo,
   type ApiError,
+  MissingHint,
+  missingFields,
 } from "@/components/pricing/kit";
 import {
   ADJUSTMENT_TYPES,
@@ -210,6 +212,7 @@ function Page() {
   const [validated, setValidated] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const stepHintId = useId();
 
   // Warn before leaving (route change or tab close) with unsaved entries.
   const skipBlock = useRef(false);
@@ -502,6 +505,27 @@ function Page() {
   );
   const lineCount = derived ? derivedLines.length : lines.length;
   const last = step === STEPS.length - 1;
+  // Empty required fields per step — Next (and Save as draft, which covers every step) stay disabled until filled.
+  const missingByStep: string[][] = [
+    missingFields([
+      ["Name", h.name],
+      ["List type", h.type],
+      ["Currency", h.currency],
+      ["Effective from", h.effectiveFrom],
+      ["End date", h.effectiveTo, !h.openEnded],
+      ["Region", h.region],
+      ["Channel", h.channel],
+      ["Customer segment", h.segment],
+      ["Unit of measure", h.uom],
+    ]),
+    missingFields([["Adjustment value", h.adjustmentValue, derived && h.adjustmentType !== "NONE"]]),
+    derived ? [] : missingFields(lines.map((l, i) => [`Product (line ${i + 1})`, l.sku] as [string, unknown])),
+    missingFields([
+      ["Reason code", h.reasonCode],
+      ["Reason text", h.reasonText, h.reasonCode === "OTHER"],
+    ]),
+  ];
+  const stepMissing = last ? missingByStep.flat() : missingByStep[step];
   const adjNumeric = h.adjustmentType === "PERCENT" || h.adjustmentType === "ABSOLUTE";
   const requiredNote = (
     <p className="text-xs text-muted-foreground mb-4">
@@ -933,7 +957,7 @@ function Page() {
             padded={false}
           >
             <div
-              className="relative overflow-x-auto"
+              className="relative overflow-x-auto overflow-y-hidden"
               tabIndex={0}
               role="region"
               aria-label="Product lines"
@@ -1229,17 +1253,28 @@ function Page() {
             Cancel
           </Btn>
           <div className="flex-1" />
+          <MissingHint id={stepHintId} missing={stepMissing} className="mr-0" />
           {step > 0 && (
             <Btn variant="subtle" icon={ArrowLeft} onClick={back} disabled={saving}>
               Back
             </Btn>
           )}
           {last ? (
-            <Btn type="submit" icon={Save} loading={saving}>
+            <Btn
+              type="submit"
+              icon={Save}
+              loading={saving}
+              disabled={stepMissing.length > 0}
+              aria-describedby={stepMissing.length ? stepHintId : undefined}
+            >
               Save as draft
             </Btn>
           ) : (
-            <Btn type="submit">
+            <Btn
+              type="submit"
+              disabled={stepMissing.length > 0}
+              aria-describedby={stepMissing.length ? stepHintId : undefined}
+            >
               Next
               <ArrowRight className="size-4" aria-hidden />
             </Btn>

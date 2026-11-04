@@ -116,7 +116,7 @@ export function QuoteLinesTable({ quote, editable, onChange }: { quote: Quote; e
         {live.status === "PARTIAL_SUCCESS" && <Flag tone="warning">Partial success — {live.failed} of {quote.lines.length} lines failed</Flag>}
         {live.status === "FAILED" && quote.lines.length > 0 && <Flag tone="danger">No lines could be priced</Flag>}
       </div>
-      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Quote lines">
+      <div className="overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label="Quote lines">
         <table className="w-full text-sm" style={{ minWidth: editable ? 1200 : 1000 }}>
           <caption className="sr-only">Quote lines with real-time pricing</caption>
           <thead>

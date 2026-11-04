@@ -348,7 +348,7 @@ function AccountDrawer({ sa, onClose, onUpdate, onIssue }: { sa: ServiceAccount;
           {result && (
             <div className="mt-3" role="status">
               <Flag tone={result.status === 200 ? "success" : "danger"}>HTTP {result.status}</Flag>
-              <pre className="mt-2 bg-muted rounded-lg p-4 text-xs overflow-x-auto">{JSON.stringify(result.body, null, 2)}</pre>
+              <pre className="mt-2 bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(result.body, null, 2)}</pre>
             </div>
           )}
         </section>

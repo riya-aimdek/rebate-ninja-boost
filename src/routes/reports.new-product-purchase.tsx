@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Play, SearchX, X } from "lucide-react";
 import { toast } from "sonner";
 import { ReportShell, FilterBar, FilterBarEnd, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
-import { Btn, Card, DataTable, EmptyState, SearchInput, Tag, notifySuccess, type Column } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, EmptyState, MissingHint, SearchInput, Tag, missingFields, notifySuccess, type Column } from "@/components/pricing/kit";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 export const Route = createFileRoute("/reports/new-product-purchase")({
@@ -118,6 +118,9 @@ function NewProductPurchasePage() {
     notifySuccess("CSV exported", `${filtered.length} ${filtered.length === 1 ? "row" : "rows"} downloaded`);
   };
 
+  const runHintId = useId();
+  const runMissing = missingFields([["From date", draft.from]]);
+
   const columns: Column<Row>[] = [
     { key: "account", header: "Account", className: "font-medium whitespace-nowrap", cell: (r) => r.account },
     { key: "region", header: "Region", cell: (r) => <Tag tone="info">{r.region}</Tag> },
@@ -190,7 +193,8 @@ function NewProductPurchasePage() {
           <Btn variant="subtle" icon={X} onClick={clearFilters} disabled={isDefault(draft) && isDefault(applied) && !q}>
             Clear filters
           </Btn>
-          <Btn type="submit" icon={Play} loading={generating}>
+          <MissingHint id={runHintId} missing={runMissing} />
+          <Btn type="submit" icon={Play} loading={generating} disabled={runMissing.length > 0} aria-describedby={runMissing.length ? runHintId : undefined}>
             Run report
           </Btn>
         </FilterBarEnd>

@@ -199,7 +199,7 @@ function Page() {
               { label: "Source system ID", value: <span className="font-mono">{c.sourceId}</span> },
               { label: "Import timestamp", value: c.importedAt },
               { label: "Last sync job", value: "SYNC-CUST-1029 (nightly batch)" },
-              { label: "Lineage", value: `${c.sourceSystem} → Integration layer → Customer Master (${c.id})`, full: true },
+              { label: "Lineage", value: `${c.sourceSystem} → Integration layer → Customer Master (${c.id})` },
             ]}
           />
         </Card>

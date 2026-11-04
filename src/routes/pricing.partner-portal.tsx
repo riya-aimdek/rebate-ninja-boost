@@ -250,7 +250,7 @@ function Portal() {
                 {apiOpen && (
                   <div>
                     <h3 className="text-sm font-semibold mb-2">GET /partner/quotes/{v.id}</h3>
-                    <pre className="text-xs bg-muted rounded-lg p-4 overflow-x-auto">{JSON.stringify(v, null, 2)}</pre>
+                    <pre className="text-xs bg-muted rounded-lg p-4 overflow-x-auto overflow-y-hidden">{JSON.stringify(v, null, 2)}</pre>
                     <p className="text-xs text-muted-foreground mt-2">No cost, margin, internal comments, competitor data or other partners' prices — removed by field-level security on the server.</p>
                   </div>
                 )}

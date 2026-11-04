@@ -486,7 +486,7 @@ function Detail({ id }: { id: string }) {
       </ConfirmDialog>
 
       <Drawer open={payloadOpen} onClose={() => setPayloadOpen(false)} title="ERP order payload" subtitle="What the ERP receives. No cost or margin is sent." size="md">
-        <pre className="text-xs bg-muted rounded-lg p-4 overflow-x-auto">{JSON.stringify(erpPayload(q), null, 2)}</pre>
+        <pre className="text-xs bg-muted rounded-lg p-4 overflow-x-auto overflow-y-hidden">{JSON.stringify(erpPayload(q), null, 2)}</pre>
       </Drawer>
     </>
   );

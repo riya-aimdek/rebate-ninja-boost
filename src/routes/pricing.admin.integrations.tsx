@@ -225,7 +225,7 @@ function IntegrationsTab({ rows, setRows, editable }: { rows: Integration[]; set
               </div>
               <p className="text-xs text-muted-foreground mt-1 font-mono">GET /api/v1/integrations/{open.id}/sync-status</p>
               {syncStatus && (
-                <pre role="status" className="mt-3 bg-muted rounded-lg p-4 text-xs overflow-x-auto">
+                <pre role="status" className="mt-3 bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">
                   {JSON.stringify(syncStatus, null, 2)}
                 </pre>
               )}
@@ -399,7 +399,7 @@ function ErrorsTab() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Standard error response" subtitle="Example: the ERP times out during a quote sync.">
-          <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto">{JSON.stringify(timeoutResponse, null, 2)}</pre>
+          <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(timeoutResponse, null, 2)}</pre>
           <p className="text-sm mt-3">
             <Flag tone="success">Retryable</Flag> <span className="text-muted-foreground">Transient technical errors retry automatically; validation, authorisation and business-rule errors never do.</span>
           </p>
@@ -415,7 +415,7 @@ function ErrorsTab() {
         >
           {exception ? (
             <>
-              <pre role="status" className="bg-muted rounded-lg p-4 text-xs overflow-x-auto">{JSON.stringify(internal, null, 2)}</pre>
+              <pre role="status" className="bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(internal, null, 2)}</pre>
               <ul className="mt-3 space-y-1 text-sm">
                 <li><Flag tone="success">No stack trace</Flag></li>
                 <li><Flag tone="success">No credentials or connection strings</Flag></li>
@@ -488,7 +488,7 @@ function ApiTab() {
         />
       </Card>
       <Card title="Response headers">
-        <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto">{`X-RateLimit-Limit: 600
+        <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{`X-RateLimit-Limit: 600
 X-RateLimit-Remaining: 587
 X-RateLimit-Reset: 1793284260
 X-Correlation-Id: c-91f0aa

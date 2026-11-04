@@ -47,11 +47,12 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMyNotifications } from "@/components/pricing/access";
 import { markRead } from "@/lib/pricing/deals";
 import { ROLE_LABEL, USERS, can, setPersona, useSession, type Module, type Role } from "@/lib/pricing/session";
@@ -186,6 +187,7 @@ export const COMING_SOON: string[] = [];
 export const SHORTCUTS: Array<{ keys: string[]; label: string }> = [
   { keys: ["Ctrl", "K"], label: "Open “Jump to” command palette" },
   { keys: ["/"], label: "Focus the search on this page" },
+  { keys: ["Ctrl", "B"], label: "Collapse or expand the sidebar" },
   { keys: ["?"], label: "Show keyboard shortcuts" },
   { keys: ["Esc"], label: "Close dialog, drawer or menu" },
   { keys: ["Enter"], label: "Submit the focused form" },
@@ -224,117 +226,217 @@ function Logo({ compact = false }: { compact?: boolean }) {
   );
 }
 
+const SECTIONS_KEY = "rn.sidebar.closedSections";
+
+/** Closed nav sections, persisted per browser. The section holding the current page is always reopened. */
+function useClosedSections(activeTitle: string | undefined) {
+  const [closed, setClosed] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? "[]");
+      if (Array.isArray(saved)) setClosed(saved.filter((s): s is string => typeof s === "string"));
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+  const save = (next: string[]) => {
+    try {
+      localStorage.setItem(SECTIONS_KEY, JSON.stringify(next));
+    } catch {
+      /* storage unavailable */
+    }
+    return next;
+  };
+  useEffect(() => {
+    if (activeTitle) setClosed((c) => (c.includes(activeTitle) ? save(c.filter((t) => t !== activeTitle)) : c));
+  }, [activeTitle]);
+  const toggle = (title: string) => setClosed((c) => save(c.includes(title) ? c.filter((t) => t !== title) : [...c, title]));
+  return { closed, toggle };
+}
+
 function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [soonOpen, setSoonOpen] = useState(false);
   const nav = useVisibleNav();
+  const activeTitle = nav.find((s) => s.items.some((i) => isActive(pathname, i.to)))?.title || undefined;
+  const { closed, toggle } = useClosedSections(activeTitle);
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+  }, [pathname, collapsed]);
   return (
-    <nav aria-label="Main" className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-3 text-sm">
-      {nav.map((section, i) => (
-        <div key={i} className={i > 0 ? "mt-4" : ""}>
-          {section.title && !collapsed && (
-            <div className="px-6 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">{section.title}</div>
-          )}
-          {section.title && collapsed && <div className="mx-4 mb-2 border-t border-white/10" aria-hidden />}
-          <ul>
-            {section.items.map((item) => {
-              const active = isActive(pathname, item.to);
-              const Icon = item.icon;
-              return (
-                <li key={item.to}>
-                  <Link
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    to={item.to as any}
-                    title={collapsed ? item.label : undefined}
-                    aria-label={collapsed ? item.label : undefined}
-                    aria-current={active ? "page" : undefined}
-                    onClick={onNavigate}
-                    className={`relative flex items-center gap-3 h-10 px-6 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
-                      active
-                        ? "bg-brand/15 text-brand font-semibold before:absolute before:left-0 before:inset-y-1 before:w-1 before:rounded-r before:bg-brand"
-                        : "text-white/80 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    <Icon className="size-[18px] shrink-0" aria-hidden />
-                    {!collapsed && <span className="truncate">{item.label}</span>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ))}
+    <TooltipProvider delayDuration={0} disableHoverableContent>
+      <nav ref={navRef} aria-label="Main" className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-3 text-sm">
+        {nav.map((section, i) => {
+          const open = collapsed || !section.title || !closed.includes(section.title);
+          const listId = `nav-section-${i}`;
+          return (
+            <div key={i} className={i > 0 ? (collapsed ? "mt-2" : "mt-1") : ""}>
+              {section.title && !collapsed && (
+                <button
+                  type="button"
+                  onClick={() => toggle(section.title)}
+                  aria-expanded={open}
+                  aria-controls={listId}
+                  className="w-full flex items-center justify-between gap-2 h-8 px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                >
+                  <span className="truncate">{section.title}</span>
+                  <span className="flex items-center gap-2">
+                    {!open && (
+                      <span className="text-[10px] font-medium tracking-normal tabular-nums text-white/60">
+                        {section.items.length}
+                        <span className="sr-only"> pages</span>
+                      </span>
+                    )}
+                    <ChevronDown className={`size-3.5 motion-safe:transition-transform ${open ? "" : "-rotate-90"}`} aria-hidden />
+                  </span>
+                </button>
+              )}
+              {section.title && collapsed && <div className="mx-4 mb-2 border-t border-white/10" aria-hidden />}
+              <div className={`grid motion-safe:transition-[grid-template-rows] motion-safe:duration-200 ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+                <ul id={listId} inert={!open} className="overflow-hidden">
+                  {section.items.map((item) => {
+                    const active = isActive(pathname, item.to);
+                    const Icon = item.icon;
+                    const link = (
+                      <Link
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        to={item.to as any}
+                        aria-label={collapsed ? item.label : undefined}
+                        aria-current={active ? "page" : undefined}
+                        onClick={onNavigate}
+                        className={`relative flex items-center gap-3 h-10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
+                          collapsed ? "justify-center" : "px-6"
+                        } ${
+                          active
+                            ? "bg-brand/15 text-brand font-semibold before:absolute before:left-0 before:inset-y-1 before:w-1 before:rounded-r before:bg-brand"
+                            : "text-white/80 hover:bg-white/5 hover:text-white"
+                        }`}
+                      >
+                        <Icon className="size-[18px] shrink-0" aria-hidden />
+                        {!collapsed && <span className="truncate">{item.label}</span>}
+                      </Link>
+                    );
+                    return (
+                      <li key={item.to}>
+                        {collapsed ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>{link}</TooltipTrigger>
+                            <TooltipContent side="right" sideOffset={8}>
+                              {item.label}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          link
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+          );
+        })}
 
-      {!collapsed && COMING_SOON.length > 0 && (
-        <div className="mt-6 border-t border-white/10 pt-3">
-          <button
-            type="button"
-            onClick={() => setSoonOpen((o) => !o)}
-            aria-expanded={soonOpen}
-            aria-controls="nav-coming-soon"
-            className="w-full flex items-center justify-between h-10 px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
-          >
-            Coming soon
-            <ChevronDown className={`size-4 transition-transform ${soonOpen ? "rotate-180" : ""}`} aria-hidden />
-          </button>
-          {soonOpen && (
-            <ul id="nav-coming-soon" className="pb-2">
-              {COMING_SOON.map((label) => (
-                <li key={label} aria-disabled="true" className="flex items-center justify-between h-9 px-6 text-white/45 cursor-not-allowed">
-                  <span className="truncate">{label}</span>
-                  <span className="text-[10px] rounded-full border border-white/20 px-1.5 py-0.5">Soon</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </nav>
+        {!collapsed && COMING_SOON.length > 0 && (
+          <div className="mt-6 border-t border-white/10 pt-3">
+            <button
+              type="button"
+              onClick={() => setSoonOpen((o) => !o)}
+              aria-expanded={soonOpen}
+              aria-controls="nav-coming-soon"
+              className="w-full flex items-center justify-between h-10 px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+            >
+              Coming soon
+              <ChevronDown className={`size-4 transition-transform ${soonOpen ? "rotate-180" : ""}`} aria-hidden />
+            </button>
+            {soonOpen && (
+              <ul id="nav-coming-soon" className="pb-2">
+                {COMING_SOON.map((label) => (
+                  <li key={label} aria-disabled="true" className="flex items-center justify-between h-9 px-6 text-white/45 cursor-not-allowed">
+                    <span className="truncate">{label}</span>
+                    <span className="text-[10px] rounded-full border border-white/20 px-1.5 py-0.5">Soon</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </nav>
+    </TooltipProvider>
   );
 }
 
 const COLLAPSE_KEY = "rn.sidebar.collapsed";
 
-/** Desktop sidebar (≥ lg). `activeLabel` is accepted for backwards compatibility; the active item comes from the URL. */
+/** Desktop sidebar (≥ lg). Collapses to an icon rail via the edge handle or Ctrl/⌘+B.
+ *  `activeLabel` is accepted for backwards compatibility; the active item comes from the URL. */
 export function Sidebar(_props: { activeLabel?: string } = {}) {
   const [collapsed, setCollapsed] = useState(false);
+  // Width animates only once the saved state is applied, so a collapsed rail doesn't slide shut on every page load.
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     try {
       setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
     } catch {
       /* storage unavailable */
     }
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
   }, []);
-  const toggle = () =>
-    setCollapsed((c) => {
-      try {
-        localStorage.setItem(COLLAPSE_KEY, c ? "0" : "1");
-      } catch {
-        /* storage unavailable */
+  const toggle = useCallback(
+    () =>
+      setCollapsed((c) => {
+        try {
+          localStorage.setItem(COLLAPSE_KEY, c ? "0" : "1");
+        } catch {
+          /* storage unavailable */
+        }
+        return !c;
+      }),
+    [],
+  );
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "b" && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        toggle();
       }
-      return !c;
-    });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggle]);
+  const toggleLabel = collapsed ? "Expand sidebar" : "Collapse sidebar";
   return (
     <aside
       aria-label="Sidebar"
-      className={`h-screen sticky top-0 z-40 shrink-0 bg-navy text-sidebar-foreground hidden lg:flex flex-col transition-[width] ${
-        collapsed ? "w-[72px]" : "w-64"
-      }`}
+      className={`h-screen sticky top-0 z-40 shrink-0 bg-navy text-sidebar-foreground hidden lg:flex flex-col ${
+        ready ? "motion-safe:transition-[width] motion-safe:duration-200 ease-out" : ""
+      } ${collapsed ? "w-[72px]" : "w-64"}`}
     >
-      <div className="h-[72px] px-4 flex items-center border-b border-white/10">
+      <div className="h-[72px] px-4 flex items-center border-b border-white/10 overflow-hidden">
         <Logo compact={collapsed} />
       </div>
       {/* Edge handle: centred on the sidebar edge and the 72px logo/header row; 24px visual, 40px hit area. */}
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        aria-expanded={!collapsed}
-        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="absolute -right-3 top-6 size-6 rounded-full bg-card text-foreground border border-border shadow-sm grid place-items-center hover:bg-muted hover:text-brand transition-colors before:absolute before:-inset-2 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
-      >
-        <ChevronLeft className={`size-3.5 motion-safe:transition-transform ${collapsed ? "rotate-180" : ""}`} aria-hidden />
-      </button>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={toggleLabel}
+              aria-expanded={!collapsed}
+              aria-keyshortcuts="Control+B Meta+B"
+              className="absolute -right-3 top-6 size-6 rounded-full bg-card text-foreground border border-border shadow-sm grid place-items-center hover:bg-muted hover:text-brand transition-colors before:absolute before:-inset-2 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+            >
+              <ChevronLeft className={`size-3.5 motion-safe:transition-transform ${collapsed ? "rotate-180" : ""}`} aria-hidden />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            {toggleLabel} <kbd className="ml-1 rounded border border-current/30 px-1 font-sans text-[10px]">Ctrl B</kbd>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <NavList collapsed={collapsed} />
     </aside>
   );

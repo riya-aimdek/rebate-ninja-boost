@@ -199,7 +199,6 @@ function ReportsPage() {
 
       <FilterPills
         label="Category"
-        multiple={false}
         selected={categories}
         onChange={setCategories}
         className="mb-6"

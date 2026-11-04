@@ -1,27 +1,48 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Download, FlaskConical, Play, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { createFileRoute, useBlocker, useNavigate } from "@tanstack/react-router";
+import {
+  ArrowLeft,
+  ArrowLeftRight,
+  ArrowRight,
+  ArrowUpDown,
+  Banknote,
+  Calculator,
+  Download,
+  FlaskConical,
+  Percent,
+  Play,
+  RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
+  Sigma,
+  TrendingDown,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   Btn,
   Card,
+  ChoiceCards,
+  RadioPills,
   ConfirmDialog,
   DataTable,
   DetailGrid,
   Drawer,
   EmptyState,
   ErrorBanner,
+  FileDrop,
   Field,
   FilterPills,
   Flag,
   InfoBanner,
-  KpiTile,
+  PillTabs,
   LinkBtn,
   ListHeader,
   PricingLayout,
   RecordLink,
+  SearchInput,
   ProgressBar,
-  Segmented,
   StatusPill,
   Stepper,
   Tag,
@@ -29,8 +50,12 @@ import {
   inputCls,
   money,
   pct,
+  toneCls,
+  type Tone,
   type ApiError,
   type Column,
+  MissingHint,
+  missingFields,
 } from "@/components/pricing/kit";
 import {
   BULK_JOBS,
@@ -38,28 +63,35 @@ import {
   BULK_SELECTION,
   GUARDRAIL_HANDLING,
   PRICE_LISTS,
+  PRODUCTS,
   REASON_CODES,
   productBySku,
   type BulkJob,
 } from "@/lib/pricing/data";
 import { downloadCsv } from "@/lib/pricing/csv";
+import { NOW } from "@/lib/pricing/deals";
+import { useSession } from "@/lib/pricing/session";
 
-type BulkSearch = { pct?: number; list?: string; scenario?: string };
+type Tab = "new" | "jobs";
+type BulkSearch = { pct?: number; list?: string; scenario?: string; tab?: "jobs" };
 
 export const Route = createFileRoute("/pricing/bulk-update")({
   // `?pct=3&scenario=A%20%2B3%25&list=BL-001` — the scenario simulator opens the preview prefilled (US-OP-03 AC#7).
   validateSearch: (s: Record<string, unknown>): BulkSearch => ({
     pct: typeof s.pct === "number" && Number.isFinite(s.pct) ? s.pct : undefined,
-    list: typeof s.list === "string" && PRICE_LISTS.some((l) => l.id === s.list) ? s.list : undefined,
+    list:
+      typeof s.list === "string" && PRICE_LISTS.some((l) => l.id === s.list) ? s.list : undefined,
     scenario: typeof s.scenario === "string" && s.scenario ? s.scenario : undefined,
+    // `?tab=jobs` opens the job history directly (e.g. from a "track progress" link).
+    tab: s.tab === "jobs" ? "jobs" : undefined,
   }),
   head: () => ({ meta: [{ title: "Bulk price update · Rebate Ninja" }] }),
   component: Page,
 });
 
-const STEPS = ["Select products", "Adjustment method", "Preview", "Confirm"];
+const STEPS = ["Select products", "Adjustment", "Preview impact", "Review & apply"];
+/** Scope sizes for the modes that select by rule; Product list counts what the user ticks. */
 const SELECTION_COUNT: Record<string, number> = {
-  "Product List": 14,
   "Product Hierarchy node": 100_000,
   "Saved filter": 4_210,
   "Uploaded file": 12_500,
@@ -72,7 +104,10 @@ const HIERARCHY_NODES = [
 ];
 const SAVED_FILTERS = ["Cable SKUs", "Phase-out lighting", "Premium ventilation"];
 
-/** Sample lines for the preview (old prices + guardrails from ST-05 / PL-02 AC#5). */
+/**
+ * Current prices for the preview (old prices + guardrails from ST-05 / PL-02 AC#5). The first six are
+ * the sample shown for rule-based selections; Product list previews exactly the products ticked.
+ */
 const SAMPLE = [
   { sku: "A-100", old: 55, cost: 44, ceiling: 60 },
   { sku: "EW-3100", old: 689, cost: 436 },
@@ -80,7 +115,13 @@ const SAMPLE = [
   { sku: "LT-PNL-60", old: 34.5, cost: 18.2 },
   { sku: "SW-RCD-63", old: 38, cost: 21.75, floor: 36 },
   { sku: "HT-ELE-2K", old: 149, cost: 88 },
+  { sku: "EW-3110", old: 799, cost: 498 },
+  { sku: "CB-6.0", old: 2.35, cost: 1.48 },
+  { sku: "LT-DWN-10", old: 72, cost: 46 },
 ];
+const RULE_SAMPLE = SAMPLE.slice(0, 6);
+/** Blocked products are listed in the picker but can't be repriced (PRODUCT_BLOCKED). */
+const PICKABLE = PRODUCTS.filter((p) => p.lifecycleStatus !== "BLOCKED");
 
 type PreviewRow = {
   sku: string;
@@ -108,6 +149,90 @@ function applyMethod(method: string, value: number, old: number, cost: number) {
     default:
       return old;
   }
+}
+
+/** What each selection mode picks, shown on its option card. */
+const SELECTION_HELP: Record<string, string> = {
+  "Product List": "A hand-picked list of products.",
+  "Product Hierarchy node": "Every SKU under one category.",
+  "Saved filter": "A filter saved on the Products page.",
+  "Uploaded file": "CSV or XLSX with a SKU column.",
+};
+
+/** One-line explanation under the method picker, so each option says what it does to a price. */
+const METHOD_HELP: Record<string, string> = {
+  PERCENTAGE: "New price = current price × (1 + value%).",
+  FIXED_AMOUNT: "Adds the same amount to every price. Use a negative value to reduce.",
+  FORMULA: "New price = current price × (1 + uplift%) + £0.50 handling.",
+  COST_CHANGE: "Reprices each SKU from its current cost to hit a target margin.",
+  CURRENCY_ADJUSTMENT: "Multiplies every price by an FX rate, e.g. GBP → EUR.",
+};
+
+const METHOD_ICON: Record<string, LucideIcon> = {
+  PERCENTAGE: Percent,
+  FIXED_AMOUNT: Banknote,
+  FORMULA: Sigma,
+  COST_CHANGE: Calculator,
+  CURRENCY_ADJUSTMENT: ArrowLeftRight,
+};
+
+/** Worked example on a £10.00 price, so the effect of each method is clear before choosing. */
+const METHOD_EXAMPLE: Record<string, string> = {
+  PERCENTAGE: "£10.00 + 5% = £10.50",
+  FIXED_AMOUNT: "£10.00 + £1.50 = £11.50",
+  FORMULA: "£10.00 × 1.05 + £0.50 = £11.00",
+  COST_CHANGE: "£7.00 cost @ 30% margin = £10.00",
+  CURRENCY_ADJUSTMENT: "£10.00 × 1.17 = €11.70",
+};
+
+/** What happens to breaching SKUs, per guardrail handling. */
+const BREACH_OUTCOME: Record<string, string> = {
+  SKIP: "Will be skipped",
+  CLAMP: "Will be clamped",
+  FAIL: "Will fail",
+};
+
+/** Changes at or above this size are flagged for a second look (likely a typo, e.g. 50 instead of 5). */
+const LARGE_CHANGE_PCT = 50;
+
+/** One figure in the preview impact strip: icon, label, value and a line of context. */
+function ImpactStat({
+  icon: Icon,
+  label,
+  value,
+  note,
+  tone,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  note?: ReactNode;
+  tone: Tone;
+}) {
+  const t = toneCls[tone];
+  return (
+    <div className="flex items-center gap-3 px-4 py-2.5 min-w-0">
+      <span
+        className={`grid place-items-center size-8 shrink-0 rounded-full ${tone === "neutral" ? "bg-muted text-muted-foreground" : `${t.soft} ${t.text}`}`}
+        aria-hidden
+      >
+        <Icon className="size-4" />
+      </span>
+      <div className="min-w-0">
+        <dt className="text-xs text-muted-foreground">{label}</dt>
+        <dd className="flex items-baseline gap-2 min-w-0">
+          <span className={`text-lg font-bold leading-tight tabular-nums ${tone === "neutral" ? "text-foreground" : t.text}`}>
+            {value}
+          </span>
+          {note && (
+            <span className="text-xs text-muted-foreground truncate" title={typeof note === "string" ? note : undefined}>
+              {note}
+            </span>
+          )}
+        </dd>
+      </div>
+    </div>
+  );
 }
 
 /** Input constraints per adjustment method (error prevention). */
@@ -146,6 +271,12 @@ const VALUE_RULES: Record<
   },
 };
 
+const HANDLING_LABEL: Record<string, string> = {
+  SKIP: "Skip — leave price unchanged",
+  CLAMP: "Clamp — set to the limit",
+  FAIL: "Fail — fail the record",
+};
+
 function formatAdjustment(method: string, v: number) {
   if (method === "PERCENTAGE" || method === "FORMULA") return `${v > 0 ? "+" : ""}${v}%`;
   if (method === "COST_CHANGE") return `target margin ${v}%`;
@@ -155,11 +286,17 @@ function formatAdjustment(method: string, v: number) {
 
 function Page() {
   const search = Route.useSearch();
+  const navigate = useNavigate();
+  const { user } = useSession();
   const fromScenario = search.pct !== undefined;
+  const [tab, setTab] = useState<Tab>(search.tab ?? "new");
+  const [discardOpen, setDiscardOpen] = useState(false);
   // Opened from a simulator scenario: land on the preview with the same adjustment.
   const [step, setStep] = useState(fromScenario ? 2 : 0);
   const [selection, setSelection] = useState<string>(BULK_SELECTION[1]);
   const [selectionDetail, setSelectionDetail] = useState(HIERARCHY_NODES[0]);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [file, setFile] = useState<File | null>(null);
   const [target, setTarget] = useState(search.list ?? "BL-002");
   const [method, setMethod] = useState<string>("PERCENTAGE");
   const [value, setValue] = useState(fromScenario ? String(search.pct) : "5");
@@ -176,13 +313,18 @@ function Page() {
   const reasonRef = useRef<HTMLSelectElement>(null);
 
   const targetList = PRICE_LISTS.find((l) => l.id === target);
-  const count = SELECTION_COUNT[selection];
+  const byList = selection === "Product List";
+  const count = byList ? picked.length : SELECTION_COUNT[selection];
   const v = Number(value);
   const rule = VALUE_RULES[method] ?? VALUE_RULES.PERCENTAGE;
+  const previewSource = useMemo(
+    () => (byList ? SAMPLE.filter((s) => picked.includes(s.sku)) : RULE_SAMPLE),
+    [byList, picked],
+  );
 
   const preview: PreviewRow[] = useMemo(
     () =>
-      SAMPLE.map((s) => {
+      previewSource.map((s) => {
         const raw = r2(applyMethod(method, v, s.old, s.cost));
         let next = raw;
         let flag: string | undefined;
@@ -201,13 +343,18 @@ function Page() {
         }
         return { sku: s.sku, old: s.old, raw, next, flag, breach };
       }),
-    [method, v, handling],
+    [previewSource, method, v, handling],
   );
   const changes = preview.map((p) => ((p.next - p.old) / p.old) * 100);
   const avg = changes.reduce((a, b) => a + b, 0) / changes.length;
-  const max = Math.max(...changes.map(Math.abs));
+  const maxIdx = changes.reduce((m, c, i) => (Math.abs(c) > Math.abs(changes[m]) ? i : m), 0);
+  const max = changes[maxIdx] ?? 0;
+  const maxSku = preview[maxIdx]?.sku;
   const breaches = preview.filter((p) => p.breach).length;
-  const breachEstimate = Math.round((count * breaches) / (SAMPLE.length * 300)) || breaches;
+  // A hand-picked list is previewed in full, so its breaches are exact rather than extrapolated.
+  const breachEstimate = byList
+    ? breaches
+    : Math.round((count * breaches) / (RULE_SAMPLE.length * 300)) || breaches;
 
   // Inline validation for step 2 (kept as the user typed it — never cleared on error).
   // Negative results are checked before the range so -120% reports ADJUSTMENT_RESULT_NEGATIVE (US-PL-02 AC#4).
@@ -225,9 +372,25 @@ function Page() {
     ? undefined
     : "Select a reason code — every price change needs one for the audit trail.";
   const adjustmentLabel = formatAdjustment(method, v);
+  // Next/Preview stays disabled until this step's required fields are filled.
+  const stepHintId = useId();
+  const stepMissing =
+    step === 0
+      ? missingFields([
+          ["Products", picked.length ? picked : "", byList],
+          ["SKU file", selectionDetail, selection === "Uploaded file"],
+          ["Target price list", target],
+        ])
+      : step === 1
+        ? missingFields([
+            ["Adjustment value", Number.isNaN(v) ? "" : value],
+            ["Reason code", reason],
+          ])
+        : [];
 
   const next = (e?: FormEvent) => {
     e?.preventDefault();
+    if (stepMissing.length > 0) return;
     setError(null);
     if (step === 0 && fileMissing) {
       setShowErrors(true);
@@ -269,6 +432,15 @@ function Page() {
     setError(null);
   };
 
+  // Nothing entered yet → Cancel leaves; part-way through → confirm before discarding the setup.
+  const cancel = () => (step > 0 ? setDiscardOpen(true) : navigate({ to: "/pricing" }));
+  // Same guard as Create price list: leaving part-way through asks before the setup is lost.
+  const blocker = useBlocker({
+    shouldBlockFn: () => step > 0,
+    enableBeforeUnload: () => step > 0,
+    withResolver: true,
+  });
+
   const confirm = () => {
     setStarting(true);
     window.setTimeout(() => {
@@ -292,22 +464,25 @@ function Page() {
             : method === "CURRENCY_ADJUSTMENT"
               ? `× ${v}`
               : `${v > 0 ? "+" : ""}${v}`,
-      selection: `${humanize(selection)}: ${selection === "Product List" ? "14 products" : selectionDetail}`,
+      selection: `${humanize(selection)}: ${byList ? `${count} products` : selectionDetail}`,
       handling: handling as BulkJob["handling"],
       status: "QUEUED",
       total: count,
       succeeded: 0,
       failed: 0,
       clamped: 0,
-      startedBy: "Riya Shah",
-      startedAt: "2026-10-29 14:15",
+      startedBy: user.name,
+      startedAt: NOW,
       published: false,
       rolledBack: false,
     };
     setJobs((j) => [job, ...j]);
-    setStep(0);
+    resetFlow();
+    // Land where the work continues: the job list, with the new job open.
+    setTab("jobs");
+    setOpenJob(job);
     toast(`Bulk update ${id} started`, {
-      description: `${count.toLocaleString("en-GB")} SKUs queued. Results land in a draft version of ${job.targetList} — track progress in Bulk jobs below.`,
+      description: `${count.toLocaleString("en-GB")} SKUs queued. Results land in a draft version of ${job.targetList}.`,
     });
   };
 
@@ -326,7 +501,7 @@ function Page() {
           const succeeded = Math.min(j.total, j.succeeded + Math.ceil(j.total / 3));
           if (succeeded < j.total) return { ...j, succeeded };
           const failed = j.total >= 100_000 ? 120 : 0;
-          const clamped = handling === "CLAMP" ? breachEstimate : 0;
+          const clamped = j.handling === "CLAMP" ? breachEstimate : 0;
           const done = {
             ...j,
             succeeded: j.total - failed,
@@ -345,7 +520,7 @@ function Page() {
       );
     }, 900);
     return () => clearTimeout(t);
-  }, [jobs, handling, breachEstimate]);
+  }, [jobs, breachEstimate]);
 
   const JOB_STATUS_ORDER: BulkJob["status"][] = [
     "QUEUED",
@@ -423,9 +598,13 @@ function Page() {
       cell: (j) => (
         <dl className="text-xs tabular-nums whitespace-nowrap grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
           <dt className="text-muted-foreground">Succeeded</dt>
-          <dd className="text-right font-semibold text-success">{j.succeeded.toLocaleString("en-GB")}</dd>
+          <dd className="text-right font-semibold text-success">
+            {j.succeeded.toLocaleString("en-GB")}
+          </dd>
           <dt className="text-muted-foreground">Failed</dt>
-          <dd className={`text-right ${j.failed ? "font-semibold text-destructive" : ""}`}>{j.failed.toLocaleString("en-GB")}</dd>
+          <dd className={`text-right ${j.failed ? "font-semibold text-destructive" : ""}`}>
+            {j.failed.toLocaleString("en-GB")}
+          </dd>
           {j.clamped > 0 && (
             <>
               <dt className="text-muted-foreground">Clamped</dt>
@@ -447,417 +626,656 @@ function Page() {
     },
   ];
 
+  const stepCard: Array<{ title: string; subtitle: string }> = [
+    {
+      title: "Choose products",
+      subtitle: "Pick which SKUs change and which price list receives the new prices.",
+    },
+    {
+      title: "Set the adjustment",
+      subtitle: "How prices change, what happens at a guardrail, and why.",
+    },
+    {
+      title: "Preview impact",
+      subtitle: byList
+        ? `Your ${count} ${count === 1 ? "product" : "products"}, calculated with ${adjustmentLabel}.`
+        : `${RULE_SAMPLE.length} sample SKUs from your ${count.toLocaleString("en-GB")} selection, calculated with ${adjustmentLabel}.`,
+    },
+    {
+      title: "Review & apply",
+      subtitle:
+        "Applying starts a background job. Nothing is published until the list is approved.",
+    },
+  ];
+  const guardedSamples = previewSource
+    .filter((s) => s.ceiling !== undefined || s.floor !== undefined)
+    .map((s) =>
+      s.ceiling !== undefined
+        ? `${s.sku} ceiling ${money(s.ceiling, targetList?.currency)}`
+        : `${s.sku} floor ${money(s.floor as number, targetList?.currency)}`,
+    )
+    .join(", ");
+  // Grouped by the step that sets them; a group appears once its step is reached and offers Edit after it.
+  const detailRow: Array<[string, string]> =
+    selection === "Product List"
+      ? []
+      : [
+          [
+            selection === "Product Hierarchy node"
+              ? "Node"
+              : selection === "Saved filter"
+                ? "Filter"
+                : "File",
+            selectionDetail.replace(/\s*\(.*\)$/, "") || "Not chosen yet",
+          ],
+        ];
+  const summaryGroups: Array<{ title: string; at: number; rows: Array<[string, string]> }> = [
+    {
+      title: "Products",
+      at: 0,
+      rows: [
+        ["Scope", humanize(selection)],
+        ...detailRow,
+        ["SKUs", count.toLocaleString("en-GB")],
+        ["Target list", targetList?.name ?? target],
+      ],
+    },
+    ...(step >= 1
+      ? [
+          {
+            title: "Adjustment",
+            at: 1,
+            rows: [
+              ["Method", humanize(method)],
+              ["Change", adjustmentLabel],
+              ["Guardrails", humanize(handling)],
+              ["Reason", reason ? humanize(reason) : "—"],
+            ] as Array<[string, string]>,
+          },
+        ]
+      : []),
+  ];
+
   return (
     <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Bulk price update" }]}>
       <ListHeader
         title="Bulk price update"
-        subtitle="Apply one controlled change across many SKUs — preview the impact first; results land in a draft version you can roll back until it is published."
+        subtitle="Apply one controlled change across many SKUs. Preview the impact first; results land in a draft version you can roll back until it is published."
       />
 
-      {fromScenario ? (
-        <InfoBanner
-          tone="info"
-          title={`Prefilled from scenario ${search.scenario ?? ""}`.trim()}
-          action={
-            <LinkBtn to="/pricing/simulator" variant="outline" size="sm" icon={ArrowLeft}>
-              Back to simulator
-            </LinkBtn>
-          }
-        >
-          Same scope and a {pct(search.pct ?? 0)} percentage adjustment. Check the preview, then continue to confirm.
-        </InfoBanner>
-      ) : (
-        <InfoBanner
-          tone="brand"
-          title="Simulate before you change"
-          action={
-            <LinkBtn to="/pricing/simulator" variant="outline" size="sm" icon={FlaskConical}>
-              Run simulation
-            </LinkBtn>
-          }
-        >
-          See volume, revenue and margin sensitivity before committing.
-        </InfoBanner>
-      )}
+      <PillTabs
+        idPrefix="bulk"
+        active={tab}
+        onChange={setTab}
+        tabs={[
+          { key: "new", label: "New update" },
+          { key: "jobs", label: "Jobs", count: jobs.length },
+        ]}
+      />
 
-      <Card
-        className="mb-8"
-        title="Create bulk update"
-        subtitle="Choose products and an adjustment, check the preview, then apply."
-      >
-        <form onSubmit={next} noValidate>
-          <Stepper steps={STEPS} current={step} />
-          <ErrorBanner error={error} onClose={() => setError(null)} />
-          <p className="text-xs text-muted-foreground mb-4">
-            <span className="text-destructive" aria-hidden>
-              *
-            </span>{" "}
-            Required
-          </p>
-
-          {step === 0 && (
-            <div className="grid md:grid-cols-2 gap-6">
-              <fieldset>
-                <legend className="text-sm font-medium text-foreground mb-1.5">
-                  Selection mode
-                  <span className="text-destructive ml-0.5" aria-hidden>
-                    *
-                  </span>
-                </legend>
-                <Segmented<string>
-                  value={selection}
-                  onChange={(s) => {
-                    setSelection(s);
-                    setSelectionDetail(
-                      s === "Product Hierarchy node"
-                        ? HIERARCHY_NODES[0]
-                        : s === "Saved filter"
-                          ? SAVED_FILTERS[0]
-                          : "",
-                    );
-                  }}
-                  options={BULK_SELECTION.map((s) => ({
-                    key: s,
-                    label: humanize(s),
-                    count: SELECTION_COUNT[s],
-                    tone: "brand" as const,
-                  }))}
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  {SELECTION_COUNT[selection].toLocaleString("en-GB")} SKUs in this selection
-                </p>
-              </fieldset>
-              <div className="space-y-4">
-                {selection === "Product Hierarchy node" && (
-                  <Field label="Hierarchy node">
-                    <select
-                      className={inputCls}
-                      value={selectionDetail}
-                      onChange={(e) => setSelectionDetail(e.target.value)}
+      <div role="tabpanel" id={`bulk-panel-${tab}`} aria-labelledby={`bulk-tab-${tab}`}>
+        {tab === "new" && (
+          <>
+            {fromScenario ? (
+              <InfoBanner
+                tone="info"
+                title={`Prefilled from scenario ${search.scenario ?? ""}`.trim()}
+                action={
+                  <LinkBtn to="/pricing/simulator" variant="outline" size="sm" icon={ArrowLeft}>
+                    Back to simulator
+                  </LinkBtn>
+                }
+              >
+                Same scope and a {pct(search.pct ?? 0)} percentage adjustment. Check the preview,
+                then continue to review.
+              </InfoBanner>
+            ) : (
+              step === 0 && (
+                <InfoBanner
+                  tone="brand"
+                  title="Simulate before you change"
+                  action={
+                    <LinkBtn
+                      to="/pricing/simulator"
+                      variant="outline"
+                      size="sm"
+                      icon={FlaskConical}
                     >
-                      {HIERARCHY_NODES.map((n) => (
-                        <option key={n}>{n}</option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
-                {selection === "Saved filter" && (
-                  <Field label="Saved filter">
-                    <select
-                      className={inputCls}
-                      value={selectionDetail}
-                      onChange={(e) => setSelectionDetail(e.target.value)}
-                    >
-                      {SAVED_FILTERS.map((n) => (
-                        <option key={n}>{n}</option>
-                      ))}
-                    </select>
-                  </Field>
-                )}
-                {selection === "Uploaded file" && (
-                  <Field
-                    label="Upload file"
-                    required
-                    hint="CSV or XLSX with a SKU column"
-                    error={showErrors && fileMissing ? "Choose a file to upload." : undefined}
-                  >
-                    <input
-                      id="bulk-file"
-                      type="file"
-                      accept=".csv,.xlsx"
-                      className={`${inputCls} py-1.5`}
-                      onChange={(e) => setSelectionDetail(e.target.files?.[0]?.name ?? "")}
-                    />
-                  </Field>
-                )}
-                {selection === "Product List" && (
-                  <div>
-                    <p className="text-sm font-medium text-foreground mb-1.5">Products</p>
-                    <div className="flex flex-wrap gap-2">
-                      {SAMPLE.map((s) => (
-                        <Tag key={s.sku}>{s.sku}</Tag>
-                      ))}
-                      <Tag tone="brand">+8 more</Tag>
-                    </div>
-                  </div>
-                )}
-                <Field
-                  label="Target price list"
-                  required
-                  hint="Results go into a draft version of this list and follow approval"
-                >
-                  <select
-                    className={inputCls}
-                    value={target}
-                    onChange={(e) => setTarget(e.target.value)}
-                  >
-                    {PRICE_LISTS.filter(
-                      (l) => !["CANCELLED", "EXPIRED", "SUPERSEDED"].includes(l.status),
-                    ).map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name} ({humanize(l.status)} v{l.version})
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-            </div>
-          )}
-
-          {step === 1 && (
-            <div className="space-y-6">
-              <fieldset>
-                <legend className="text-sm font-medium text-foreground mb-1.5">
-                  Adjustment method
-                  <span className="text-destructive ml-0.5" aria-hidden>
-                    *
-                  </span>
-                </legend>
-                <Segmented<string>
-                  value={method}
-                  onChange={setMethod}
-                  options={BULK_METHODS.map((m) => ({
-                    key: m,
-                    label: humanize(m),
-                    tone: "brand" as const,
-                  }))}
-                />
-              </fieldset>
-              <div className="grid md:grid-cols-3 gap-x-6 gap-y-4">
-                <Field
-                  label={`Adjustment value (${method === "FIXED_AMOUNT" ? (targetList?.currency ?? "GBP") : rule.unit})`}
-                  required
-                  error={showErrors ? valueError : undefined}
-                  hint={
-                    method === "PERCENTAGE"
-                      ? "Percent change, e.g. 5 or -3"
-                      : method === "FIXED_AMOUNT"
-                        ? `Amount in ${targetList?.currency ?? "GBP"} added to each price, e.g. 1.50`
-                        : method === "COST_CHANGE"
-                          ? "Target margin % on current cost, e.g. 30"
-                          : method === "CURRENCY_ADJUSTMENT"
-                            ? "FX rate multiplier, e.g. 1.17"
-                            : "Formula uplift %, e.g. 5"
+                      Run simulation
+                    </LinkBtn>
                   }
                 >
-                  <input
-                    ref={valueRef}
-                    type="number"
-                    inputMode="decimal"
-                    min={rule.min}
-                    max={rule.max}
-                    step={rule.step}
-                    className={inputCls}
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    onBlur={() => setShowErrors(true)}
-                    placeholder="e.g. 5"
-                  />
-                </Field>
-                <Field
-                  label="Guardrail handling"
-                  required
-                  hint="What happens when a new price breaks a floor or ceiling"
-                >
-                  <select
-                    className={inputCls}
-                    value={handling}
-                    onChange={(e) => setHandling(e.target.value)}
-                  >
-                    {GUARDRAIL_HANDLING.map((g) => (
-                      <option key={g} value={g}>
-                        {g === "SKIP"
-                          ? "Skip — leave price unchanged"
-                          : g === "CLAMP"
-                            ? "Clamp — set to the limit"
-                            : "Fail — fail the record"}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Reason code" required error={showErrors ? reasonError : undefined}>
-                  <select
-                    ref={reasonRef}
-                    className={inputCls}
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                  >
-                    <option value="">Select…</option>
-                    {REASON_CODES.map((r) => (
-                      <option key={r} value={r}>
-                        {humanize(r)}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" role="status">
-                {[
-                  ["SKUs in scope", count.toLocaleString("en-GB")],
-                  ["Average change", pct(avg, 2)],
-                  ["Maximum change", `${max.toFixed(2)}%`],
-                  ["Guardrail breaches (est.)", breachEstimate.toLocaleString("en-GB")],
-                ].map(([l, val]) => (
-                  <KpiTile
-                    key={l}
-                    label={l}
-                    value={val}
-                    tone={l.startsWith("Guardrail") && breachEstimate > 0 ? "warning" : "neutral"}
-                  />
-                ))}
-              </div>
-              <DataTable
-                caption="Preview of sample prices before and after the update"
-                columns={[
-                  {
-                    key: "p",
-                    header: "Sample product",
-                    cell: (r: PreviewRow) => (
-                      <div>
-                        <RecordLink to="/pricing/products/$id" params={{ id: r.sku }}>
-                          {productBySku(r.sku)?.name ?? r.sku}
-                        </RecordLink>
-                        <div className="text-xs text-muted-foreground">{r.sku}</div>
-                      </div>
-                    ),
-                  },
-                  {
-                    key: "o",
-                    header: "Before",
-                    align: "right",
-                    cell: (r) => (
-                      <span className="tabular-nums">{money(r.old, targetList?.currency)}</span>
-                    ),
-                  },
-                  {
-                    key: "raw",
-                    header: "Calculated",
-                    align: "right",
-                    cell: (r) => (
-                      <span className="tabular-nums">{money(r.raw, targetList?.currency)}</span>
-                    ),
-                  },
-                  {
-                    key: "n",
-                    header: "After",
-                    align: "right",
-                    cell: (r) => (
-                      <span className="font-semibold tabular-nums">
-                        {money(r.next, targetList?.currency)}
-                      </span>
-                    ),
-                  },
-                  {
-                    key: "c",
-                    header: "Change",
-                    align: "right",
-                    cell: (r) => {
-                      const d = ((r.next - r.old) / r.old) * 100;
-                      return (
-                        <span
-                          className={`tabular-nums ${d > 0 ? "text-success" : d < 0 ? "text-destructive" : ""}`}
-                        >
-                          {pct(d, 2)}
-                        </span>
-                      );
-                    },
-                  },
-                  {
-                    key: "f",
-                    header: "Flag",
-                    cell: (r) =>
-                      r.flag ? (
-                        <Flag tone={r.flag.startsWith("failed") ? "danger" : "warning"}>
-                          {r.flag}
-                        </Flag>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">OK</span>
-                      ),
-                  },
-                ]}
-                rows={preview}
-                rowKey={(r) => r.sku}
-              />
-              <p className="text-xs text-muted-foreground">
-                Guardrails: A-100 ceiling £60 (a +20% change on £55 gives £66 → Clamp sets £60),
-                SW-RCD-63 floor £36.
-              </p>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-4">
-              <DetailGrid
-                items={[
-                  {
-                    label: "Selection",
-                    value: `${humanize(selection)} · ${selection === "Product List" ? "14 products" : selectionDetail || "—"}`,
-                  },
-                  { label: "SKUs", value: count.toLocaleString("en-GB") },
-                  { label: "Method", value: `${humanize(method)} · ${adjustmentLabel}` },
-                  { label: "Guardrail handling", value: humanize(handling) },
-                  {
-                    label: "Target",
-                    value: targetList ? (
-                      <span>
-                        <RecordLink to="/pricing/price-lists/$id" params={{ id: targetList.id }}>
-                          {targetList.name}
-                        </RecordLink>{" "}
-                        → new draft version v{targetList.version + 1}
-                      </span>
-                    ) : (
-                      target
-                    ),
-                  },
-                  { label: "Reason code", value: humanize(reason) },
-                  {
-                    label: "Estimated duration",
-                    value:
-                      count >= 100_000 ? "≈ 45 min (SLA: 100,000 SKUs within 1 hour)" : "< 5 min",
-                  },
-                  { label: "Publishing", value: "Nothing is published until the list is approved" },
-                ]}
-              />
-              <InfoBanner tone="info">
-                Runs in the background: Queued → Running → Succeeded, Partial success or Failed.
-                Every failed record is listed. Rollback restores prior prices until the draft is
-                published.
-              </InfoBanner>
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center gap-3 mt-6 pt-5 border-t border-border">
-            {step > 0 && (
-              <Btn variant="ghost" onClick={resetFlow}>
-                Cancel
-              </Btn>
+                  See volume, revenue and margin sensitivity before committing.
+                </InfoBanner>
+              )
             )}
-            <div className="flex-1" />
-            <div className="flex flex-wrap items-center gap-2">
-              {step > 0 && (
-                <Btn variant="subtle" icon={ArrowLeft} onClick={() => setStep((s) => s - 1)}>
-                  Back
-                </Btn>
-              )}
-              {step < 3 ? (
-                <Btn type="submit">
-                  {step === 1 ? "Preview" : "Next"}
-                  <ArrowRight className="size-4" aria-hidden />
-                </Btn>
-              ) : (
-                <Btn type="submit" icon={Play}>
-                  Apply update
-                </Btn>
-              )}
+
+            <Stepper steps={STEPS} current={step} />
+            <ErrorBanner error={error} onClose={() => setError(null)} />
+
+            <form onSubmit={next} noValidate>
+              {/* Buttons sit under the step card they act on; the summary keeps its own height and stays in view. */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start pb-6">
+                <div className="lg:col-span-2 min-w-0">
+                  <Card title={stepCard[step].title} subtitle={stepCard[step].subtitle}>
+                    {step === 0 && (
+                      <div className="space-y-6">
+                        <fieldset>
+                          <legend className="text-sm font-medium text-foreground mb-2">
+                            Selection mode
+                            <span className="text-destructive ml-0.5" aria-hidden>
+                              *
+                            </span>
+                          </legend>
+                          <RadioPills<string>
+                            label="Selection mode"
+                            value={selection}
+                            onChange={(s) => {
+                              setSelection(s);
+                              setFile(null);
+                              setSelectionDetail(
+                                s === "Product Hierarchy node"
+                                  ? HIERARCHY_NODES[0]
+                                  : s === "Saved filter"
+                                    ? SAVED_FILTERS[0]
+                                    : "",
+                              );
+                            }}
+                            options={BULK_SELECTION.map((s) => ({
+                              key: s,
+                              label: humanize(s),
+                              meta:
+                                s === "Product List"
+                                  ? picked.length
+                                    ? `${picked.length} selected`
+                                    : undefined
+                                  : SELECTION_COUNT[s] >= 10_000
+                                    ? `${Math.round(SELECTION_COUNT[s] / 1000)}k SKUs`
+                                    : `${SELECTION_COUNT[s].toLocaleString("en-GB")} SKUs`,
+                            }))}
+                          />
+                          <p className="text-xs text-muted-foreground mt-2" role="status">
+                            {SELECTION_HELP[selection]}
+                          </p>
+                        </fieldset>
+                        {/* The control for the chosen mode sits right under the options it belongs to. */}
+                        {selection === "Product List" && (
+                          <ProductPicker picked={picked} onChange={setPicked} />
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 empty:hidden">
+                          {selection === "Product Hierarchy node" && (
+                            <Field label="Hierarchy node" required>
+                              <select
+                                className={inputCls}
+                                value={selectionDetail}
+                                onChange={(e) => setSelectionDetail(e.target.value)}
+                              >
+                                {HIERARCHY_NODES.map((n) => (
+                                  <option key={n}>{n}</option>
+                                ))}
+                              </select>
+                            </Field>
+                          )}
+                          {selection === "Saved filter" && (
+                            <Field label="Saved filter" required>
+                              <select
+                                className={inputCls}
+                                value={selectionDetail}
+                                onChange={(e) => setSelectionDetail(e.target.value)}
+                              >
+                                {SAVED_FILTERS.map((n) => (
+                                  <option key={n}>{n}</option>
+                                ))}
+                              </select>
+                            </Field>
+                          )}
+                        </div>
+                        {selection === "Uploaded file" && (
+                          <FileDrop
+                            id="bulk-file"
+                            label="SKU file"
+                            required
+                            accept=".csv,.xlsx"
+                            file={file}
+                            onChange={(f) => {
+                              setFile(f);
+                              setSelectionDetail(f?.name ?? "");
+                            }}
+                            error={
+                              showErrors && fileMissing ? "Choose a file to upload." : undefined
+                            }
+                            onTemplate={() => {
+                              downloadCsv("bulk-update-skus-template.csv", [
+                                { sku: "A-100" },
+                                { sku: "EW-3100" },
+                              ]);
+                              toast.success("Template downloaded", {
+                                description: "One SKU per row in the sku column.",
+                              });
+                            }}
+                          />
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 border-t border-border pt-6">
+                          <Field
+                            label="Target price list"
+                            required
+                            hint="Results go into a new draft version of this list and follow approval"
+                          >
+                            <select
+                              className={inputCls}
+                              value={target}
+                              onChange={(e) => setTarget(e.target.value)}
+                            >
+                              {PRICE_LISTS.filter(
+                                (l) => !["CANCELLED", "EXPIRED", "SUPERSEDED"].includes(l.status),
+                              ).map((l) => (
+                                <option key={l.id} value={l.id}>
+                                  {l.name} ({humanize(l.status)} v{l.version})
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                        </div>
+                      </div>
+                    )}
+
+                    {step === 1 && (
+                      <div className="space-y-6">
+                        <fieldset>
+                          <legend className="text-sm font-medium text-foreground mb-2">
+                            Adjustment method
+                            <span className="text-destructive ml-0.5" aria-hidden>
+                              *
+                            </span>
+                          </legend>
+                          <ChoiceCards<string>
+                            label="Adjustment method"
+                            layout="compact"
+                            value={method}
+                            onChange={setMethod}
+                            options={BULK_METHODS.map((m) => ({
+                              key: m,
+                              label: humanize(m),
+                              hint: METHOD_HELP[m],
+                              icon: METHOD_ICON[m],
+                              example: METHOD_EXAMPLE[m],
+                            }))}
+                          />
+                        </fieldset>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4">
+                          <Field
+                            label={`Adjustment value (${method === "FIXED_AMOUNT" ? (targetList?.currency ?? "GBP") : rule.unit})`}
+                            required
+                            error={showErrors ? valueError : undefined}
+                            hint={
+                              method === "PERCENTAGE"
+                                ? "Percent change, e.g. 5 or -3"
+                                : method === "FIXED_AMOUNT"
+                                  ? `Amount in ${targetList?.currency ?? "GBP"} added to each price, e.g. 1.50`
+                                  : method === "COST_CHANGE"
+                                    ? "Target margin % on current cost, e.g. 30"
+                                    : method === "CURRENCY_ADJUSTMENT"
+                                      ? "FX rate multiplier, e.g. 1.17"
+                                      : "Formula uplift %, e.g. 5"
+                            }
+                          >
+                            <input
+                              ref={valueRef}
+                              type="number"
+                              inputMode="decimal"
+                              min={rule.min}
+                              max={rule.max}
+                              step={rule.step}
+                              className={inputCls}
+                              value={value}
+                              onChange={(e) => setValue(e.target.value)}
+                              onBlur={() => setShowErrors(true)}
+                              placeholder="e.g. 5"
+                            />
+                          </Field>
+                          <Field
+                            label="Guardrail handling"
+                            required
+                            hint="What happens when a new price breaks a floor or ceiling"
+                          >
+                            <select
+                              className={inputCls}
+                              value={handling}
+                              onChange={(e) => setHandling(e.target.value)}
+                            >
+                              {GUARDRAIL_HANDLING.map((g) => (
+                                <option key={g} value={g}>
+                                  {HANDLING_LABEL[g] ?? humanize(g)}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                          <Field
+                            label="Reason code"
+                            required
+                            hint="Recorded in the audit trail"
+                            error={showErrors ? reasonError : undefined}
+                          >
+                            <select
+                              ref={reasonRef}
+                              className={inputCls}
+                              value={reason}
+                              onChange={(e) => setReason(e.target.value)}
+                            >
+                              <option value="">Select…</option>
+                              {REASON_CODES.map((r) => (
+                                <option key={r} value={r}>
+                                  {humanize(r)}
+                                </option>
+                              ))}
+                            </select>
+                          </Field>
+                        </div>
+                      </div>
+                    )}
+
+                    {step === 2 && (
+                      <div className="space-y-4">
+                        {/* One slim row: icon, label over value, short context beside the value. */}
+                        <dl className="grid grid-cols-1 sm:grid-cols-3 rounded-lg border border-border bg-card divide-y sm:divide-y-0 sm:divide-x divide-border">
+                          <ImpactStat
+                            icon={avg < 0 ? TrendingDown : TrendingUp}
+                            label="Average change"
+                            value={pct(avg || 0, 2)}
+                            tone={Math.abs(avg) >= LARGE_CHANGE_PCT ? "warning" : "neutral"}
+                            note={`${preview.length.toLocaleString("en-GB")} ${byList ? "" : "sample "}SKU${preview.length === 1 ? "" : "s"}`}
+                          />
+                          <ImpactStat
+                            icon={ArrowUpDown}
+                            label="Largest change"
+                            value={pct(max, 2)}
+                            tone={Math.abs(max) >= LARGE_CHANGE_PCT ? "warning" : "neutral"}
+                            note={
+                              Math.abs(max) >= LARGE_CHANGE_PCT
+                                ? "Check the value"
+                                : maxSku
+                                  ? (productBySku(maxSku)?.name ?? maxSku)
+                                  : undefined
+                            }
+                          />
+                          <ImpactStat
+                            icon={breachEstimate > 0 ? ShieldAlert : ShieldCheck}
+                            label={byList ? "Breaches" : "Breaches (est.)"}
+                            value={breachEstimate > 0 ? breachEstimate.toLocaleString("en-GB") : "None"}
+                            tone={breachEstimate > 0 ? "warning" : "success"}
+                            note={
+                              breachEstimate > 0
+                                ? (BREACH_OUTCOME[handling] ?? humanize(handling))
+                                : "All within limits"
+                            }
+                          />
+                        </dl>
+                        <DataTable
+                          caption="Preview of sample prices before and after the update"
+                          columns={[
+                            {
+                              key: "p",
+                              header: byList ? "Product" : "Sample product",
+                              cell: (r: PreviewRow) => (
+                                <div className="flex items-baseline gap-2 min-w-0">
+                                  <RecordLink to="/pricing/products/$id" params={{ id: r.sku }}>
+                                    {productBySku(r.sku)?.name ?? r.sku}
+                                  </RecordLink>
+                                  <span className="text-xs text-muted-foreground whitespace-nowrap">{r.sku}</span>
+                                </div>
+                              ),
+                            },
+                            {
+                              key: "o",
+                              header: "Before",
+                              align: "right",
+                              cell: (r) => (
+                                <span className="tabular-nums">
+                                  {money(r.old, targetList?.currency)}
+                                </span>
+                              ),
+                            },
+                            // "Calculated" only differs from "After" when a guardrail clamps or skips a price.
+                            ...(preview.some((p) => p.raw !== p.next)
+                              ? [
+                                  {
+                                    key: "raw",
+                                    header: "Calculated",
+                                    align: "right" as const,
+                                    cell: (r: PreviewRow) => (
+                                      <span className="tabular-nums">
+                                        {money(r.raw, targetList?.currency)}
+                                      </span>
+                                    ),
+                                  },
+                                ]
+                              : []),
+                            {
+                              key: "n",
+                              header: "After",
+                              align: "right",
+                              cell: (r) => (
+                                <span className="font-semibold tabular-nums">
+                                  {money(r.next, targetList?.currency)}
+                                </span>
+                              ),
+                            },
+                            {
+                              key: "c",
+                              header: "Change",
+                              align: "right",
+                              cell: (r) => {
+                                const d = ((r.next - r.old) / r.old) * 100;
+                                return (
+                                  <span
+                                    className={`tabular-nums ${d > 0 ? "text-success" : d < 0 ? "text-destructive" : ""}`}
+                                  >
+                                    {pct(d, 2)}
+                                  </span>
+                                );
+                              },
+                            },
+                            {
+                              key: "f",
+                              header: "Guardrail",
+                              cell: (r) =>
+                                r.flag ? (
+                                  <Flag tone={r.flag.startsWith("failed") ? "danger" : "warning"}>
+                                    {r.flag}
+                                  </Flag>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">
+                                    Within limits
+                                  </span>
+                                ),
+                            },
+                          ]}
+                          rows={preview}
+                          rowKey={(r) => r.sku}
+                          numbered={false}
+                          dense
+                        />
+                        {guardedSamples && (
+                          <p className="text-xs text-muted-foreground">
+                            Guardrails: {guardedSamples}. Breaches are handled by “
+                            {HANDLING_LABEL[handling] ?? humanize(handling)}”.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {step === 3 && (
+                      <div className="space-y-4">
+                        <DetailGrid
+                          columns={2}
+                          items={[
+                            {
+                              label: "Creates",
+                              value: targetList ? (
+                                <span>
+                                  Draft v{targetList.version + 1} of{" "}
+                                  <RecordLink
+                                    to="/pricing/price-lists/$id"
+                                    params={{ id: targetList.id }}
+                                  >
+                                    {targetList.name}
+                                  </RecordLink>
+                                </span>
+                              ) : (
+                                target
+                              ),
+                            },
+                            {
+                              label: "Estimated duration",
+                              value:
+                                count >= 100_000
+                                  ? "≈ 45 min (SLA: 100,000 SKUs within 1 hour)"
+                                  : "< 5 min",
+                            },
+                            {
+                              label: "Guardrail breaches (est.)",
+                              value: breachEstimate
+                                ? `${breachEstimate.toLocaleString("en-GB")} · ${HANDLING_LABEL[handling] ?? humanize(handling)}`
+                                : "None expected",
+                            },
+                            { label: "Publishing", value: "Only after the list is approved" },
+                          ]}
+                        />
+                        <InfoBanner tone="info">
+                          Runs in the background: Queued → Running → Succeeded, Partial success or
+                          Failed. Every failed record is listed. Rollback restores prior prices
+                          until the draft is published.
+                        </InfoBanner>
+                      </div>
+                    )}
+                  </Card>
+
+                  <div className="flex flex-wrap items-center gap-3 mt-6">
+                    <Btn variant="subtle" onClick={cancel}>
+                      Cancel
+                    </Btn>
+                    <div className="flex-1" />
+                    <MissingHint id={stepHintId} missing={stepMissing} className="mr-0" />
+                    {step > 0 && (
+                      <Btn variant="subtle" icon={ArrowLeft} onClick={() => setStep((s) => s - 1)}>
+                        Back
+                      </Btn>
+                    )}
+                    {step < 3 ? (
+                      <Btn
+                        type="submit"
+                        disabled={stepMissing.length > 0}
+                        aria-describedby={stepMissing.length ? stepHintId : undefined}
+                      >
+                        {step === 1 ? "Preview" : step === 2 ? "Review" : "Next"}
+                        <ArrowRight className="size-4" aria-hidden />
+                      </Btn>
+                    ) : (
+                      <Btn type="submit" icon={Play}>
+                        Apply update
+                      </Btn>
+                    )}
+                  </div>
+                </div>
+
+                <aside className="lg:sticky lg:top-4" aria-label="Bulk update summary">
+                  <Card title="Summary">
+                    <div className="space-y-6">
+                      {summaryGroups.map((g) => (
+                        <section key={g.title} aria-labelledby={`bulk-sum-${g.at}`}>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <h3
+                              id={`bulk-sum-${g.at}`}
+                              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                            >
+                              {g.title}
+                            </h3>
+                            {step > g.at && (
+                              <Btn
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setStep(g.at)}
+                                aria-label={`Edit ${g.title.toLowerCase()}`}
+                              >
+                                Edit
+                              </Btn>
+                            )}
+                          </div>
+                          <dl className="divide-y divide-border text-sm">
+                            {g.rows.map(([label, val]) => (
+                              <div
+                                key={label}
+                                className="flex items-baseline justify-between gap-4 py-2"
+                              >
+                                <dt className="text-muted-foreground shrink-0">{label}</dt>
+                                <dd className="font-medium text-right min-w-0 break-words">
+                                  {val}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </section>
+                      ))}
+                    </div>
+                  </Card>
+                </aside>
+              </div>
+            </form>
+          </>
+        )}
+
+        {tab === "jobs" && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <FilterPills<BulkJob["status"]>
+                label="Status"
+                selected={jobStatus}
+                onChange={setJobStatus}
+                options={jobStatuses.map((st) => ({
+                  key: st,
+                  label: humanize(st),
+                  count: jobs.filter((j) => j.status === st).length,
+                }))}
+              />
+              <span className="text-sm text-muted-foreground tabular-nums" role="status">
+                {shownJobs.length} {shownJobs.length === 1 ? "job" : "jobs"}
+              </span>
             </div>
-          </div>
-        </form>
-      </Card>
+            <DataTable
+              caption="Bulk update jobs"
+              columns={jobCols}
+              rows={shownJobs}
+              rowKey={(j) => j.id}
+              onRowClick={setOpenJob}
+              selectedKey={openJob?.id ?? null}
+              pageSize={10}
+              empty={
+                jobStatus.length ? (
+                  <EmptyState
+                    title="No jobs match this status"
+                    action={
+                      <Btn variant="subtle" onClick={() => setJobStatus([])}>
+                        Clear filters
+                      </Btn>
+                    }
+                  />
+                ) : (
+                  <EmptyState
+                    title="No bulk jobs yet"
+                    action={
+                      <Btn variant="subtle" onClick={() => setTab("new")}>
+                        Start a bulk update
+                      </Btn>
+                    }
+                  >
+                    Jobs appear here once you apply a bulk update.
+                  </EmptyState>
+                )
+              }
+            />
+          </>
+        )}
+      </div>
 
       <ConfirmDialog
         open={confirmOpen}
@@ -869,46 +1287,29 @@ function Page() {
         onCancel={() => setConfirmOpen(false)}
       />
 
-      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-        <h2 className="text-lg font-semibold tracking-tight">Bulk jobs</h2>
-        <span className="text-sm text-muted-foreground tabular-nums" role="status">
-          {shownJobs.length} {shownJobs.length === 1 ? "job" : "jobs"}
-        </span>
-      </div>
-      <FilterPills<BulkJob["status"]>
-        label="Status"
-        selected={jobStatus}
-        onChange={setJobStatus}
-        options={jobStatuses.map((st) => ({
-          key: st,
-          label: humanize(st),
-          count: jobs.filter((j) => j.status === st).length,
-        }))}
+      <ConfirmDialog
+        open={discardOpen}
+        tone="danger"
+        title="Start this bulk update over?"
+        description="You'll go back to step 1. No prices have changed."
+        confirmLabel="Start over"
+        cancelLabel="Keep editing"
+        onConfirm={() => {
+          setDiscardOpen(false);
+          resetFlow();
+        }}
+        onCancel={() => setDiscardOpen(false)}
       />
-      <DataTable
-        caption="Bulk update jobs"
-        columns={jobCols}
-        rows={shownJobs}
-        rowKey={(j) => j.id}
-        onRowClick={setOpenJob}
-        selectedKey={openJob?.id ?? null}
-        pageSize={10}
-        empty={
-          jobStatus.length ? (
-            <EmptyState
-              title="No jobs match this status"
-              action={
-                <Btn variant="subtle" onClick={() => setJobStatus([])}>
-                  Clear filters
-                </Btn>
-              }
-            />
-          ) : (
-            <EmptyState title="No bulk jobs yet">
-              Jobs appear here once you apply a bulk update above.
-            </EmptyState>
-          )
-        }
+
+      <ConfirmDialog
+        open={blocker.status === "blocked"}
+        tone="danger"
+        title="Leave this bulk update?"
+        description="Your selection and adjustment haven't been applied. If you leave now, the setup is lost. No prices have changed."
+        confirmLabel="Discard and leave"
+        cancelLabel="Keep editing"
+        onConfirm={() => blocker.proceed?.()}
+        onCancel={() => blocker.reset?.()}
       />
 
       <JobDrawer
@@ -919,6 +1320,125 @@ function Page() {
         }
       />
     </PricingLayout>
+  );
+}
+
+/** Searchable checklist for Product list mode. Blocked products stay visible with the reason they can't be picked. */
+function ProductPicker({
+  picked,
+  onChange,
+}: {
+  picked: string[];
+  onChange: (skus: string[]) => void;
+}) {
+  const [q, setQ] = useState("");
+  const ql = q.trim().toLowerCase();
+  const shown = PRODUCTS.filter(
+    (p) => !ql || p.name.toLowerCase().includes(ql) || p.sku.toLowerCase().includes(ql),
+  );
+  const shownPickable = shown.filter((p) => p.lifecycleStatus !== "BLOCKED").map((p) => p.sku);
+  const allShown = shownPickable.length > 0 && shownPickable.every((s) => picked.includes(s));
+  const toggle = (sku: string) =>
+    onChange(picked.includes(sku) ? picked.filter((s) => s !== sku) : [...picked, sku]);
+  const toggleAll = () =>
+    onChange(
+      allShown
+        ? picked.filter((s) => !shownPickable.includes(s))
+        : [...picked, ...shownPickable.filter((s) => !picked.includes(s))],
+    );
+  return (
+    <fieldset>
+      <legend className="text-sm font-medium text-foreground mb-2">
+        Products
+        <span className="text-destructive ml-0.5" aria-hidden>
+          *
+        </span>
+      </legend>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
+        <SearchInput
+          value={q}
+          onChange={setQ}
+          placeholder="Search products"
+          label="Search products by name or SKU"
+          className="basis-full sm:basis-auto sm:flex-1"
+        />
+        <span className="flex items-center gap-2 ml-auto">
+          <span
+            className="text-sm text-muted-foreground tabular-nums whitespace-nowrap"
+            role="status"
+          >
+            {picked.length} of {PICKABLE.length} selected
+          </span>
+          {picked.length > 0 && (
+            <Btn variant="ghost" size="sm" onClick={() => onChange([])}>
+              Clear
+            </Btn>
+          )}
+        </span>
+      </div>
+      <div className="rounded-lg border border-border overflow-hidden">
+        {/* Header stays outside the scroll area, so the scrollbar starts below it. */}
+        {shownPickable.length > 0 && (
+          <label className="flex items-center gap-3 px-4 min-h-10 bg-muted border-b border-border text-sm font-medium cursor-pointer">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--brand)]"
+              checked={allShown}
+              onChange={toggleAll}
+            />
+            {ql
+              ? `Select all ${shownPickable.length} matching`
+              : `Select all ${shownPickable.length}`}
+          </label>
+        )}
+        {/* One-line rows, capped at about five so the step stays short; the cut-off row shows it scrolls. */}
+        <div className="divide-y divide-border max-h-52 overflow-y-auto">
+          {shown.map((p) => {
+            const blocked = p.lifecycleStatus === "BLOCKED";
+            const on = picked.includes(p.sku);
+            return (
+              <label
+                key={p.sku}
+                className={`flex items-center gap-3 px-4 py-2 min-h-10 text-sm ${
+                  blocked
+                    ? "cursor-not-allowed"
+                    : on
+                      ? "bg-brand-soft cursor-pointer"
+                      : "cursor-pointer hover:bg-muted/40"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="size-4 shrink-0 accent-[var(--brand)]"
+                  disabled={blocked}
+                  checked={on}
+                  onChange={() => toggle(p.sku)}
+                />
+                <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2">
+                  <span className={`font-medium ${blocked ? "text-muted-foreground" : ""}`}>
+                    {p.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{p.sku}</span>
+                </span>
+                {/* Only exceptions get a label; "Active" on every row would be noise. */}
+                {blocked ? (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    Blocked in ERP
+                  </span>
+                ) : (
+                  p.lifecycleStatus !== "ACTIVE" && <StatusPill status={p.lifecycleStatus} />
+                )}
+              </label>
+            );
+          })}
+          {shown.length === 0 && (
+            <p className="px-4 py-6 text-sm text-muted-foreground text-center">
+              No products match “{q}”.
+            </p>
+          )}
+        </div>
+      </div>
+    </fieldset>
   );
 }
 

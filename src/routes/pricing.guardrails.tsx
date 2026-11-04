@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { Pencil, Plus, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -13,6 +13,7 @@ import {
   FilterPills,
   InfoBanner,
   ListHeader,
+  MissingHint,
   Modal,
   PricingLayout,
   RecordLink,
@@ -20,6 +21,7 @@ import {
   Tag,
   humanize,
   inputCls,
+  missingFields,
   money,
   type ApiError,
   type Tone,
@@ -148,6 +150,7 @@ function Page() {
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [enforcements, setEnforcements] = useState<Enforcement[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
+  const grHintId = useId();
 
   const list = useMemo(
     () =>
@@ -181,6 +184,14 @@ function Page() {
   const LIVE = ["gr-ceiling", "gr-maxdisc-na", "gr-to", "gr-product"];
   const fe = (k: string) => (submitted || (LIVE.includes(k) && errs[k] && !errs[k].startsWith("Enter")) ? errs[k] : undefined);
   const dirty = editing !== null && JSON.stringify(form) !== origin;
+  // Save stays disabled until required fields have values; "needs a limit" and floor/ceiling checks run on submit.
+  const grMissing = missingFields([
+    [form.scopeLevel === "CUSTOMER" ? "Customer" : "Segment", form.scope, form.scopeLevel !== "GLOBAL"],
+    ["Product", form.product],
+    ["Effective from", form.effectiveFrom],
+    ["Reason code", form.reasonCode],
+    ["Reason text", form.reasonText, form.reasonCode === "OTHER"],
+  ]);
 
   /** Rejection banner carrying the US-ST-05 error code; field errors stay inline. */
   const rejection = (): ApiError | null => {
@@ -419,10 +430,17 @@ function Page() {
         subtitle={dirty ? "Unsaved changes · limits are effective-dated and versioned." : "Limits are effective-dated and versioned. History is retained."}
         footer={
           <>
+            <MissingHint id={grHintId} missing={grMissing} />
             <Btn variant="subtle" onClick={() => setEditing(null)} disabled={saving}>
               Cancel
             </Btn>
-            <Btn type="submit" form="guardrail-form" loading={saving}>
+            <Btn
+              type="submit"
+              form="guardrail-form"
+              loading={saving}
+              disabled={grMissing.length > 0}
+              aria-describedby={grMissing.length ? grHintId : undefined}
+            >
               Save guardrail
             </Btn>
           </>

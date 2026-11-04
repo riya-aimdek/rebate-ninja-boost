@@ -351,7 +351,7 @@ function Metrics({ tasks }: { tasks: ApprovalTask[] }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
       <Card title="Approval rate by approver" subtitle={`${decided.length} decided requests`} padded={false}>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-hidden">
           <table className="w-full text-sm">
             <caption className="sr-only">Approval rate by approver</caption>
             <thead>
@@ -376,7 +376,7 @@ function Metrics({ tasks }: { tasks: ApprovalTask[] }) {
         </div>
       </Card>
       <Card title="By category" subtitle="Volume, approval rate and SLA breaches" padded={false}>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-hidden">
           <table className="w-full text-sm">
             <caption className="sr-only">Requests by category</caption>
             <thead>

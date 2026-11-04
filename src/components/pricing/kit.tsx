@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  FileText,
   Filter,
   Info,
   Loader2,
@@ -12,6 +13,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  Upload,
   X,
   XCircle,
   type LucideIcon,
@@ -149,8 +151,9 @@ export function LinkBtn({
   );
 }
 
+// Selects stop at 24rem from sm up: their options are short, so a full-width dropdown reads as a text box.
 export const inputCls =
-  "w-full h-10 px-3 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
+  "w-full sm:[&:is(select)]:max-w-sm h-10 px-3 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
 
 export function Field({
   label,
@@ -280,6 +283,8 @@ export function FilterButton({ count = 0, onClick, expanded }: { count?: number;
 /**
  * Quick-filter pill group with counts (e.g. lifecycle status). One pattern for every list page.
  * `multiple` lets several pills be on at once; otherwise selecting one replaces the others.
+ * Rule: list filters are always multi-select (OR within a group). Use `multiple={false}` only for a
+ * required single choice (period, example preset) and pair it with `clearable={false}`.
  */
 export function FilterPills<T extends string>({
   label,
@@ -699,6 +704,326 @@ export function Segmented<T extends string>({
   );
 }
 
+/**
+ * Standard file upload: a dashed drop area with a Browse button and the accepted types, then the chosen
+ * file as a row with Replace / Remove. The native input stays hidden; the button opens it. Wrong type or
+ * oversize files are rejected inline before they reach the caller.
+ */
+export function FileDrop({
+  id,
+  label,
+  required,
+  accept,
+  maxMb = 10,
+  file,
+  onChange,
+  error,
+  onTemplate,
+}: {
+  /** Put on the Browse / Replace button so callers can focus it on a validation error. */
+  id: string;
+  label: string;
+  required?: boolean;
+  /** Comma list of extensions, e.g. ".csv,.xlsx". */
+  accept: string;
+  maxMb?: number;
+  file: File | null;
+  onChange: (f: File | null) => void;
+  error?: string;
+  /** Shows a "Download template" link. */
+  onTemplate?: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const [rejected, setRejected] = useState<string | null>(null);
+  const exts = accept.split(",").map((s) => s.trim().toLowerCase());
+  const types = exts.map((e) => e.replace(".", "").toUpperCase()).join(" or ");
+  const take = (f?: File | null) => {
+    if (!f) return;
+    const ext = `.${f.name.split(".").pop() ?? ""}`.toLowerCase();
+    if (!exts.includes(ext)) return setRejected(`${f.name} isn't a ${types} file. Choose a ${types} file.`);
+    if (f.size > maxMb * 1024 * 1024) return setRejected(`${f.name} is over ${maxMb} MB. Split it into smaller files.`);
+    setRejected(null);
+    onChange(f);
+  };
+  const browse = () => inputRef.current?.click();
+  const msg = rejected ?? error;
+  const size = (b: number) => (b < 1024 * 1024 ? `${Math.max(1, Math.round(b / 1024))} KB` : `${(b / 1024 / 1024).toFixed(1)} MB`);
+  const describedBy = `${id}-label${msg ? ` ${id}-msg` : ""}`;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span id={`${id}-label`} className="text-sm font-medium text-foreground">
+        {label}
+        {required && (
+          <span className="text-destructive ml-0.5" aria-hidden>
+            *
+          </span>
+        )}
+      </span>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => {
+          take(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      {file ? (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+          <FileText className="size-5 text-brand shrink-0" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium break-all">{file.name}</div>
+            <div className="text-xs text-muted-foreground tabular-nums">{size(file.size)}</div>
+          </div>
+          <Btn id={id} variant="subtle" size="sm" onClick={browse} aria-describedby={describedBy}>
+            Replace
+          </Btn>
+          <Btn variant="ghost" size="sm" icon={X} onClick={() => onChange(null)} aria-label={`Remove ${file.name}`}>
+            Remove
+          </Btn>
+        </div>
+      ) : (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setOver(true);
+          }}
+          onDragLeave={() => setOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setOver(false);
+            take(e.dataTransfer.files?.[0]);
+          }}
+          className={`flex flex-wrap items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 transition ${
+            msg ? "border-destructive" : over ? "border-brand bg-brand-soft" : "border-border"
+          }`}
+        >
+          <Upload className="size-5 text-brand shrink-0" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm">Drag a file here or browse</div>
+            <div className="text-xs text-muted-foreground whitespace-nowrap">
+              {types} · up to {maxMb} MB
+            </div>
+          </div>
+          <Btn id={id} variant="outline" size="sm" onClick={browse} aria-describedby={describedBy}>
+            Browse files
+          </Btn>
+        </div>
+      )}
+      {(msg || onTemplate) && (
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          {msg ? (
+            <p id={`${id}-msg`} className="text-xs text-destructive flex items-center gap-1" role="alert">
+              <XCircle className="size-3.5 shrink-0" aria-hidden />
+              {msg}
+            </p>
+          ) : (
+            <span />
+          )}
+          {onTemplate && (
+            <button type="button" className="hit text-xs text-brand font-semibold hover:underline" onClick={onTemplate}>
+              Download template
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Classic radio mark: ring plus inner dot when selected, so the choice reads without relying on fill colour. */
+function RadioDot({ on }: { on: boolean }) {
+  return (
+    <span
+      className={`grid place-items-center size-4 shrink-0 rounded-full border-2 bg-card ${on ? "border-brand" : "border-muted-foreground"}`}
+      aria-hidden
+    >
+      {on && <span className="size-2 rounded-full bg-brand" />}
+    </span>
+  );
+}
+
+const radioKeyStep = (key: string) =>
+  key === "ArrowRight" || key === "ArrowDown" ? 1 : key === "ArrowLeft" || key === "ArrowUp" ? -1 : 0;
+
+/**
+ * Compact single choice: a row of pills, each with a radio mark and an optional count (WAI-ARIA
+ * radiogroup). Use for short options in one line; use ChoiceCards when each option needs explaining.
+ */
+export function RadioPills<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  /** Accessible name of the group (the visible legend usually says the same). */
+  label: string;
+  options: Array<{ key: T; label: string; /** Right-hand extra, e.g. "4,210 SKUs". */ meta?: ReactNode }>;
+  value: T;
+  onChange: (k: T) => void;
+}) {
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = radioKeyStep(e.key);
+    if (!step) return;
+    e.preventDefault();
+    const next = (options.findIndex((o) => o.key === value) + step + options.length) % options.length;
+    onChange(options[next].key);
+    e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=radio]")[next]?.focus();
+  };
+  return (
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2" onKeyDown={onKeyDown}>
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            onClick={() => onChange(o.key)}
+            className={`inline-flex items-center gap-2 h-10 pl-3 pr-4 rounded-full border text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${
+              on ? "border-brand bg-brand-soft font-semibold text-foreground" : "border-border bg-card text-foreground hover:border-brand/50"
+            }`}
+          >
+            <RadioDot on={on} />
+            {o.label}
+            {o.meta !== undefined && <span className="text-xs font-normal text-muted-foreground tabular-nums">{o.meta}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Single-choice option cards (WAI-ARIA radiogroup, arrow keys move the choice). Use when each option
+ * needs a one-line explanation; use Segmented for short, self-explanatory choices.
+ */
+export function ChoiceCards<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  layout = "grid",
+  className = layout === "compact"
+    ? "grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2"
+    : "grid grid-cols-1 sm:grid-cols-2 gap-3",
+}: {
+  /** Accessible name of the group (the visible legend usually says the same). */
+  label: string;
+  options: Array<{
+    key: T;
+    label: string;
+    hint?: ReactNode;
+    /** Right-aligned extra, e.g. "14 SKUs". */
+    meta?: ReactNode;
+    icon?: LucideIcon;
+    /** Worked example, e.g. "£10.00 + 5% = £10.50". */
+    example?: ReactNode;
+  }>;
+  value: T;
+  onChange: (k: T) => void;
+  /** "compact" shows small icon tiles; only the selected option's hint and example appear below. */
+  layout?: "grid" | "compact";
+  className?: string;
+}) {
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const step = radioKeyStep(e.key);
+    if (!step) return;
+    e.preventDefault();
+    const idx = options.findIndex((o) => o.key === value);
+    const next = (idx + step + options.length) % options.length;
+    onChange(options[next].key);
+    e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=radio]")[next]?.focus();
+  };
+  const descId = useId();
+  if (layout === "compact") {
+    const sel = options.find((o) => o.key === value);
+    return (
+      <div>
+        <div
+          role="radiogroup"
+          aria-label={label}
+          aria-describedby={descId}
+          className={className}
+          onKeyDown={onKeyDown}
+        >
+          {options.map((o) => {
+            const on = o.key === value;
+            const Icon = o.icon;
+            return (
+              <button
+                key={o.key}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                tabIndex={on ? 0 : -1}
+                onClick={() => onChange(o.key)}
+                className={`flex items-center gap-2 min-w-0 text-left rounded-lg border px-3 py-2 text-sm leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${
+                  on
+                    ? "border-brand bg-brand-soft/70 font-semibold text-foreground"
+                    : "border-border bg-card font-medium text-muted-foreground hover:border-brand/50 hover:text-foreground"
+                }`}
+              >
+                {Icon ? (
+                  <Icon className={`size-4 shrink-0 ${on ? "text-brand" : ""}`} aria-hidden />
+                ) : (
+                  <RadioDot on={on} />
+                )}
+                <span className="min-w-0">{o.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {sel && (sel.hint || sel.example) && (
+          <p id={descId} aria-live="polite" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {sel.hint && <span>{sel.hint}</span>}
+            {sel.example && (
+              <span className="rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono tabular-nums text-foreground">
+                {sel.example}
+              </span>
+            )}
+          </p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div role="radiogroup" aria-label={label} className={className} onKeyDown={onKeyDown}>
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            tabIndex={on ? 0 : -1}
+            onClick={() => onChange(o.key)}
+            className={`flex flex-col justify-start text-left rounded-xl border p-4 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${
+              on ? "border-brand bg-brand-soft/70" : "border-border bg-card hover:border-brand/50"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <RadioDot on={on} />
+              <span className="font-semibold">{o.label}</span>
+              {o.meta !== undefined && (
+                <span className="ml-auto text-xs text-muted-foreground tabular-nums">{o.meta}</span>
+              )}
+            </span>
+            {o.hint && <span className="block text-xs text-muted-foreground mt-1.5 pl-6">{o.hint}</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* Cards & detail grids                                                */
 /* ------------------------------------------------------------------ */
@@ -757,10 +1082,12 @@ const DETAIL_COLS: Record<1 | 2 | 3, string> = {
 export function DetailGrid({ items, columns }: { items: DetailItem[]; columns?: 1 | 2 | 3 }) {
   const max = useContext(DetailColumns);
   const cols = Math.min(columns ?? 3, max) as 1 | 2 | 3;
+  // Full-width items go last so they never split a row and leave short fields stranded.
+  const ordered = [...items.filter((it) => !it.full), ...items.filter((it) => it.full)];
   return (
     <div>
       <dl className={`grid ${DETAIL_COLS[cols]} gap-x-10`}>
-        {items.map((it, i) => {
+        {ordered.map((it, i) => {
           const empty = it.value === null || it.value === undefined || it.value === "";
           return (
             <div
@@ -1142,6 +1469,7 @@ export function DataTable<T>({
   rows,
   rowKey,
   numbered = true,
+  dense = false,
   onRowClick,
   empty = "No records found.",
   rowClassName,
@@ -1159,6 +1487,8 @@ export function DataTable<T>({
   rows: T[];
   rowKey: (row: T) => string;
   numbered?: boolean;
+  /** Shorter rows for previews and other secondary tables. */
+  dense?: boolean;
   onRowClick?: (row: T) => void;
   empty?: ReactNode;
   rowClassName?: (row: T) => string;
@@ -1168,6 +1498,7 @@ export function DataTable<T>({
   /** Paginate client-side with a "Showing x–y of n" footer. */
   pageSize?: number;
 }) {
+  const cellPad = dense ? "py-2" : "py-3.5";
   const alignCls = (a?: string) =>
     a === "right" ? "text-right" : a === "center" ? "text-center" : "text-left";
   const [page, setPage] = useState(0);
@@ -1181,18 +1512,18 @@ export function DataTable<T>({
   return (
     <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
       <div
-        className="relative overflow-x-auto"
+        className="relative overflow-x-auto overflow-y-hidden"
         tabIndex={0}
         role="region"
         aria-label={caption ?? "Data table"}
       >
         {/* Min width per column so narrow screens scroll the table instead of crushing cells into tall stacks. */}
-        <table className="w-full text-sm" style={{ minWidth: columns.length * 96 + (numbered ? 48 : 0) }}>
+        <table className="w-full text-sm" style={{ minWidth: columns.length * 88 + (numbered ? 48 : 0) }}>
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead>
             <tr className="bg-navy text-navy-foreground">
               {numbered && (
-                <th scope="col" className="px-4 py-3.5 text-left font-semibold w-12">
+                <th scope="col" className={`px-2.5 first:pl-4 last:pr-4 ${cellPad} text-left font-semibold w-12`}>
                   <span aria-hidden>#</span>
                   <span className="sr-only">Row number</span>
                 </th>
@@ -1201,7 +1532,7 @@ export function DataTable<T>({
                 <th
                   key={c.key}
                   scope="col"
-                  className={`px-4 py-3.5 font-semibold whitespace-nowrap ${alignCls(c.align)}`}
+                  className={`px-2.5 first:pl-4 last:pr-4 ${cellPad} font-semibold whitespace-nowrap ${alignCls(c.align)}`}
                   style={c.width ? { width: c.width } : undefined}
                 >
                   {c.header}
@@ -1213,7 +1544,7 @@ export function DataTable<T>({
             {loading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={`sk${i}`} aria-hidden>
-                  <td colSpan={columns.length + (numbered ? 1 : 0)} className="px-4 py-3.5">
+                  <td colSpan={columns.length + (numbered ? 1 : 0)} className={`px-2.5 first:pl-4 last:pr-4 ${cellPad}`}>
                     <Skeleton className="h-5 w-full" />
                   </td>
                 </tr>
@@ -1252,14 +1583,14 @@ export function DataTable<T>({
                     className={`${sel ? "bg-brand-soft" : i % 2 === 1 ? "bg-muted/30" : ""} ${onRowClick ? "cursor-pointer hover:bg-brand-soft/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand" : ""} ${rowClassName?.(r) ?? ""}`}
                   >
                     {numbered && (
-                      <td className="px-4 py-3.5 text-muted-foreground tabular-nums">
+                      <td className={`px-2.5 first:pl-4 last:pr-4 ${cellPad} text-muted-foreground tabular-nums`}>
                         {start + i + 1}
                       </td>
                     )}
                     {columns.map((c) => (
                       <td
                         key={c.key}
-                        className={`px-4 py-3.5 ${alignCls(c.align)} ${c.align === "right" || c.align === "center" ? "whitespace-nowrap" : ""} ${c.className ?? ""}`}
+                        className={`px-2.5 first:pl-4 last:pr-4 ${cellPad} ${alignCls(c.align)} ${c.align === "right" || c.align === "center" ? "whitespace-nowrap" : ""} ${c.className ?? ""}`}
                       >
                         {c.cell(r, start + i)}
                       </td>

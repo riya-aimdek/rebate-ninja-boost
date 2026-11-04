@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { ArrowRight, Check, Pause, Pencil, Plus, Power, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,8 @@ import {
   notifyUndo,
   pct,
   type Column,
+  MissingHint,
+  missingFields,
 } from "@/components/pricing/kit";
 import {
   COMPETITOR_STRATEGIES,
@@ -916,6 +918,12 @@ function RuleModal({
     }, 400);
   };
   const isComp = r.trigger === "COMPETITOR_PRICE_CHANGE";
+  const hintId = useId();
+  const missing = missingFields([
+    ["Rule name", r.name],
+    ["Scope", r.scope],
+    ["Undercut by (%)", r.undercutPct, isComp && r.competitorStrategy === "UNDERCUT_BY_PCT"],
+  ]);
 
   return (
     <Modal
@@ -927,10 +935,17 @@ function RuleModal({
       dismissible={!dirty && !saving}
       footer={
         <>
+          <MissingHint id={hintId} missing={missing} />
           <Btn variant="subtle" onClick={onClose} disabled={saving}>
             Cancel
           </Btn>
-          <Btn type="submit" form="repricing-rule-form" loading={saving}>
+          <Btn
+            type="submit"
+            form="repricing-rule-form"
+            loading={saving}
+            disabled={missing.length > 0}
+            aria-describedby={missing.length ? hintId : undefined}
+          >
             {rule ? "Save rule" : "Create rule"}
           </Btn>
         </>

@@ -225,7 +225,7 @@ function Preferences() {
         </>
       }
     >
-      <div className="overflow-x-auto" role="region" aria-label="Notification preferences" tabIndex={0}>
+      <div className="overflow-x-auto overflow-y-hidden" role="region" aria-label="Notification preferences" tabIndex={0}>
         <table className="w-full text-sm min-w-[640px]">
           <caption className="sr-only">Channels per event</caption>
           <thead>

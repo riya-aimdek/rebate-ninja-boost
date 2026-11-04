@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Compass, Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,7 @@ import {
   FilterPills,
   InfoBanner,
   ListHeader,
+  MissingHint,
   Modal,
   PricingLayout,
   StatusPill,
@@ -21,6 +22,7 @@ import {
   Toggle,
   humanize,
   inputCls,
+  missingFields,
   type ApiError,
 } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
@@ -87,6 +89,16 @@ function Flows() {
     setError(null);
   };
   const dirty = editing !== null && JSON.stringify(editing) !== origin;
+  const hintId = useId();
+  const missing = editing
+    ? missingFields([
+        ["Flow name", editing.name],
+        ["Effective from", editing.effectiveFrom],
+        ["Reason code", editing.reasonCode ?? "", editing.version > 1],
+        ...editing.questions.map((q) => [`${q.id} question`, q.text] as [string, string]),
+        ...editing.outcomes.map((o, i) => [`Outcome ${i + 1} name`, o.label] as [string, string]),
+      ])
+    : [];
 
   const save = (activate: boolean) => {
     if (!editing) return;
@@ -212,13 +224,14 @@ function Flows() {
         subtitle={dirty ? "Unsaved changes" : "Questions, branching and outcomes. Saving keeps it in draft."}
         footer={
           <>
+            <MissingHint id={hintId} missing={missing} />
             <Btn variant="subtle" onClick={() => setEditing(null)} disabled={!!saving}>
               Cancel
             </Btn>
-            <Btn variant="outline" loading={saving === "save"} disabled={!!saving} onClick={() => save(false)}>
+            <Btn variant="outline" loading={saving === "save"} disabled={!!saving || missing.length > 0} aria-describedby={missing.length ? hintId : undefined} onClick={() => save(false)}>
               Save draft
             </Btn>
-            <Btn loading={saving === "activate"} disabled={!!saving} onClick={() => save(true)}>
+            <Btn loading={saving === "activate"} disabled={!!saving || missing.length > 0} aria-describedby={missing.length ? hintId : undefined} onClick={() => save(true)}>
               Save and activate
             </Btn>
           </>

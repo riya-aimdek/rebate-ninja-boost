@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { History, KeyRound, Pencil, RefreshCw, RotateCcw, Send, ServerCog } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,7 @@ import {
   Flag,
   InfoBanner,
   ListHeader,
+  MissingHint,
   Modal,
   PillTabs,
   PricingLayout,
@@ -25,6 +26,7 @@ import {
   Tag,
   humanize,
   inputCls,
+  missingFields,
   money,
   notifySuccess,
   type ApiError,
@@ -145,6 +147,13 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
   const [runDate, setRunDate] = useState("2026-11-15");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const publishHintId = useId();
+  const missingPublish = missingFields([
+    ["Price list", listId],
+    ["Destination", destId],
+    ["Mode", mode],
+    ["Run date", runDate],
+  ]);
   const list = listById(listId)!;
   const dest = destinationById(destId) ?? dests[0];
   const gates = gateLines(list, runDate);
@@ -237,10 +246,11 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
       subtitle="Only approved, valid prices effective on the run date are sent. Everything else is rejected or held and logged."
       footer={
         <>
+          <MissingHint id={publishHintId} missing={missingPublish} />
           <Btn variant="subtle" onClick={onClose} disabled={busy}>
             Cancel
           </Btn>
-          <Btn type="submit" form="publish-form" icon={Send} loading={busy}>
+          <Btn type="submit" form="publish-form" icon={Send} loading={busy} disabled={missingPublish.length > 0} aria-describedby={missingPublish.length ? publishHintId : undefined}>
             {sent.length ? `Publish ${sent.length} record${sent.length === 1 ? "" : "s"}` : "Record rejected attempt"}
           </Btn>
         </>
@@ -302,7 +312,7 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
         {sample && (
           <details className="mt-4 text-sm">
             <summary className="cursor-pointer font-semibold text-brand">Payload preview (first record)</summary>
-            <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto">
+            <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto overflow-y-hidden">
               {JSON.stringify(
                 { product: sample.line.sku, scope, price: sample.line.price, currency: list.currency, uom: sample.line.uom, quantityBand: { min: sample.line.minQty, max: sample.line.maxQty ?? null }, validFrom: sample.effectiveFrom, validTo: sample.line.effectiveTo ?? list.effectiveTo ?? null, listVersion: `${list.id} v${list.version}`, changeType: list.version > 1 ? "UPDATE" : "CREATE" },
                 null,
@@ -642,6 +652,12 @@ function RollbackModal({ pub, dest, pending, userId, onClose, onCreate, nextId }
   if (!comments.trim()) errs["rb-comments"] = "Explain what was wrong and what is being restored.";
   if (scope === "SELECTED" && picked.length === 0) errs["rb-scope"] = "Select at least one record, or reverse the whole publication.";
   const fe = (k: string) => (submitted ? errs[k] : undefined);
+  const rollbackHintId = useId();
+  const missingRollback = missingFields([
+    ["Selected records", picked, scope === "SELECTED"],
+    ["Reason code", reasonCode],
+    ["Comments", comments],
+  ]);
 
   const review = (e?: FormEvent) => {
     e?.preventDefault();
@@ -706,10 +722,11 @@ function RollbackModal({ pub, dest, pending, userId, onClose, onCreate, nextId }
         subtitle={`${pub.listName} ${pub.listVersion} on ${dest.name}. Nothing is deleted — the original, the request and the correction all stay in the audit history.`}
         footer={
           <>
+            <MissingHint id={rollbackHintId} missing={missingRollback} />
             <Btn variant="subtle" onClick={onClose}>
               Cancel
             </Btn>
-            <Btn type="submit" form="rollback-form" icon={RotateCcw}>
+            <Btn type="submit" form="rollback-form" icon={RotateCcw} disabled={missingRollback.length > 0} aria-describedby={missingRollback.length ? rollbackHintId : undefined}>
               Review rollback
             </Btn>
           </>
@@ -873,6 +890,14 @@ function DestinationForm({ dest, onClose, onSave }: { dest: Destination; onClose
   if (f.authorizedRegions.length === 0) errs["d-regions"] = "Authorize at least one region.";
   if (f.modes.length === 0) errs["d-modes"] = "Choose at least one mode.";
   const fe = (k: string) => (submitted ? errs[k] : undefined);
+  const destHintId = useId();
+  const missingDest = missingFields([
+    ["Name", f.name],
+    ["Endpoint", f.endpoint],
+    ["Batch size", f.batchSize ? String(f.batchSize) : ""],
+    ["Modes", f.modes],
+    ["Authorized regions", f.authorizedRegions],
+  ]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
@@ -892,10 +917,11 @@ function DestinationForm({ dest, onClose, onSave }: { dest: Destination; onClose
       subtitle={dirty ? "Unsaved changes" : "Changes apply to the next publication."}
       footer={
         <>
+          <MissingHint id={destHintId} missing={missingDest} />
           <Btn variant="subtle" onClick={onClose} disabled={busy}>
             Cancel
           </Btn>
-          <Btn type="submit" form="dest-form" loading={busy}>
+          <Btn type="submit" form="dest-form" loading={busy} disabled={missingDest.length > 0} aria-describedby={missingDest.length ? destHintId : undefined}>
             Save destination
           </Btn>
         </>
@@ -939,7 +965,9 @@ function DestinationForm({ dest, onClose, onSave }: { dest: Destination; onClose
           </select>
         </Field>
         <fieldset id="d-modes" tabIndex={-1}>
-          <legend className="text-sm font-medium mb-2">Modes</legend>
+          <legend className="text-sm font-medium mb-2">
+            Modes<span className="text-destructive ml-0.5" aria-hidden>*</span>
+          </legend>
           <div className="flex gap-4 text-sm">
             {(["BATCH", "EVENT"] as const).map((m) => (
               <label key={m} className="inline-flex items-center gap-2 h-10">
@@ -950,7 +978,9 @@ function DestinationForm({ dest, onClose, onSave }: { dest: Destination; onClose
           {fe("d-modes") && <p className="text-xs text-destructive">{fe("d-modes")}</p>}
         </fieldset>
         <fieldset id="d-regions" tabIndex={-1} className="md:col-span-2">
-          <legend className="text-sm font-medium mb-2">Authorized regions</legend>
+          <legend className="text-sm font-medium mb-2">
+            Authorized regions<span className="text-destructive ml-0.5" aria-hidden>*</span>
+          </legend>
           <div className="flex flex-wrap gap-4 text-sm">
             {REGIONS.map((r) => (
               <label key={r} className="inline-flex items-center gap-2 h-10">
@@ -1040,7 +1070,7 @@ function ReadApiTab() {
           <p className="text-sm font-mono break-all">
             {resp.req} → <span className={resp.status === 200 ? "text-success" : "text-destructive"}>{resp.status}</span>
           </p>
-          <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto">{JSON.stringify(resp.body, null, 2)}</pre>
+          <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(resp.body, null, 2)}</pre>
         </div>
       )}
     </Card>
@@ -1153,7 +1183,7 @@ function IdempotencyTab() {
               <span className={`font-mono font-semibold ${resp.status < 300 ? "text-success" : "text-destructive"}`}>HTTP {resp.status}</span>
               <span>{resp.note}</span>
             </div>
-            <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto">{JSON.stringify(resp.body, null, 2)}</pre>
+            <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(resp.body, null, 2)}</pre>
           </div>
         )}
       </Card>

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { TODAY } from "@/lib/pricing/csv";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, RefreshCw, Settings2, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -17,6 +17,7 @@ import {
   InfoBanner,
   KpiTile,
   ListHeader,
+  MissingHint,
   Modal,
   PricingLayout,
   Price,
@@ -26,6 +27,7 @@ import {
   Tag,
   humanize,
   inputCls,
+  missingFields,
   money,
   notifyUndo,
   pct,
@@ -559,6 +561,7 @@ function RecommendationsPage() {
         title={`Reject ${bulkRejectable.length} ${bulkRejectable.length === 1 ? "recommendation" : "recommendations"}?`}
         description={`Forgoes ${signedMoney(bulkRejectImpact)} of expected margin impact. The reason is logged against each item.`}
         confirmLabel={`Reject ${bulkRejectable.length}`}
+        missing={missingFields([["Reason code", bulkReason]])}
         onConfirm={bulkReject}
         onCancel={() => {
           setBulk(null);
@@ -748,6 +751,13 @@ function DecisionModal({
   const [reason, setReason] = useState("");
   const [reasonText, setReasonText] = useState("");
   const [err, setErr] = useState<ApiError | null>(null);
+  const hintId = useId();
+  // The decision button stays disabled until this decision's required fields have values.
+  const decisionMissing = missingFields([
+    ["Modified price", modified, kind === "MODIFY"],
+    ["Reason code", reason, kind === "REJECT"],
+    ["Reason text", reasonText, kind === "REJECT" && reason === "OTHER"],
+  ]);
 
   const modNum = Number(modified);
   const modMargin = modified ? marginPct(modNum, rec.sku) : undefined;
@@ -796,10 +806,16 @@ function DecisionModal({
       dismissible={!modified && !reason && !reasonText}
       footer={
         <>
+          <MissingHint id={hintId} missing={decisionMissing} />
           <Btn variant="subtle" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn variant={kind === "REJECT" ? "danger" : "primary"} onClick={submit}>
+          <Btn
+            variant={kind === "REJECT" ? "danger" : "primary"}
+            onClick={submit}
+            disabled={decisionMissing.length > 0}
+            aria-describedby={decisionMissing.length ? hintId : undefined}
+          >
             {kind === "REJECT" ? "Reject" : kind === "MODIFY" ? "Save modification" : "Accept"}
           </Btn>
         </>
@@ -823,7 +839,7 @@ function DecisionModal({
               step="0.01"
               min={0.01}
               inputMode="decimal"
-              onKeyDown={(e) => e.key === "Enter" && submit()}
+              onKeyDown={(e) => e.key === "Enter" && decisionMissing.length === 0 && submit()}
               value={modified}
               aria-invalid={err?.field === "decision.modifiedPrice"}
               onChange={(e) => setModified(e.target.value)}

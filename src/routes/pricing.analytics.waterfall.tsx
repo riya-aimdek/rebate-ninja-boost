@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, Settings2, Trash2, Waves } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -23,6 +23,8 @@ import {
   notifySuccess,
   pct,
   type ApiError,
+  MissingHint,
+  missingFields,
 } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
 import { ChartLegend, DrillTrail, Freshness } from "@/components/pricing/analytics-ui";
@@ -377,7 +379,7 @@ function BridgeTable({ def, cur, prev, period }: { def: WaterfallLevel[]; cur: R
   const rows = def.filter((l) => typeof c[l.key] === "number").map((l) => ({ key: l.key, label: l.label, now: c[l.key], before: p[l.key], change: c[l.key] - p[l.key], total: isTotal(l.kind) }));
   const [a, b] = period === "2026-Q3" ? ["Q2", "Q3"] : ["Q3", "Q2"];
   return (
-    <div className="overflow-x-auto -mx-2" role="region" aria-label="Price bridge" tabIndex={0}>
+    <div className="overflow-x-auto overflow-y-hidden -mx-2" role="region" aria-label="Price bridge" tabIndex={0}>
       <table className="w-full text-sm min-w-[320px]">
         <caption className="sr-only">Per-unit change in each waterfall component, {a} to {b}</caption>
         <thead>
@@ -430,6 +432,8 @@ function DefinitionEditor({ open, def, onClose, onSave }: { open: boolean; def: 
     setLastOpen(true);
   } else if (!open && lastOpen) setLastOpen(false);
   const dirty = JSON.stringify(draft) !== JSON.stringify(def);
+  const hintId = useId();
+  const missing = missingFields(draft.map((l, i) => [`Label (level ${i + 1})`, l.label] as [string, unknown]));
   const update = (i: number, patch: Partial<WaterfallLevel>) => setDraft(draft.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const move = (i: number, d: -1 | 1) => {
     const next = [...draft];
@@ -460,10 +464,13 @@ function DefinitionEditor({ open, def, onClose, onSave }: { open: boolean; def: 
       subtitle="Levels are applied in this order. Components must reconcile to invoice, pocket price and pocket margin."
       footer={
         <>
+          <MissingHint id={hintId} missing={missing} />
           <Btn variant="subtle" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn onClick={save}>Save definition</Btn>
+          <Btn onClick={save} disabled={missing.length > 0} aria-describedby={missing.length ? hintId : undefined}>
+            Save definition
+          </Btn>
         </>
       }
     >
@@ -472,7 +479,7 @@ function DefinitionEditor({ open, def, onClose, onSave }: { open: boolean; def: 
         {draft.map((l, i) => (
           <li key={`${l.key}-${i}`} className="grid grid-cols-1 sm:grid-cols-[2rem_1fr_1fr_auto] items-end gap-3 border-b border-border pb-3">
             <span className="text-sm text-muted-foreground tabular-nums sm:pb-2.5">{i + 1}</span>
-            <Field label="Label">
+            <Field label="Label" required>
               <input className={inputCls} value={l.label} onChange={(e) => update(i, { label: e.target.value })} />
             </Field>
             <Field label="Kind">

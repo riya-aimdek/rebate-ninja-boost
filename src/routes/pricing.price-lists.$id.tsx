@@ -16,7 +16,7 @@ import {
   Undo2,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -47,6 +47,8 @@ import {
   notifyUndo,
   type ApiError,
   type Column,
+  MissingHint,
+  missingFields,
 } from "@/components/pricing/kit";
 import {
   DropdownMenu,
@@ -242,6 +244,14 @@ function Detail({ source }: { source: PriceList }) {
   const [staleDemo, setStaleDemo] = useState(false);
   const [actionErr, setActionErr] = useState<{ comment?: string; schedule?: string }>({});
   const [busy, setBusy] = useState(false);
+  const actionHintId = useId();
+  // Comment is required for REJECT / SEND_BACK / CANCEL; the date for SCHEDULE.
+  const actionMissing = actionModal
+    ? missingFields([
+        ["Comment", comment, TRANSITIONS[actionModal].comment],
+        ["Activation date", scheduleAt, actionModal === "SCHEDULE"],
+      ])
+    : [];
 
   const locked = !["DRAFT"].includes(list.status);
   const derived = !!list.parentId;
@@ -572,6 +582,7 @@ function Detail({ source }: { source: PriceList }) {
         dismissible={!busy && !comment.trim()}
         footer={
           <>
+            <MissingHint id={actionHintId} missing={actionMissing} />
             <Btn
               variant="subtle"
               onClick={() => setActionModal(null)}
@@ -591,6 +602,8 @@ function Detail({ source }: { source: PriceList }) {
               form="transition-form"
               variant={actionModal && DESTRUCTIVE.includes(actionModal) ? "danger" : "primary"}
               loading={busy}
+              disabled={actionMissing.length > 0}
+              aria-describedby={actionMissing.length ? actionHintId : undefined}
             >
               {actionModal
                 ? actionModal === "SUBMIT"
@@ -1146,6 +1159,12 @@ function PriceEditModal({
   const [text, setText] = useState("");
   const [err, setErr] = useState<{ price?: string; reason?: string; text?: string }>({});
   const [lastId, setLastId] = useState<string | null>(null);
+  const hintId = useId();
+  const missing = missingFields([
+    ["New price", price],
+    ["Reason code", reason],
+    ["Reason text", text, reason === "OTHER"],
+  ]);
   if (line && line.id !== lastId) {
     setLastId(line.id);
     setPrice(line.price?.toString() ?? "");
@@ -1188,10 +1207,16 @@ function PriceEditModal({
       dismissible={!dirty}
       footer={
         <>
+          <MissingHint id={hintId} missing={missing} />
           <Btn variant="subtle" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn type="submit" form="price-edit-form">
+          <Btn
+            type="submit"
+            form="price-edit-form"
+            disabled={missing.length > 0}
+            aria-describedby={missing.length ? hintId : undefined}
+          >
             Save price
           </Btn>
         </>
@@ -1281,6 +1306,12 @@ function OverrideModal({
     expires?: string;
   }>({});
   const [lastId, setLastId] = useState<string | null>(null);
+  const hintId = useId();
+  const missing = missingFields([
+    ["Override price", price],
+    ["Override reason code", reason],
+    ["Reason text", reasonText, reason === "OTHER"],
+  ]);
   if (line && line.id !== lastId) {
     setLastId(line.id);
     setPrice(line.overridePrice?.toString() ?? "");
@@ -1353,10 +1384,16 @@ function OverrideModal({
               Remove override
             </Btn>
           )}
+          <MissingHint id={hintId} missing={missing} />
           <Btn variant="subtle" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn type="submit" form="override-form">
+          <Btn
+            type="submit"
+            form="override-form"
+            disabled={missing.length > 0}
+            aria-describedby={missing.length ? hintId : undefined}
+          >
             Save override
           </Btn>
         </>
@@ -1595,7 +1632,7 @@ function DerivationTab({
         {ran && (
           <div className="mt-5 space-y-4" role="status">
             <div
-              className="relative overflow-x-auto rounded-lg border border-border"
+              className="relative overflow-x-auto overflow-y-hidden rounded-lg border border-border"
               tabIndex={0}
               role="region"
               aria-label="Recalculated derivation chain"
@@ -2082,6 +2119,13 @@ function AddLineModal({ open, list, onClose, onAdd }: { open: boolean; list: Pri
   const blank = { sku: "", price: "", uom: list.uom ?? "EA", minQty: "1", maxQty: "", allowZero: false };
   const [f, setF] = useState(blank);
   const [submitted, setSubmitted] = useState(false);
+  const hintId = useId();
+  const missing = missingFields([
+    ["Product", f.sku],
+    ["Price", f.price, !f.allowZero],
+    ["Unit of measure", f.uom],
+    ["Min qty", f.minQty],
+  ]);
   useEffect(() => {
     if (open) {
       setF({ ...blank, uom: list.uom ?? "EA" });
@@ -2133,10 +2177,17 @@ function AddLineModal({ open, list, onClose, onAdd }: { open: boolean; list: Pri
       subtitle={`${list.name} · ${list.currency} · effective ${list.effectiveFrom} → list end`}
       footer={
         <>
+          <MissingHint id={hintId} missing={missing} />
           <Btn variant="subtle" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn type="submit" form="add-line-form" icon={Plus}>
+          <Btn
+            type="submit"
+            form="add-line-form"
+            icon={Plus}
+            disabled={missing.length > 0}
+            aria-describedby={missing.length ? hintId : undefined}
+          >
             Add line
           </Btn>
         </>

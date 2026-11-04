@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   CheckCircle2,
   XCircle,
@@ -24,6 +24,8 @@ import {
   Card,
   Field,
   inputCls,
+  MissingHint,
+  missingFields,
   PillTabs,
   Segmented,
   Modal,
@@ -889,15 +891,16 @@ function PageHeader(props: {
                 <ChevronDown className="size-4" aria-hidden />
               </Btn>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-0 max-h-80 overflow-auto">
-              <div className="px-4 py-3 border-b border-border text-sm font-semibold">Saved scenarios</div>
+            {/* Heading stays put; only the list below it scrolls. */}
+            <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-0 max-h-80 flex flex-col overflow-hidden">
+              <div className="shrink-0 px-4 py-3 border-b border-border text-sm font-semibold">Saved scenarios</div>
               {props.savedScenarios.length === 0 ? (
                 <div className="px-4 py-6 text-center">
                   <p className="text-sm font-medium">No saved scenarios yet</p>
                   <p className="mt-1 text-xs text-muted-foreground">Save the current inputs to compare options later. You can keep up to 5.</p>
                 </div>
               ) : (
-                <ul>
+                <ul className="min-h-0 overflow-y-auto">
                   {props.savedScenarios.map((s) => (
                     <li key={s.id} className="px-4 py-2 border-b border-border last:border-0 flex items-center gap-2 text-sm">
                       <div className="flex-1 min-w-0">
@@ -1250,7 +1253,7 @@ function GrowthConfig({
         </Btn>
       }
     >
-      <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Growth scenario inputs (scrolls horizontally)">
+      <div className="relative overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label="Growth scenario inputs (scrolls horizontally)">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left border-b border-border">
@@ -1567,7 +1570,7 @@ function ResultsTable({
           <span>{fullName}</span>
         </h3>
       </div>
-      <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label={`${fullName} results (scrolls horizontally)`}>
+      <div className="relative overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label={`${fullName} results (scrolls horizontally)`}>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
@@ -1752,7 +1755,7 @@ function TotalSummary({
         <h3 id="rm-total-summary" className="font-semibold text-base">Total summary <span className="text-muted-foreground font-normal text-sm">(EW + SOC + NBU combined)</span></h3>
         <span className="text-xs text-muted-foreground">All layers added together</span>
       </div>
-      <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Total summary (scrolls horizontally)">
+      <div className="relative overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label="Total summary (scrolls horizontally)">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40">
@@ -1900,7 +1903,7 @@ function VarianceAnalysis({
       </div>
 
       <section aria-label="Variance table" className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-        <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Variance table (scrolls horizontally)">
+        <div className="relative overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label="Variance table (scrolls horizontally)">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
@@ -2043,7 +2046,9 @@ function BKpi({ label, value, accent, chip }: { label: string; value: string; ac
 function SaveScenarioModal({
   open, name, setName, onCancel, onSave,
 }: { open: boolean; name: string; setName: (s: string) => void; onCancel: () => void; onSave: () => void }) {
-  const empty = !name.trim();
+  const missing = missingFields([["Scenario name", name]]);
+  const empty = missing.length > 0;
+  const hintId = useId();
   return (
     <Modal
       open={open}
@@ -2053,8 +2058,9 @@ function SaveScenarioModal({
       size="sm"
       footer={
         <>
+          <MissingHint id={hintId} missing={missing} />
           <Btn variant="subtle" onClick={onCancel}>Cancel</Btn>
-          <Btn type="submit" form="rm-save-form" icon={Bookmark} disabled={empty} title={empty ? "Enter a scenario name to save" : undefined}>
+          <Btn type="submit" form="rm-save-form" icon={Bookmark} disabled={empty} aria-describedby={empty ? hintId : undefined}>
             Save
           </Btn>
         </>

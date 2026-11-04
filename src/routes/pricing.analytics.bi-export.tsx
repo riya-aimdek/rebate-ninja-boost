@@ -225,7 +225,7 @@ function Page() {
                   Copy URL
                 </Btn>
               </div>
-              <pre className="rounded-lg bg-muted px-4 py-3 text-xs overflow-x-auto whitespace-pre" tabIndex={0} aria-label="API request and response headers">
+              <pre className="rounded-lg bg-muted px-4 py-3 text-xs overflow-x-auto overflow-y-hidden whitespace-pre" tabIndex={0} aria-label="API request and response headers">
                 {request}
               </pre>
             </div>

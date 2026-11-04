@@ -48,7 +48,7 @@ const statusTone: Record<Status, Tone> = {
 const STATUSES: Status[] = ["Paid", "Approved", "Pending", "On hold"];
 
 function PayoutSummaryPage() {
-  const [status, setStatus] = useState<"all" | Status>("all");
+  const [statuses, setStatuses] = useState<Status[]>([]);
   const [program, setProgram] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -56,7 +56,7 @@ function PayoutSummaryPage() {
     () =>
       ROWS.filter(
         (r) =>
-          (status === "all" || r.status === status) &&
+          (statuses.length === 0 || statuses.includes(r.status)) &&
           (program === "all" || r.program === program) &&
           (!from || r.scheduled >= from) &&
           (!to || r.scheduled <= to),
@@ -77,10 +77,10 @@ function PayoutSummaryPage() {
   const programs = Array.from(new Set(ROWS.map((r) => r.program)));
   const dateError = from && to && from > to ? "End date must be on or after the start date" : undefined;
 
-  const activeCount = [program !== "all", status !== "all", from !== "", to !== ""].filter(Boolean).length;
+  const activeCount = [program !== "all", statuses.length > 0, from !== "", to !== ""].filter(Boolean).length;
   const clearFilters = () => {
     setProgram("all");
-    setStatus("all");
+    setStatuses([]);
     setFrom("");
     setTo("");
   };
@@ -169,9 +169,8 @@ function PayoutSummaryPage() {
 
       <FilterPills<Status>
         label="Status"
-        multiple={false}
-        selected={status === "all" ? [] : [status]}
-        onChange={(next) => setStatus(next[0] ?? "all")}
+        selected={statuses}
+        onChange={setStatuses}
         options={STATUSES.map((s) => ({ key: s, label: s, count: statusBase.filter((r) => r.status === s).length }))}
       />
 

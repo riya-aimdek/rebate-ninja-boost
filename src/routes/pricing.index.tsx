@@ -427,7 +427,7 @@ function TypeBreakdown() {
 
 function ExpiryTimeline({ items }: { items: Array<{ list: (typeof PRICE_LISTS)[number]; days: number }> }) {
   const [sel, setSel] = useState<Range[]>([]);
-  const shown = sel.length ? items.filter((e) => RANGES[sel[0]].test(e.days)) : items;
+  const shown = sel.length ? items.filter((e) => sel.some((r) => RANGES[r].test(e.days))) : items;
   const n = (r: Range) => items.filter((e) => RANGES[r].test(e.days)).length;
 
   return (
@@ -438,7 +438,6 @@ function ExpiryTimeline({ items }: { items: Array<{ list: (typeof PRICE_LISTS)[n
         <FilterPills<Range>
           label="Expires in"
           showLabel={false}
-          multiple={false}
           selected={sel}
           onChange={setSel}
           className=""
@@ -450,7 +449,7 @@ function ExpiryTimeline({ items }: { items: Array<{ list: (typeof PRICE_LISTS)[n
       {shown.length === 0 ? (
         <div className="px-6 py-6">
           <EmptyState
-            title={sel.length ? `No price lists expire in ${RANGES[sel[0]].text}` : `Nothing expires in the next ${WINDOW_DAYS} days`}
+            title={sel.length ? `No price lists expire in ${sel.map((r) => RANGES[r].text).join(" or ")}` : `Nothing expires in the next ${WINDOW_DAYS} days`}
             action={
               sel.length ? (
                 <Btn variant="subtle" onClick={() => setSel([])}>

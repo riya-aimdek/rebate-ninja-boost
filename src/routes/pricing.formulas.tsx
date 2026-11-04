@@ -1,5 +1,5 @@
 import { createFileRoute, useBlocker } from "@tanstack/react-router";
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { CheckCircle2, ChevronDown, FlaskConical, Plus, RefreshCw, Save, Trash2, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -13,11 +13,13 @@ import {
   Flag,
   InfoBanner,
   ListHeader,
+  MissingHint,
   PricingLayout,
   StatusPill,
   Tag,
   humanize,
   inputCls,
+  missingFields,
   money,
   notifyUndo,
   type ApiError,
@@ -102,6 +104,7 @@ function Page() {
   const [submitted, setSubmitted] = useState(false);
   const [exprTouched, setExprTouched] = useState(false);
   const [busy, setBusy] = useState<"save" | "activate" | "test" | null>(null);
+  const formulaHintId = useId();
   const [confirmActivate, setConfirmActivate] = useState(false);
   const [confirmSwitch, setConfirmSwitch] = useState<Formula | "new" | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -198,6 +201,15 @@ function Page() {
       fieldErrs[`formula-var-${i}-source`] = v.sourceType === "CONSTANT" ? "Enter a number, e.g. 15.00." : `Choose a ${SOURCE_LABEL[v.sourceType].toLowerCase()}.`;
   });
   const fe = (k: string) => (submitted || (k === "formula-expression" && exprTouched) ? fieldErrs[k] : undefined);
+  // Save/Activate stay disabled until required fields have values; syntax and reference checks run on submit.
+  const formulaMissing = missingFields([
+    ["Formula name", draft.name],
+    ["Expression", draft.expression],
+    ...draft.variables.flatMap((v, i): Array<[string, unknown]> => [
+      [`Variable ${i + 1} name`, v.name],
+      [`Variable ${i + 1} ${v.sourceType === "CONSTANT" ? "value" : "source"}`, v.source],
+    ]),
+  ]);
   const limitsInvalid = !!(fieldErrs["formula-decimals"] || fieldErrs["formula-min"] || fieldErrs["formula-max"]);
 
   /** Save-time validation (US-ST-04): unknown variable, circular reference, divide-by-zero risk, currency & unit mismatch. */
@@ -426,16 +438,17 @@ function Page() {
             subtitle={`${draft.id} · last updated ${draft.lastUpdated}`}
             actions={
               <>
+                <MissingHint id={formulaHintId} missing={formulaMissing} />
                 {dirty && (
                   <Btn variant="subtle" icon={Undo2} onClick={discard} disabled={!!busy}>
                     {savedVersion ? "Discard changes" : "Cancel"}
                   </Btn>
                 )}
-                <Btn variant="outline" icon={Save} type="submit" loading={busy === "save"} disabled={!dirty || (!!busy && busy !== "save")} title={!dirty ? "No changes to save" : undefined}>
+                <Btn variant="outline" icon={Save} type="submit" loading={busy === "save"} disabled={!dirty || (!!busy && busy !== "save") || formulaMissing.length > 0} aria-describedby={formulaMissing.length ? formulaHintId : undefined} title={!dirty ? "No changes to save" : undefined}>
                   {draft.status === "ACTIVE" ? "Save changes" : "Save draft"}
                 </Btn>
                 {draft.status !== "ACTIVE" && (
-                  <Btn icon={Zap} onClick={requestActivate} disabled={!canActivate || !!busy} aria-describedby={!canActivate ? "formula-activate-why" : undefined}>
+                  <Btn icon={Zap} onClick={requestActivate} disabled={!canActivate || !!busy || formulaMissing.length > 0} aria-describedby={formulaMissing.length ? formulaHintId : !canActivate ? "formula-activate-why" : undefined}>
                     Activate
                   </Btn>
                 )}
@@ -557,7 +570,7 @@ function Page() {
           </Card>
 
           <Card title="Variables" subtitle="One row for each name in the expression. Pick where its value comes from." padded={false}>
-            <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Formula variables">
+            <div className="relative overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label="Formula variables">
               <table className="w-full text-sm min-w-[720px]">
                 <caption className="sr-only">Formula variables</caption>
                 <thead>

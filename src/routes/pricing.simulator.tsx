@@ -548,7 +548,7 @@ function SimulatorPage() {
               className="xl:col-span-2"
               padded={false}
             >
-              <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Scenario comparison table">
+              <div className="relative overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label="Scenario comparison table">
                 <table className="w-full text-sm">
                   <caption className="sr-only">Baseline versus each scenario: projected value and change for revenue, volume and margin</caption>
                   {/* Column groups make each scenario header's scope="colgroup" valid (value + change columns). */}

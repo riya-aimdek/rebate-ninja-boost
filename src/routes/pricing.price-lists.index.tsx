@@ -49,7 +49,7 @@ export const Route = createFileRoute("/pricing/price-lists/")({
   // `?status=ACTIVE` lets dashboard KPIs open this list pre-filtered.
   validateSearch: (s: Record<string, unknown>): ListSearch => ({
     status:
-      typeof s.status === "string" && (LIST_STATUSES as readonly string[]).includes(s.status)
+      typeof s.status === "string" && s.status.split(",").every((x) => (LIST_STATUSES as readonly string[]).includes(x))
         ? s.status
         : undefined,
   }),
@@ -206,7 +206,7 @@ function Page() {
         (l) =>
           (!q || `${l.id} ${l.name}`.toLowerCase().includes(q.toLowerCase())) &&
           (!filters.type || l.type === filters.type) &&
-          (!filters.status || l.status === filters.status) &&
+          (!filters.status || filters.status.split(",").includes(l.status)) &&
           (!filters.currency || l.currency === filters.currency) &&
           (!filters.region || l.region === filters.region),
       ),
@@ -336,9 +336,8 @@ function Page() {
       />
       <FilterPills<ListStatus>
         label="Status"
-        multiple={false}
-        selected={filters.status ? [filters.status as ListStatus] : []}
-        onChange={(next) => applyFilters({ ...filters, status: next[0] ?? "" })}
+        selected={filters.status ? (filters.status.split(",") as ListStatus[]) : []}
+        onChange={(next) => applyFilters({ ...filters, status: next.join(",") })}
         options={LIST_STATUSES.map((s) => ({
           key: s,
           label: humanize(s),

@@ -117,7 +117,7 @@ export function CustomerTree({
         )}
       </div>
 
-      <div role="tree" aria-label={label} className="overflow-x-auto">
+      <div role="tree" aria-label={label} className="overflow-x-auto overflow-y-hidden">
         <div>
           {rows.map((r, i) => {
             const open = !collapsed.has(r.c.id);

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
-import { Coins, ShieldCheck, Upload } from "lucide-react";
+import { Coins, ExternalLink, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -12,6 +12,7 @@ import {
   FilterChip,
   FilterPills,
   InfoBanner,
+  LinkBtn,
   ListHeader,
   Modal,
   PillTabs,
@@ -26,6 +27,7 @@ import {
   missingFields,
   money,
   notifySuccess,
+  toneCls,
   type ApiError,
 } from "@/components/pricing/kit";
 import {
@@ -40,6 +42,15 @@ import {
   type CostType,
 } from "@/lib/pricing/data";
 import { TODAY } from "@/lib/pricing/csv";
+
+/** Timeline axis ticks, placed at their real dates. */
+const AXIS_TICKS = [
+  { date: "2026-01-01", label: "Jan 2026" },
+  { date: "2026-07-01", label: "Jul 2026" },
+  { date: "2027-01-01", label: "Jan 2027" },
+  { date: "2027-07-01", label: "Jul 2027" },
+  { date: "2027-12-31", label: "Dec 2027" },
+];
 
 type TabKey = "records" | "history" | "config";
 const TABS: TabKey[] = ["records", "history", "config"];
@@ -88,7 +99,7 @@ function Page() {
   const setTab = (t: TabKey) => navigate({ search: (s: CostSearch) => ({ ...s, tab: t === "records" ? undefined : t }), replace: true });
   const setTimelineSku = (sku: string) => navigate({ search: (s: CostSearch) => ({ ...s, sku }), replace: true });
   const [q, setQ] = useState("");
-  const [type, setType] = useState("all");
+  const [types, setTypes] = useState<CostType[]>([]);
   const [plant, setPlant] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [marginDef, setMarginDef] = useState<CostType[]>(MARGIN_COST_DEFINITION);
@@ -102,6 +113,7 @@ function Page() {
   const marginDirty = [...marginDef].sort().join() !== [...savedMarginDef].sort().join();
   const draftDirty = JSON.stringify(draft) !== JSON.stringify(EMPTY);
   const importHintId = useId();
+  const marginHintId = useId();
   const importMissing = missingFields([
     ["SKU", draft.sku],
     ["Plant", draft.plant],
@@ -127,9 +139,9 @@ function Page() {
   const rows = useMemo(
     () =>
       costs
-        .filter((c) => (!q || [c.sku, c.plant, c.source].some((v) => v.toLowerCase().includes(q.toLowerCase()))) && (type === "all" || c.costType === type) && (plant === "all" || c.plant === plant))
+        .filter((c) => (!q || [c.sku, c.plant, c.source].some((v) => v.toLowerCase().includes(q.toLowerCase()))) && (types.length === 0 || types.includes(c.costType)) && (plant === "all" || c.plant === plant))
         .sort((a, b) => a.sku.localeCompare(b.sku) || a.costType.localeCompare(b.costType) || b.effectiveFrom.localeCompare(a.effectiveFrom)),
-    [costs, q, type, plant],
+    [costs, q, types, plant],
   );
 
   const ingest = () => {
@@ -289,9 +301,8 @@ function Page() {
         <>
           <FilterPills<CostType>
             label="Cost type"
-            multiple={false}
-            selected={type === "all" ? [] : [type as CostType]}
-            onChange={(next) => setType(next[0] ?? "all")}
+            selected={types}
+            onChange={setTypes}
             options={COST_TYPES.filter((t) => costs.some((c) => c.costType === t)).map((t) => ({ key: t, label: humanize(t), count: costs.filter((c) => c.costType === t).length }))}
           />
           {showFilters && (
@@ -325,7 +336,7 @@ function Page() {
                     variant="subtle"
                     onClick={() => {
                       setQ("");
-                      setType("all");
+                      setTypes([]);
                       setPlant("all");
                     }}
                   >
@@ -364,71 +375,113 @@ function Page() {
 
       {tab === "history" && (
         <div className="space-y-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <Field label="Product" className="w-full sm:w-80">
-            <select className={inputCls} value={timelineSku} onChange={(e) => setTimelineSku(e.target.value)}>
-              {skus.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                  {productName(s) ? ` — ${productName(s)}` : ""}
-                </option>
-              ))}
-            </select>
-          </Field>
-          {productName(timelineSku) && (
-            <RecordLink to="/pricing/products/$id" params={{ id: timelineSku }}>
-              Open {productName(timelineSku)}
-            </RecordLink>
-          )}
-        </div>
         <Card
           title="Timeline"
           subtitle="Jan 2026 – Dec 2027. Each bar is one cost record; records of the same type never overlap."
+          actions={
+            <>
+              <label htmlFor="timeline-sku" className="sr-only">
+                Product
+              </label>
+              <select
+                id="timeline-sku"
+                className={`${inputCls} w-64`}
+                value={timelineSku}
+                onChange={(e) => setTimelineSku(e.target.value)}
+              >
+                {skus.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                    {productName(s) ? ` — ${productName(s)}` : ""}
+                  </option>
+                ))}
+              </select>
+              {productName(timelineSku) && (
+                <LinkBtn to="/pricing/products/$id" params={{ id: timelineSku }} variant="outline" icon={ExternalLink}>
+                  View product
+                </LinkBtn>
+              )}
+            </>
+          }
         >
           {typesForSku.length === 0 ? (
             <p className="text-sm text-muted-foreground">No cost records received for {timelineSku}. Choose another product above.</p>
           ) : (
-          /* Fixed-width chart scrolls inside the card on narrow screens. */
-          <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label={`Cost timeline for ${timelineSku}`}>
-          <div className="relative min-w-[640px]">
-            <div className="flex justify-between text-xs text-muted-foreground mb-2 pl-40" aria-hidden>
-              {["Jan 26", "Jul 26", "Jan 27", "Jul 27", "Dec 27"].map((l) => (
-                <span key={l}>{l}</span>
-              ))}
-            </div>
-            {typesForSku.map((t) => (
-              <div key={t} className="flex items-center gap-3 py-2 border-b border-border">
-                <div className="shrink-0 w-[148px] text-sm font-medium">{humanize(t)}</div>
-                <div className="relative flex-1 h-8 bg-muted/50 rounded">
-                  <div className="absolute top-0 bottom-0 w-px bg-brand" style={{ left: `${pos(TODAY)}%` }} title={`Today ${TODAY}`} aria-hidden />
-                  {timelineRows
-                    .filter((c) => c.costType === t)
-                    .map((c) => {
-                      const l = pos(c.effectiveFrom);
-                      const r = pos(c.effectiveTo ?? "2027-12-31");
-                      return (
-                        <div
-                          key={c.id}
-                          className={`absolute top-1 bottom-1 rounded px-2 text-xs font-semibold flex items-center overflow-hidden whitespace-nowrap ${c.status === "SUPERSEDED" ? "bg-muted-foreground/30 text-foreground" : c.status === "SCHEDULED" ? "bg-info text-white" : "bg-success text-white"}`}
-                          style={{ left: `${l}%`, width: `${Math.max(2, r - l)}%` }}
-                          title={`${humanize(c.status)} · ${c.effectiveFrom} → ${c.effectiveTo ?? "open-ended"} · ${money(c.amount, c.currency)}`}
-                        >
-                          {money(c.amount, c.currency)}
-                          {!c.effectiveTo && " →"}
-                          <span className="sr-only">
-                            , {humanize(c.status)}, {c.effectiveFrom} to {c.effectiveTo ?? "open-ended"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                </div>
+          /* Fits the card at every width — no horizontal scroll. */
+          <div role="region" aria-label={`Cost timeline for ${timelineSku}`}>
+          <div>
+            {/* Axis — ticks sit at their real dates, on the same track as the bars. */}
+            <div className="flex gap-4">
+              <div className="w-20 sm:w-32 shrink-0" />
+              <div className="relative flex-1 h-8" aria-hidden>
+                {AXIS_TICKS.map((t, i) => (
+                  <span
+                    key={t.date}
+                    className={`absolute top-0 text-xs text-muted-foreground whitespace-nowrap ${i === 0 ? "" : i === AXIS_TICKS.length - 1 ? "-translate-x-full" : "-translate-x-1/2 hidden md:inline"}`}
+                    style={{ left: `${pos(t.date)}%` }}
+                  >
+                    {t.label}
+                  </span>
+                ))}
+                <span
+                  className="absolute bottom-0 -translate-x-1/2 rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-brand-foreground whitespace-nowrap"
+                  style={{ left: `${pos(TODAY)}%` }}
+                >
+                  Today
+                </span>
               </div>
-            ))}
-            <div className="flex flex-wrap gap-4 mt-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5"><span className="size-3 rounded bg-success" aria-hidden /> Active</span>
-              <span className="flex items-center gap-1.5"><span className="size-3 rounded bg-info" aria-hidden /> Scheduled</span>
-              <span className="flex items-center gap-1.5"><span className="size-3 rounded bg-muted-foreground/30" aria-hidden /> Superseded</span>
-              <span className="flex items-center gap-1.5"><span className="w-px h-3 bg-brand" aria-hidden /> Today</span>
+            </div>
+            <div className="flex gap-4">
+              <div className="w-20 sm:w-32 shrink-0">
+                {typesForSku.map((t) => (
+                  <div key={t} className="h-14 flex items-center text-xs sm:text-sm font-medium">
+                    {humanize(t)}
+                  </div>
+                ))}
+              </div>
+              <div className="relative flex-1">
+                {/* Gridlines and today marker span every row. */}
+                {AXIS_TICKS.map((t) => (
+                  <span key={t.date} className="absolute inset-y-0 w-px bg-border/70" style={{ left: `${pos(t.date)}%` }} aria-hidden />
+                ))}
+                <span className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-brand z-10" style={{ left: `${pos(TODAY)}%` }} aria-hidden />
+                {typesForSku.map((t) => (
+                  <div key={t} className="relative h-14 border-b border-border/70 last:border-b-0">
+                    {timelineRows
+                      .filter((c) => c.costType === t)
+                      .map((c) => {
+                        const l = pos(c.effectiveFrom);
+                        const r = pos(c.effectiveTo ?? "2027-12-31");
+                        const tone = toneCls[c.status === "SUPERSEDED" ? "neutral" : c.status === "SCHEDULED" ? "info" : "success"];
+                        const openEnded = !c.effectiveTo;
+                        return (
+                          <div
+                            key={c.id}
+                            className={`absolute top-2.5 bottom-2.5 rounded-md border px-1.5 sm:px-2.5 flex items-center gap-2 overflow-hidden whitespace-nowrap text-xs ${tone.soft} ${tone.border} ${openEnded ? "rounded-r-none border-r-0 [mask-image:linear-gradient(to_right,black_85%,transparent)]" : ""}`}
+                            style={{ left: `${l}%`, width: `${Math.max(2, r - l)}%` }}
+                            title={`${humanize(c.status)} · ${c.effectiveFrom} → ${c.effectiveTo ?? "open-ended"} · ${money(c.amount, c.currency)}`}
+                          >
+                            <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} aria-hidden />
+                            <span className={`font-semibold tabular-nums ${tone.text}`}>{money(c.amount, c.currency)}</span>
+                            <span className="hidden lg:inline text-muted-foreground tabular-nums truncate">
+                              {c.effectiveFrom} → {c.effectiveTo ?? "open-ended"}
+                            </span>
+                            <span className="sr-only">, {humanize(c.status)}</span>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
+              {(["ACTIVE", "SCHEDULED", "SUPERSEDED"] as const).map((s) => (
+                <StatusPill key={s} status={s} />
+              ))}
+              <span className="flex items-center gap-1.5">
+                <span className="w-0.5 h-3.5 bg-brand" aria-hidden /> Today ({TODAY})
+              </span>
+              <span>Faded end = open-ended (no end date yet)</span>
             </div>
           </div>
           </div>
@@ -483,13 +536,21 @@ function Page() {
             subtitle="Tenant setting — which cost types add up to “cost” for margin"
             actions={
               <>
+                <MissingHint id={marginHintId} missing={missingFields([["At least one cost type", marginDef]])} />
                 {marginDirty && <Tag tone="warning">Unsaved changes</Tag>}
                 {marginDirty && (
                   <Btn size="sm" variant="subtle" onClick={() => setMarginDef(savedMarginDef)} disabled={savingMargin}>
                     Cancel
                   </Btn>
                 )}
-                <Btn size="sm" onClick={saveMargin} loading={savingMargin} disabled={!marginDirty} title={!marginDirty ? "No changes to save" : undefined}>
+                <Btn
+                  size="sm"
+                  onClick={saveMargin}
+                  loading={savingMargin}
+                  disabled={!marginDirty || marginDef.length === 0}
+                  aria-describedby={marginDef.length === 0 ? marginHintId : undefined}
+                  title={!marginDirty ? "No changes to save" : undefined}
+                >
                   Save
                 </Btn>
               </>

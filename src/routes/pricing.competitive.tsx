@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { ArrowRight, Download, Lock, Plus, Radar, Rss, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -16,6 +16,7 @@ import {
   InfoBanner,
   KpiTile,
   ListHeader,
+  MissingHint,
   Modal,
   PillTabs,
   PricingLayout,
@@ -24,6 +25,7 @@ import {
   StatusPill,
   Tag,
   inputCls,
+  missingFields,
   pct,
   type ApiError,
   type Column,
@@ -308,7 +310,6 @@ function CompetitivePage() {
             label="Freshness"
             selected={fresh}
             onChange={setFresh}
-            multiple={false}
             options={[
               { key: "FRESH", label: "Fresh", count: obs.length - stale },
               { key: "STALE", label: "Stale", count: stale },
@@ -449,7 +450,14 @@ function MappingTab({ maps, setMaps }: { maps: Mapping[]; setMaps: (fn: (m: Mapp
   const [sku, setSku] = useState("");
   const [err, setErr] = useState<ApiError | null>(null);
   const duplicate = maps.some((m) => m.competitor === competitor && m.competitorSku.toLowerCase() === cSku.trim().toLowerCase());
+  const mapHintId = useId();
+  const mapMissing = missingFields([
+    ["Competitor", competitor],
+    ["Competitor SKU", cSku],
+    ["Our SKU", sku],
+  ]);
   const add = () => {
+    if (mapMissing.length > 0) return;
     setErr(null);
     const missing = !competitor ? "competitor" : !cSku.trim() ? "competitorSku" : !sku ? "sku" : null;
     if (missing) {
@@ -520,8 +528,9 @@ function MappingTab({ maps, setMaps }: { maps: Mapping[]; setMaps: (fn: (m: Mapp
               ))}
             </select>
           </Field>
-          <div className="flex justify-end">
-            <Btn type="submit" icon={Plus}>
+          <div className="flex justify-end gap-3">
+            <MissingHint id={mapHintId} missing={mapMissing} />
+            <Btn type="submit" icon={Plus} disabled={mapMissing.length > 0} aria-describedby={mapMissing.length ? mapHintId : undefined}>
               Save mapping
             </Btn>
           </div>
@@ -537,7 +546,14 @@ function ManualEntryModal({ maps, onClose, onSave }: { maps: Mapping[]; onClose:
   const [price, setPrice] = useState("");
   const [date, setDate] = useState("2026-10-29");
   const [err, setErr] = useState<ApiError | null>(null);
+  const hintId = useId();
+  const missing = missingFields([
+    ["Competitor SKU", mapKey],
+    ["Observed price", price],
+    ["Observed on", date],
+  ]);
   const save = () => {
+    if (missing.length > 0) return;
     const m = maps.find((x) => x.competitor + "|" + x.competitorSku === mapKey);
     if (!m) return setErr({ errorClass: "VALIDATION", code: "VALIDATION_REQUIRED", message: "Select a mapped competitor SKU. Unmapped SKUs must be mapped first.", field: "competitorSku" });
     if (!(Number(price) > 0)) return setErr({ errorClass: "VALIDATION", code: "VALIDATION_REQUIRED", message: "Enter the observed price above 0, e.g. 34.99.", field: "price" });
@@ -554,10 +570,13 @@ function ManualEntryModal({ maps, onClose, onSave }: { maps: Mapping[]; onClose:
       dismissible={!mapKey && !price}
       footer={
         <>
+          <MissingHint id={hintId} missing={missing} />
           <Btn variant="subtle" onClick={onClose}>
             Cancel
           </Btn>
-          <Btn onClick={save}>Save observation</Btn>
+          <Btn onClick={save} disabled={missing.length > 0} aria-describedby={missing.length ? hintId : undefined}>
+            Save observation
+          </Btn>
         </>
       }
     >
