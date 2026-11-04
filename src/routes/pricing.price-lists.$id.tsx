@@ -360,7 +360,7 @@ function Detail({ source }: { source: PriceList }) {
   // Deep link from the list row menu: open the requested transition once, then drop it from the URL
   // so Back/refresh don't reopen the dialog.
   useEffect(() => {
-    const a = search.action;
+    const a = search.action as ActionKey | undefined;
     if (!a) return;
     if (TRANSITIONS[a].from.includes(list.status)) openAction(a);
     navigate({
@@ -1792,10 +1792,11 @@ function ApprovalTab({
         <Card title="Approval task">
           {taskState ? (
             <DetailGrid
+              columns={1}
               items={[
-                { label: "Assigned to", value: "Pricing Manager — Neel Kamat", full: true },
-                { label: "Submitted by", value: list.submittedBy ?? "—", full: true },
-                { label: "State", value: <StatusPill status={taskState} />, full: true },
+                { label: "Assigned to", value: "Pricing Manager — Neel Kamat" },
+                { label: "Submitted by", value: list.submittedBy ?? "—" },
+                { label: "State", value: <StatusPill status={taskState} /> },
               ]}
             />
           ) : (

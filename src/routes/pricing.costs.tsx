@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Coins, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -22,6 +22,8 @@ import {
   Tag,
   humanize,
   inputCls,
+  MissingHint,
+  missingFields,
   money,
   notifySuccess,
   type ApiError,
@@ -83,8 +85,8 @@ function Page() {
   const navigate = useNavigate({ from: "/pricing/costs" });
   const tab = search.tab ?? "records";
   const timelineSku = search.sku ?? "A-100";
-  const setTab = (t: TabKey) => navigate({ search: (s) => ({ ...s, tab: t === "records" ? undefined : t }), replace: true });
-  const setTimelineSku = (sku: string) => navigate({ search: (s) => ({ ...s, sku }), replace: true });
+  const setTab = (t: TabKey) => navigate({ search: (s: CostSearch) => ({ ...s, tab: t === "records" ? undefined : t }), replace: true });
+  const setTimelineSku = (sku: string) => navigate({ search: (s: CostSearch) => ({ ...s, sku }), replace: true });
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
   const [plant, setPlant] = useState("all");
@@ -99,6 +101,16 @@ function Page() {
   const [importing, setImporting] = useState(false);
   const marginDirty = [...marginDef].sort().join() !== [...savedMarginDef].sort().join();
   const draftDirty = JSON.stringify(draft) !== JSON.stringify(EMPTY);
+  const importHintId = useId();
+  const importMissing = missingFields([
+    ["SKU", draft.sku],
+    ["Plant", draft.plant],
+    ["Cost type", draft.costType],
+    ["Amount", draft.amount],
+    ["Currency", draft.currency],
+    ["Effective from", draft.effectiveFrom],
+    ["Source system", draft.source],
+  ]);
   const setField = (patch: Partial<Draft>) => {
     setDraft((d) => ({ ...d, ...patch }));
     // Clear the inline error for fields the user is fixing.
@@ -551,15 +563,27 @@ function Page() {
         subtitle="Simulates a payload from an integration — validation runs exactly as the API would."
         footer={
           <>
-            {draftDirty && (
-              <span role="status" className="mr-auto self-center text-xs font-medium text-warning-foreground">
-                Unsaved changes
-              </span>
+            {(draftDirty || importMissing.length > 0) && (
+              <div className="mr-auto self-center flex flex-col gap-0.5">
+                {draftDirty && (
+                  <span role="status" className="text-xs font-medium text-warning-foreground">
+                    Unsaved changes
+                  </span>
+                )}
+                <MissingHint id={importHintId} missing={importMissing} />
+              </div>
             )}
             <Btn variant="subtle" onClick={() => setOpen(false)} disabled={importing}>
               Cancel
             </Btn>
-            <Btn type="submit" form="cost-import" icon={Upload} loading={importing}>
+            <Btn
+              type="submit"
+              form="cost-import"
+              icon={Upload}
+              loading={importing}
+              disabled={importMissing.length > 0}
+              aria-describedby={importMissing.length ? importHintId : undefined}
+            >
               Import
             </Btn>
           </>

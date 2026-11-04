@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState, type FormEvent } from "react";
+import { useId, useMemo, useState, type FormEvent } from "react";
 import { Eye, Plus, RefreshCw, Trash2, UserPlus, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -15,6 +15,7 @@ import {
   Flag,
   InfoBanner,
   ListHeader,
+  MissingHint,
   Modal,
   PillTabs,
   PricingLayout,
@@ -23,6 +24,7 @@ import {
   Tag,
   humanize,
   inputCls,
+  missingFields,
   notifyUndo,
   type ApiError,
 } from "@/components/pricing/kit";
@@ -291,6 +293,19 @@ function Page() {
   };
   const errs = draft ? fieldErrors(draft) : {};
   const fe = (id: string) => (submitted ? errs[id] : undefined);
+  // Save/Activate stay disabled until every required field has a value (format checks still run on submit).
+  const segHintId = useId();
+  const segMissing = draft
+    ? missingFields([
+        ["Segment name", draft.name],
+        ["Priority", draft.priority],
+        ...draft.conds.map((c, i): [string, unknown, boolean] => [`Condition ${i + 1} value`, c.value, draft.method === "ATTRIBUTE"]),
+        ["Trailing months", draft.trailingMonths, draft.method === "VOLUME"],
+        ["Threshold", draft.threshold, draft.method === "VOLUME"],
+        ["Reason for change", draft.reasonCode, versioning],
+        ["Reason text", draft.reasonText, versioning && draft.reasonCode === "OTHER"],
+      ])
+    : [];
 
   /** Validate, focus the first invalid field, and (for activation) require a preview. */
   const requestPersist = (status: Segment["status"]) => {
@@ -391,6 +406,12 @@ function Page() {
   if (!assign.reason.trim()) assignErrs["assign-reason"] = "Enter a reason — manual overrides are audited.";
   const ae = (id: string) => (assignSubmitted ? assignErrs[id] : undefined);
   const assignDirty = !!(assign.customerId || assign.segment || assign.reason);
+  const assignHintId = useId();
+  const assignMissing = missingFields([
+    ["Customer", assign.customerId],
+    ["Segment", assign.segment],
+    ["Override reason", assign.reason],
+  ]);
 
   const saveAssign = (e?: FormEvent) => {
     e?.preventDefault();
@@ -733,6 +754,7 @@ function Page() {
         }
         footer={
           <>
+            <MissingHint id={segHintId} missing={segMissing} />
             {pendingDraft && (
               <Btn variant="ghost" onClick={discardPendingDraft} disabled={!!saving} className="mr-auto">
                 Discard draft v{pendingDraft.seg.version}
@@ -741,10 +763,21 @@ function Page() {
             <Btn variant="subtle" onClick={() => setDraft(null)} disabled={!!saving}>
               Cancel
             </Btn>
-            <Btn variant="outline" loading={saving === "DRAFT"} disabled={!!saving} onClick={() => requestPersist("DRAFT")}>
+            <Btn
+              variant="outline"
+              loading={saving === "DRAFT"}
+              disabled={!!saving || segMissing.length > 0}
+              aria-describedby={segMissing.length ? segHintId : undefined}
+              onClick={() => requestPersist("DRAFT")}
+            >
               Save draft
             </Btn>
-            <Btn icon={Zap} disabled={!!saving} onClick={() => requestPersist("ACTIVE")}>
+            <Btn
+              icon={Zap}
+              disabled={!!saving || segMissing.length > 0}
+              aria-describedby={segMissing.length ? segHintId : undefined}
+              onClick={() => requestPersist("ACTIVE")}
+            >
               Activate
             </Btn>
           </>
@@ -1032,10 +1065,17 @@ function Page() {
         subtitle="Manual assignments override rule-based segments and require a reason."
         footer={
           <>
+            <MissingHint id={assignHintId} missing={assignMissing} />
             <Btn variant="subtle" onClick={() => setAssignOpen(false)} disabled={assignSaving}>
               Cancel
             </Btn>
-            <Btn type="submit" form="assign-form" loading={assignSaving}>
+            <Btn
+              type="submit"
+              form="assign-form"
+              loading={assignSaving}
+              disabled={assignMissing.length > 0}
+              aria-describedby={assignMissing.length ? assignHintId : undefined}
+            >
               Save override
             </Btn>
           </>

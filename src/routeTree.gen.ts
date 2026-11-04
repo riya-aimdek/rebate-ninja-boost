@@ -29,25 +29,45 @@ import { Route as PricingSimulatorRouteImport } from './routes/pricing.simulator
 import { Route as PricingSegmentsRouteImport } from './routes/pricing.segments'
 import { Route as PricingRepricingRouteImport } from './routes/pricing.repricing'
 import { Route as PricingRecommendationsRouteImport } from './routes/pricing.recommendations'
+import { Route as PricingPublicationsRouteImport } from './routes/pricing.publications'
 import { Route as PricingPriceTraceRouteImport } from './routes/pricing.price-trace'
 import { Route as PricingPrecedenceRouteImport } from './routes/pricing.precedence'
+import { Route as PricingPartnerPortalRouteImport } from './routes/pricing.partner-portal'
 import { Route as PricingOptimizationRouteImport } from './routes/pricing.optimization'
+import { Route as PricingNotificationsRouteImport } from './routes/pricing.notifications'
+import { Route as PricingGuidedSellingRouteImport } from './routes/pricing.guided-selling'
 import { Route as PricingGuardrailsRouteImport } from './routes/pricing.guardrails'
 import { Route as PricingFormulasRouteImport } from './routes/pricing.formulas'
+import { Route as PricingExceptionsRouteImport } from './routes/pricing.exceptions'
 import { Route as PricingDataQualityRouteImport } from './routes/pricing.data-quality'
 import { Route as PricingCostsRouteImport } from './routes/pricing.costs'
 import { Route as PricingCompetitiveRouteImport } from './routes/pricing.competitive'
 import { Route as PricingBulkUpdateRouteImport } from './routes/pricing.bulk-update'
 import { Route as PricingAuditLogRouteImport } from './routes/pricing.audit-log'
+import { Route as PricingApprovalsRouteImport } from './routes/pricing.approvals'
+import { Route as PricingApprovalMatrixRouteImport } from './routes/pricing.approval-matrix'
 import { Route as PricingRulesIndexRouteImport } from './routes/pricing.rules.index'
+import { Route as PricingQuotesIndexRouteImport } from './routes/pricing.quotes.index'
 import { Route as PricingProductsIndexRouteImport } from './routes/pricing.products.index'
 import { Route as PricingPriceListsIndexRouteImport } from './routes/pricing.price-lists.index'
 import { Route as PricingCustomersIndexRouteImport } from './routes/pricing.customers.index'
 import { Route as PricingRulesIdRouteImport } from './routes/pricing.rules.$id'
+import { Route as PricingQuotesNewRouteImport } from './routes/pricing.quotes.new'
+import { Route as PricingQuotesIdRouteImport } from './routes/pricing.quotes.$id'
 import { Route as PricingProductsIdRouteImport } from './routes/pricing.products.$id'
 import { Route as PricingPriceListsNewRouteImport } from './routes/pricing.price-lists.new'
 import { Route as PricingPriceListsIdRouteImport } from './routes/pricing.price-lists.$id'
 import { Route as PricingCustomersIdRouteImport } from './routes/pricing.customers.$id'
+import { Route as PricingAnalyticsWaterfallRouteImport } from './routes/pricing.analytics.waterfall'
+import { Route as PricingAnalyticsMarginRouteImport } from './routes/pricing.analytics.margin'
+import { Route as PricingAnalyticsDealProfitabilityRouteImport } from './routes/pricing.analytics.deal-profitability'
+import { Route as PricingAnalyticsComplianceRouteImport } from './routes/pricing.analytics.compliance'
+import { Route as PricingAnalyticsBiExportRouteImport } from './routes/pricing.analytics.bi-export'
+import { Route as PricingAdminUsersRouteImport } from './routes/pricing.admin.users'
+import { Route as PricingAdminSsoRouteImport } from './routes/pricing.admin.sso'
+import { Route as PricingAdminServiceAccountsRouteImport } from './routes/pricing.admin.service-accounts'
+import { Route as PricingAdminIntegrationsRouteImport } from './routes/pricing.admin.integrations'
+import { Route as PricingAdminFieldSecurityRouteImport } from './routes/pricing.admin.field-security'
 
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
@@ -152,6 +172,11 @@ const PricingRecommendationsRoute = PricingRecommendationsRouteImport.update({
   path: '/pricing/recommendations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingPublicationsRoute = PricingPublicationsRouteImport.update({
+  id: '/pricing/publications',
+  path: '/pricing/publications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingPriceTraceRoute = PricingPriceTraceRouteImport.update({
   id: '/pricing/price-trace',
   path: '/pricing/price-trace',
@@ -162,9 +187,24 @@ const PricingPrecedenceRoute = PricingPrecedenceRouteImport.update({
   path: '/pricing/precedence',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingPartnerPortalRoute = PricingPartnerPortalRouteImport.update({
+  id: '/pricing/partner-portal',
+  path: '/pricing/partner-portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingOptimizationRoute = PricingOptimizationRouteImport.update({
   id: '/pricing/optimization',
   path: '/pricing/optimization',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingNotificationsRoute = PricingNotificationsRouteImport.update({
+  id: '/pricing/notifications',
+  path: '/pricing/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingGuidedSellingRoute = PricingGuidedSellingRouteImport.update({
+  id: '/pricing/guided-selling',
+  path: '/pricing/guided-selling',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingGuardrailsRoute = PricingGuardrailsRouteImport.update({
@@ -175,6 +215,11 @@ const PricingGuardrailsRoute = PricingGuardrailsRouteImport.update({
 const PricingFormulasRoute = PricingFormulasRouteImport.update({
   id: '/pricing/formulas',
   path: '/pricing/formulas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingExceptionsRoute = PricingExceptionsRouteImport.update({
+  id: '/pricing/exceptions',
+  path: '/pricing/exceptions',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingDataQualityRoute = PricingDataQualityRouteImport.update({
@@ -202,9 +247,24 @@ const PricingAuditLogRoute = PricingAuditLogRouteImport.update({
   path: '/pricing/audit-log',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingApprovalsRoute = PricingApprovalsRouteImport.update({
+  id: '/pricing/approvals',
+  path: '/pricing/approvals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingApprovalMatrixRoute = PricingApprovalMatrixRouteImport.update({
+  id: '/pricing/approval-matrix',
+  path: '/pricing/approval-matrix',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingRulesIndexRoute = PricingRulesIndexRouteImport.update({
   id: '/pricing/rules/',
   path: '/pricing/rules/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingQuotesIndexRoute = PricingQuotesIndexRouteImport.update({
+  id: '/pricing/quotes/',
+  path: '/pricing/quotes/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingProductsIndexRoute = PricingProductsIndexRouteImport.update({
@@ -227,6 +287,16 @@ const PricingRulesIdRoute = PricingRulesIdRouteImport.update({
   path: '/pricing/rules/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingQuotesNewRoute = PricingQuotesNewRouteImport.update({
+  id: '/pricing/quotes/new',
+  path: '/pricing/quotes/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingQuotesIdRoute = PricingQuotesIdRouteImport.update({
+  id: '/pricing/quotes/$id',
+  path: '/pricing/quotes/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PricingProductsIdRoute = PricingProductsIdRouteImport.update({
   id: '/pricing/products/$id',
   path: '/pricing/products/$id',
@@ -247,22 +317,86 @@ const PricingCustomersIdRoute = PricingCustomersIdRouteImport.update({
   path: '/pricing/customers/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PricingAnalyticsWaterfallRoute =
+  PricingAnalyticsWaterfallRouteImport.update({
+    id: '/pricing/analytics/waterfall',
+    path: '/pricing/analytics/waterfall',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const PricingAnalyticsMarginRoute = PricingAnalyticsMarginRouteImport.update({
+  id: '/pricing/analytics/margin',
+  path: '/pricing/analytics/margin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingAnalyticsDealProfitabilityRoute =
+  PricingAnalyticsDealProfitabilityRouteImport.update({
+    id: '/pricing/analytics/deal-profitability',
+    path: '/pricing/analytics/deal-profitability',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const PricingAnalyticsComplianceRoute =
+  PricingAnalyticsComplianceRouteImport.update({
+    id: '/pricing/analytics/compliance',
+    path: '/pricing/analytics/compliance',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const PricingAnalyticsBiExportRoute =
+  PricingAnalyticsBiExportRouteImport.update({
+    id: '/pricing/analytics/bi-export',
+    path: '/pricing/analytics/bi-export',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const PricingAdminUsersRoute = PricingAdminUsersRouteImport.update({
+  id: '/pricing/admin/users',
+  path: '/pricing/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingAdminSsoRoute = PricingAdminSsoRouteImport.update({
+  id: '/pricing/admin/sso',
+  path: '/pricing/admin/sso',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingAdminServiceAccountsRoute =
+  PricingAdminServiceAccountsRouteImport.update({
+    id: '/pricing/admin/service-accounts',
+    path: '/pricing/admin/service-accounts',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const PricingAdminIntegrationsRoute =
+  PricingAdminIntegrationsRouteImport.update({
+    id: '/pricing/admin/integrations',
+    path: '/pricing/admin/integrations',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const PricingAdminFieldSecurityRoute =
+  PricingAdminFieldSecurityRouteImport.update({
+    id: '/pricing/admin/field-security',
+    path: '/pricing/admin/field-security',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/profile': typeof ProfileRoute
   '/rebate-modeling': typeof RebateModelingRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/pricing/approval-matrix': typeof PricingApprovalMatrixRoute
+  '/pricing/approvals': typeof PricingApprovalsRoute
   '/pricing/audit-log': typeof PricingAuditLogRoute
   '/pricing/bulk-update': typeof PricingBulkUpdateRoute
   '/pricing/competitive': typeof PricingCompetitiveRoute
   '/pricing/costs': typeof PricingCostsRoute
   '/pricing/data-quality': typeof PricingDataQualityRoute
+  '/pricing/exceptions': typeof PricingExceptionsRoute
   '/pricing/formulas': typeof PricingFormulasRoute
   '/pricing/guardrails': typeof PricingGuardrailsRoute
+  '/pricing/guided-selling': typeof PricingGuidedSellingRoute
+  '/pricing/notifications': typeof PricingNotificationsRoute
   '/pricing/optimization': typeof PricingOptimizationRoute
+  '/pricing/partner-portal': typeof PricingPartnerPortalRoute
   '/pricing/precedence': typeof PricingPrecedenceRoute
   '/pricing/price-trace': typeof PricingPriceTraceRoute
+  '/pricing/publications': typeof PricingPublicationsRoute
   '/pricing/recommendations': typeof PricingRecommendationsRoute
   '/pricing/repricing': typeof PricingRepricingRoute
   '/pricing/segments': typeof PricingSegmentsRoute
@@ -279,30 +413,50 @@ export interface FileRoutesByFullPath {
   '/reports/settlement-status': typeof ReportsSettlementStatusRoute
   '/pricing/': typeof PricingIndexRoute
   '/reports/': typeof ReportsIndexRoute
+  '/pricing/admin/field-security': typeof PricingAdminFieldSecurityRoute
+  '/pricing/admin/integrations': typeof PricingAdminIntegrationsRoute
+  '/pricing/admin/service-accounts': typeof PricingAdminServiceAccountsRoute
+  '/pricing/admin/sso': typeof PricingAdminSsoRoute
+  '/pricing/admin/users': typeof PricingAdminUsersRoute
+  '/pricing/analytics/bi-export': typeof PricingAnalyticsBiExportRoute
+  '/pricing/analytics/compliance': typeof PricingAnalyticsComplianceRoute
+  '/pricing/analytics/deal-profitability': typeof PricingAnalyticsDealProfitabilityRoute
+  '/pricing/analytics/margin': typeof PricingAnalyticsMarginRoute
+  '/pricing/analytics/waterfall': typeof PricingAnalyticsWaterfallRoute
   '/pricing/customers/$id': typeof PricingCustomersIdRoute
   '/pricing/price-lists/$id': typeof PricingPriceListsIdRoute
   '/pricing/price-lists/new': typeof PricingPriceListsNewRoute
   '/pricing/products/$id': typeof PricingProductsIdRoute
+  '/pricing/quotes/$id': typeof PricingQuotesIdRoute
+  '/pricing/quotes/new': typeof PricingQuotesNewRoute
   '/pricing/rules/$id': typeof PricingRulesIdRoute
   '/pricing/customers/': typeof PricingCustomersIndexRoute
   '/pricing/price-lists/': typeof PricingPriceListsIndexRoute
   '/pricing/products/': typeof PricingProductsIndexRoute
+  '/pricing/quotes/': typeof PricingQuotesIndexRoute
   '/pricing/rules/': typeof PricingRulesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/profile': typeof ProfileRoute
   '/rebate-modeling': typeof RebateModelingRoute
+  '/pricing/approval-matrix': typeof PricingApprovalMatrixRoute
+  '/pricing/approvals': typeof PricingApprovalsRoute
   '/pricing/audit-log': typeof PricingAuditLogRoute
   '/pricing/bulk-update': typeof PricingBulkUpdateRoute
   '/pricing/competitive': typeof PricingCompetitiveRoute
   '/pricing/costs': typeof PricingCostsRoute
   '/pricing/data-quality': typeof PricingDataQualityRoute
+  '/pricing/exceptions': typeof PricingExceptionsRoute
   '/pricing/formulas': typeof PricingFormulasRoute
   '/pricing/guardrails': typeof PricingGuardrailsRoute
+  '/pricing/guided-selling': typeof PricingGuidedSellingRoute
+  '/pricing/notifications': typeof PricingNotificationsRoute
   '/pricing/optimization': typeof PricingOptimizationRoute
+  '/pricing/partner-portal': typeof PricingPartnerPortalRoute
   '/pricing/precedence': typeof PricingPrecedenceRoute
   '/pricing/price-trace': typeof PricingPriceTraceRoute
+  '/pricing/publications': typeof PricingPublicationsRoute
   '/pricing/recommendations': typeof PricingRecommendationsRoute
   '/pricing/repricing': typeof PricingRepricingRoute
   '/pricing/segments': typeof PricingSegmentsRoute
@@ -319,14 +473,27 @@ export interface FileRoutesByTo {
   '/reports/settlement-status': typeof ReportsSettlementStatusRoute
   '/pricing': typeof PricingIndexRoute
   '/reports': typeof ReportsIndexRoute
+  '/pricing/admin/field-security': typeof PricingAdminFieldSecurityRoute
+  '/pricing/admin/integrations': typeof PricingAdminIntegrationsRoute
+  '/pricing/admin/service-accounts': typeof PricingAdminServiceAccountsRoute
+  '/pricing/admin/sso': typeof PricingAdminSsoRoute
+  '/pricing/admin/users': typeof PricingAdminUsersRoute
+  '/pricing/analytics/bi-export': typeof PricingAnalyticsBiExportRoute
+  '/pricing/analytics/compliance': typeof PricingAnalyticsComplianceRoute
+  '/pricing/analytics/deal-profitability': typeof PricingAnalyticsDealProfitabilityRoute
+  '/pricing/analytics/margin': typeof PricingAnalyticsMarginRoute
+  '/pricing/analytics/waterfall': typeof PricingAnalyticsWaterfallRoute
   '/pricing/customers/$id': typeof PricingCustomersIdRoute
   '/pricing/price-lists/$id': typeof PricingPriceListsIdRoute
   '/pricing/price-lists/new': typeof PricingPriceListsNewRoute
   '/pricing/products/$id': typeof PricingProductsIdRoute
+  '/pricing/quotes/$id': typeof PricingQuotesIdRoute
+  '/pricing/quotes/new': typeof PricingQuotesNewRoute
   '/pricing/rules/$id': typeof PricingRulesIdRoute
   '/pricing/customers': typeof PricingCustomersIndexRoute
   '/pricing/price-lists': typeof PricingPriceListsIndexRoute
   '/pricing/products': typeof PricingProductsIndexRoute
+  '/pricing/quotes': typeof PricingQuotesIndexRoute
   '/pricing/rules': typeof PricingRulesIndexRoute
 }
 export interface FileRoutesById {
@@ -335,16 +502,23 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/rebate-modeling': typeof RebateModelingRoute
   '/reports': typeof ReportsRouteWithChildren
+  '/pricing/approval-matrix': typeof PricingApprovalMatrixRoute
+  '/pricing/approvals': typeof PricingApprovalsRoute
   '/pricing/audit-log': typeof PricingAuditLogRoute
   '/pricing/bulk-update': typeof PricingBulkUpdateRoute
   '/pricing/competitive': typeof PricingCompetitiveRoute
   '/pricing/costs': typeof PricingCostsRoute
   '/pricing/data-quality': typeof PricingDataQualityRoute
+  '/pricing/exceptions': typeof PricingExceptionsRoute
   '/pricing/formulas': typeof PricingFormulasRoute
   '/pricing/guardrails': typeof PricingGuardrailsRoute
+  '/pricing/guided-selling': typeof PricingGuidedSellingRoute
+  '/pricing/notifications': typeof PricingNotificationsRoute
   '/pricing/optimization': typeof PricingOptimizationRoute
+  '/pricing/partner-portal': typeof PricingPartnerPortalRoute
   '/pricing/precedence': typeof PricingPrecedenceRoute
   '/pricing/price-trace': typeof PricingPriceTraceRoute
+  '/pricing/publications': typeof PricingPublicationsRoute
   '/pricing/recommendations': typeof PricingRecommendationsRoute
   '/pricing/repricing': typeof PricingRepricingRoute
   '/pricing/segments': typeof PricingSegmentsRoute
@@ -361,14 +535,27 @@ export interface FileRoutesById {
   '/reports/settlement-status': typeof ReportsSettlementStatusRoute
   '/pricing/': typeof PricingIndexRoute
   '/reports/': typeof ReportsIndexRoute
+  '/pricing/admin/field-security': typeof PricingAdminFieldSecurityRoute
+  '/pricing/admin/integrations': typeof PricingAdminIntegrationsRoute
+  '/pricing/admin/service-accounts': typeof PricingAdminServiceAccountsRoute
+  '/pricing/admin/sso': typeof PricingAdminSsoRoute
+  '/pricing/admin/users': typeof PricingAdminUsersRoute
+  '/pricing/analytics/bi-export': typeof PricingAnalyticsBiExportRoute
+  '/pricing/analytics/compliance': typeof PricingAnalyticsComplianceRoute
+  '/pricing/analytics/deal-profitability': typeof PricingAnalyticsDealProfitabilityRoute
+  '/pricing/analytics/margin': typeof PricingAnalyticsMarginRoute
+  '/pricing/analytics/waterfall': typeof PricingAnalyticsWaterfallRoute
   '/pricing/customers/$id': typeof PricingCustomersIdRoute
   '/pricing/price-lists/$id': typeof PricingPriceListsIdRoute
   '/pricing/price-lists/new': typeof PricingPriceListsNewRoute
   '/pricing/products/$id': typeof PricingProductsIdRoute
+  '/pricing/quotes/$id': typeof PricingQuotesIdRoute
+  '/pricing/quotes/new': typeof PricingQuotesNewRoute
   '/pricing/rules/$id': typeof PricingRulesIdRoute
   '/pricing/customers/': typeof PricingCustomersIndexRoute
   '/pricing/price-lists/': typeof PricingPriceListsIndexRoute
   '/pricing/products/': typeof PricingProductsIndexRoute
+  '/pricing/quotes/': typeof PricingQuotesIndexRoute
   '/pricing/rules/': typeof PricingRulesIndexRoute
 }
 export interface FileRouteTypes {
@@ -378,16 +565,23 @@ export interface FileRouteTypes {
     | '/profile'
     | '/rebate-modeling'
     | '/reports'
+    | '/pricing/approval-matrix'
+    | '/pricing/approvals'
     | '/pricing/audit-log'
     | '/pricing/bulk-update'
     | '/pricing/competitive'
     | '/pricing/costs'
     | '/pricing/data-quality'
+    | '/pricing/exceptions'
     | '/pricing/formulas'
     | '/pricing/guardrails'
+    | '/pricing/guided-selling'
+    | '/pricing/notifications'
     | '/pricing/optimization'
+    | '/pricing/partner-portal'
     | '/pricing/precedence'
     | '/pricing/price-trace'
+    | '/pricing/publications'
     | '/pricing/recommendations'
     | '/pricing/repricing'
     | '/pricing/segments'
@@ -404,30 +598,50 @@ export interface FileRouteTypes {
     | '/reports/settlement-status'
     | '/pricing/'
     | '/reports/'
+    | '/pricing/admin/field-security'
+    | '/pricing/admin/integrations'
+    | '/pricing/admin/service-accounts'
+    | '/pricing/admin/sso'
+    | '/pricing/admin/users'
+    | '/pricing/analytics/bi-export'
+    | '/pricing/analytics/compliance'
+    | '/pricing/analytics/deal-profitability'
+    | '/pricing/analytics/margin'
+    | '/pricing/analytics/waterfall'
     | '/pricing/customers/$id'
     | '/pricing/price-lists/$id'
     | '/pricing/price-lists/new'
     | '/pricing/products/$id'
+    | '/pricing/quotes/$id'
+    | '/pricing/quotes/new'
     | '/pricing/rules/$id'
     | '/pricing/customers/'
     | '/pricing/price-lists/'
     | '/pricing/products/'
+    | '/pricing/quotes/'
     | '/pricing/rules/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/profile'
     | '/rebate-modeling'
+    | '/pricing/approval-matrix'
+    | '/pricing/approvals'
     | '/pricing/audit-log'
     | '/pricing/bulk-update'
     | '/pricing/competitive'
     | '/pricing/costs'
     | '/pricing/data-quality'
+    | '/pricing/exceptions'
     | '/pricing/formulas'
     | '/pricing/guardrails'
+    | '/pricing/guided-selling'
+    | '/pricing/notifications'
     | '/pricing/optimization'
+    | '/pricing/partner-portal'
     | '/pricing/precedence'
     | '/pricing/price-trace'
+    | '/pricing/publications'
     | '/pricing/recommendations'
     | '/pricing/repricing'
     | '/pricing/segments'
@@ -444,14 +658,27 @@ export interface FileRouteTypes {
     | '/reports/settlement-status'
     | '/pricing'
     | '/reports'
+    | '/pricing/admin/field-security'
+    | '/pricing/admin/integrations'
+    | '/pricing/admin/service-accounts'
+    | '/pricing/admin/sso'
+    | '/pricing/admin/users'
+    | '/pricing/analytics/bi-export'
+    | '/pricing/analytics/compliance'
+    | '/pricing/analytics/deal-profitability'
+    | '/pricing/analytics/margin'
+    | '/pricing/analytics/waterfall'
     | '/pricing/customers/$id'
     | '/pricing/price-lists/$id'
     | '/pricing/price-lists/new'
     | '/pricing/products/$id'
+    | '/pricing/quotes/$id'
+    | '/pricing/quotes/new'
     | '/pricing/rules/$id'
     | '/pricing/customers'
     | '/pricing/price-lists'
     | '/pricing/products'
+    | '/pricing/quotes'
     | '/pricing/rules'
   id:
     | '__root__'
@@ -459,16 +686,23 @@ export interface FileRouteTypes {
     | '/profile'
     | '/rebate-modeling'
     | '/reports'
+    | '/pricing/approval-matrix'
+    | '/pricing/approvals'
     | '/pricing/audit-log'
     | '/pricing/bulk-update'
     | '/pricing/competitive'
     | '/pricing/costs'
     | '/pricing/data-quality'
+    | '/pricing/exceptions'
     | '/pricing/formulas'
     | '/pricing/guardrails'
+    | '/pricing/guided-selling'
+    | '/pricing/notifications'
     | '/pricing/optimization'
+    | '/pricing/partner-portal'
     | '/pricing/precedence'
     | '/pricing/price-trace'
+    | '/pricing/publications'
     | '/pricing/recommendations'
     | '/pricing/repricing'
     | '/pricing/segments'
@@ -485,14 +719,27 @@ export interface FileRouteTypes {
     | '/reports/settlement-status'
     | '/pricing/'
     | '/reports/'
+    | '/pricing/admin/field-security'
+    | '/pricing/admin/integrations'
+    | '/pricing/admin/service-accounts'
+    | '/pricing/admin/sso'
+    | '/pricing/admin/users'
+    | '/pricing/analytics/bi-export'
+    | '/pricing/analytics/compliance'
+    | '/pricing/analytics/deal-profitability'
+    | '/pricing/analytics/margin'
+    | '/pricing/analytics/waterfall'
     | '/pricing/customers/$id'
     | '/pricing/price-lists/$id'
     | '/pricing/price-lists/new'
     | '/pricing/products/$id'
+    | '/pricing/quotes/$id'
+    | '/pricing/quotes/new'
     | '/pricing/rules/$id'
     | '/pricing/customers/'
     | '/pricing/price-lists/'
     | '/pricing/products/'
+    | '/pricing/quotes/'
     | '/pricing/rules/'
   fileRoutesById: FileRoutesById
 }
@@ -501,29 +748,49 @@ export interface RootRouteChildren {
   ProfileRoute: typeof ProfileRoute
   RebateModelingRoute: typeof RebateModelingRoute
   ReportsRoute: typeof ReportsRouteWithChildren
+  PricingApprovalMatrixRoute: typeof PricingApprovalMatrixRoute
+  PricingApprovalsRoute: typeof PricingApprovalsRoute
   PricingAuditLogRoute: typeof PricingAuditLogRoute
   PricingBulkUpdateRoute: typeof PricingBulkUpdateRoute
   PricingCompetitiveRoute: typeof PricingCompetitiveRoute
   PricingCostsRoute: typeof PricingCostsRoute
   PricingDataQualityRoute: typeof PricingDataQualityRoute
+  PricingExceptionsRoute: typeof PricingExceptionsRoute
   PricingFormulasRoute: typeof PricingFormulasRoute
   PricingGuardrailsRoute: typeof PricingGuardrailsRoute
+  PricingGuidedSellingRoute: typeof PricingGuidedSellingRoute
+  PricingNotificationsRoute: typeof PricingNotificationsRoute
   PricingOptimizationRoute: typeof PricingOptimizationRoute
+  PricingPartnerPortalRoute: typeof PricingPartnerPortalRoute
   PricingPrecedenceRoute: typeof PricingPrecedenceRoute
   PricingPriceTraceRoute: typeof PricingPriceTraceRoute
+  PricingPublicationsRoute: typeof PricingPublicationsRoute
   PricingRecommendationsRoute: typeof PricingRecommendationsRoute
   PricingRepricingRoute: typeof PricingRepricingRoute
   PricingSegmentsRoute: typeof PricingSegmentsRoute
   PricingSimulatorRoute: typeof PricingSimulatorRoute
   PricingIndexRoute: typeof PricingIndexRoute
+  PricingAdminFieldSecurityRoute: typeof PricingAdminFieldSecurityRoute
+  PricingAdminIntegrationsRoute: typeof PricingAdminIntegrationsRoute
+  PricingAdminServiceAccountsRoute: typeof PricingAdminServiceAccountsRoute
+  PricingAdminSsoRoute: typeof PricingAdminSsoRoute
+  PricingAdminUsersRoute: typeof PricingAdminUsersRoute
+  PricingAnalyticsBiExportRoute: typeof PricingAnalyticsBiExportRoute
+  PricingAnalyticsComplianceRoute: typeof PricingAnalyticsComplianceRoute
+  PricingAnalyticsDealProfitabilityRoute: typeof PricingAnalyticsDealProfitabilityRoute
+  PricingAnalyticsMarginRoute: typeof PricingAnalyticsMarginRoute
+  PricingAnalyticsWaterfallRoute: typeof PricingAnalyticsWaterfallRoute
   PricingCustomersIdRoute: typeof PricingCustomersIdRoute
   PricingPriceListsIdRoute: typeof PricingPriceListsIdRoute
   PricingPriceListsNewRoute: typeof PricingPriceListsNewRoute
   PricingProductsIdRoute: typeof PricingProductsIdRoute
+  PricingQuotesIdRoute: typeof PricingQuotesIdRoute
+  PricingQuotesNewRoute: typeof PricingQuotesNewRoute
   PricingRulesIdRoute: typeof PricingRulesIdRoute
   PricingCustomersIndexRoute: typeof PricingCustomersIndexRoute
   PricingPriceListsIndexRoute: typeof PricingPriceListsIndexRoute
   PricingProductsIndexRoute: typeof PricingProductsIndexRoute
+  PricingQuotesIndexRoute: typeof PricingQuotesIndexRoute
   PricingRulesIndexRoute: typeof PricingRulesIndexRoute
 }
 
@@ -669,6 +936,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingRecommendationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing/publications': {
+      id: '/pricing/publications'
+      path: '/pricing/publications'
+      fullPath: '/pricing/publications'
+      preLoaderRoute: typeof PricingPublicationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pricing/price-trace': {
       id: '/pricing/price-trace'
       path: '/pricing/price-trace'
@@ -683,11 +957,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingPrecedenceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing/partner-portal': {
+      id: '/pricing/partner-portal'
+      path: '/pricing/partner-portal'
+      fullPath: '/pricing/partner-portal'
+      preLoaderRoute: typeof PricingPartnerPortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pricing/optimization': {
       id: '/pricing/optimization'
       path: '/pricing/optimization'
       fullPath: '/pricing/optimization'
       preLoaderRoute: typeof PricingOptimizationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/notifications': {
+      id: '/pricing/notifications'
+      path: '/pricing/notifications'
+      fullPath: '/pricing/notifications'
+      preLoaderRoute: typeof PricingNotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/guided-selling': {
+      id: '/pricing/guided-selling'
+      path: '/pricing/guided-selling'
+      fullPath: '/pricing/guided-selling'
+      preLoaderRoute: typeof PricingGuidedSellingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing/guardrails': {
@@ -702,6 +997,13 @@ declare module '@tanstack/react-router' {
       path: '/pricing/formulas'
       fullPath: '/pricing/formulas'
       preLoaderRoute: typeof PricingFormulasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/exceptions': {
+      id: '/pricing/exceptions'
+      path: '/pricing/exceptions'
+      fullPath: '/pricing/exceptions'
+      preLoaderRoute: typeof PricingExceptionsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing/data-quality': {
@@ -739,11 +1041,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingAuditLogRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing/approvals': {
+      id: '/pricing/approvals'
+      path: '/pricing/approvals'
+      fullPath: '/pricing/approvals'
+      preLoaderRoute: typeof PricingApprovalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/approval-matrix': {
+      id: '/pricing/approval-matrix'
+      path: '/pricing/approval-matrix'
+      fullPath: '/pricing/approval-matrix'
+      preLoaderRoute: typeof PricingApprovalMatrixRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pricing/rules/': {
       id: '/pricing/rules/'
       path: '/pricing/rules'
       fullPath: '/pricing/rules/'
       preLoaderRoute: typeof PricingRulesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/quotes/': {
+      id: '/pricing/quotes/'
+      path: '/pricing/quotes'
+      fullPath: '/pricing/quotes/'
+      preLoaderRoute: typeof PricingQuotesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing/products/': {
@@ -774,6 +1097,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingRulesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing/quotes/new': {
+      id: '/pricing/quotes/new'
+      path: '/pricing/quotes/new'
+      fullPath: '/pricing/quotes/new'
+      preLoaderRoute: typeof PricingQuotesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/quotes/$id': {
+      id: '/pricing/quotes/$id'
+      path: '/pricing/quotes/$id'
+      fullPath: '/pricing/quotes/$id'
+      preLoaderRoute: typeof PricingQuotesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/pricing/products/$id': {
       id: '/pricing/products/$id'
       path: '/pricing/products/$id'
@@ -800,6 +1137,76 @@ declare module '@tanstack/react-router' {
       path: '/pricing/customers/$id'
       fullPath: '/pricing/customers/$id'
       preLoaderRoute: typeof PricingCustomersIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/analytics/waterfall': {
+      id: '/pricing/analytics/waterfall'
+      path: '/pricing/analytics/waterfall'
+      fullPath: '/pricing/analytics/waterfall'
+      preLoaderRoute: typeof PricingAnalyticsWaterfallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/analytics/margin': {
+      id: '/pricing/analytics/margin'
+      path: '/pricing/analytics/margin'
+      fullPath: '/pricing/analytics/margin'
+      preLoaderRoute: typeof PricingAnalyticsMarginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/analytics/deal-profitability': {
+      id: '/pricing/analytics/deal-profitability'
+      path: '/pricing/analytics/deal-profitability'
+      fullPath: '/pricing/analytics/deal-profitability'
+      preLoaderRoute: typeof PricingAnalyticsDealProfitabilityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/analytics/compliance': {
+      id: '/pricing/analytics/compliance'
+      path: '/pricing/analytics/compliance'
+      fullPath: '/pricing/analytics/compliance'
+      preLoaderRoute: typeof PricingAnalyticsComplianceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/analytics/bi-export': {
+      id: '/pricing/analytics/bi-export'
+      path: '/pricing/analytics/bi-export'
+      fullPath: '/pricing/analytics/bi-export'
+      preLoaderRoute: typeof PricingAnalyticsBiExportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/admin/users': {
+      id: '/pricing/admin/users'
+      path: '/pricing/admin/users'
+      fullPath: '/pricing/admin/users'
+      preLoaderRoute: typeof PricingAdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/admin/sso': {
+      id: '/pricing/admin/sso'
+      path: '/pricing/admin/sso'
+      fullPath: '/pricing/admin/sso'
+      preLoaderRoute: typeof PricingAdminSsoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/admin/service-accounts': {
+      id: '/pricing/admin/service-accounts'
+      path: '/pricing/admin/service-accounts'
+      fullPath: '/pricing/admin/service-accounts'
+      preLoaderRoute: typeof PricingAdminServiceAccountsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/admin/integrations': {
+      id: '/pricing/admin/integrations'
+      path: '/pricing/admin/integrations'
+      fullPath: '/pricing/admin/integrations'
+      preLoaderRoute: typeof PricingAdminIntegrationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing/admin/field-security': {
+      id: '/pricing/admin/field-security'
+      path: '/pricing/admin/field-security'
+      fullPath: '/pricing/admin/field-security'
+      preLoaderRoute: typeof PricingAdminFieldSecurityRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -841,29 +1248,50 @@ const rootRouteChildren: RootRouteChildren = {
   ProfileRoute: ProfileRoute,
   RebateModelingRoute: RebateModelingRoute,
   ReportsRoute: ReportsRouteWithChildren,
+  PricingApprovalMatrixRoute: PricingApprovalMatrixRoute,
+  PricingApprovalsRoute: PricingApprovalsRoute,
   PricingAuditLogRoute: PricingAuditLogRoute,
   PricingBulkUpdateRoute: PricingBulkUpdateRoute,
   PricingCompetitiveRoute: PricingCompetitiveRoute,
   PricingCostsRoute: PricingCostsRoute,
   PricingDataQualityRoute: PricingDataQualityRoute,
+  PricingExceptionsRoute: PricingExceptionsRoute,
   PricingFormulasRoute: PricingFormulasRoute,
   PricingGuardrailsRoute: PricingGuardrailsRoute,
+  PricingGuidedSellingRoute: PricingGuidedSellingRoute,
+  PricingNotificationsRoute: PricingNotificationsRoute,
   PricingOptimizationRoute: PricingOptimizationRoute,
+  PricingPartnerPortalRoute: PricingPartnerPortalRoute,
   PricingPrecedenceRoute: PricingPrecedenceRoute,
   PricingPriceTraceRoute: PricingPriceTraceRoute,
+  PricingPublicationsRoute: PricingPublicationsRoute,
   PricingRecommendationsRoute: PricingRecommendationsRoute,
   PricingRepricingRoute: PricingRepricingRoute,
   PricingSegmentsRoute: PricingSegmentsRoute,
   PricingSimulatorRoute: PricingSimulatorRoute,
   PricingIndexRoute: PricingIndexRoute,
+  PricingAdminFieldSecurityRoute: PricingAdminFieldSecurityRoute,
+  PricingAdminIntegrationsRoute: PricingAdminIntegrationsRoute,
+  PricingAdminServiceAccountsRoute: PricingAdminServiceAccountsRoute,
+  PricingAdminSsoRoute: PricingAdminSsoRoute,
+  PricingAdminUsersRoute: PricingAdminUsersRoute,
+  PricingAnalyticsBiExportRoute: PricingAnalyticsBiExportRoute,
+  PricingAnalyticsComplianceRoute: PricingAnalyticsComplianceRoute,
+  PricingAnalyticsDealProfitabilityRoute:
+    PricingAnalyticsDealProfitabilityRoute,
+  PricingAnalyticsMarginRoute: PricingAnalyticsMarginRoute,
+  PricingAnalyticsWaterfallRoute: PricingAnalyticsWaterfallRoute,
   PricingCustomersIdRoute: PricingCustomersIdRoute,
   PricingPriceListsIdRoute: PricingPriceListsIdRoute,
   PricingPriceListsNewRoute: PricingPriceListsNewRoute,
   PricingProductsIdRoute: PricingProductsIdRoute,
+  PricingQuotesIdRoute: PricingQuotesIdRoute,
+  PricingQuotesNewRoute: PricingQuotesNewRoute,
   PricingRulesIdRoute: PricingRulesIdRoute,
   PricingCustomersIndexRoute: PricingCustomersIndexRoute,
   PricingPriceListsIndexRoute: PricingPriceListsIndexRoute,
   PricingProductsIndexRoute: PricingProductsIndexRoute,
+  PricingQuotesIndexRoute: PricingQuotesIndexRoute,
   PricingRulesIndexRoute: PricingRulesIndexRoute,
 }
 export const routeTree = rootRouteImport

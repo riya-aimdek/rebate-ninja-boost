@@ -1,8 +1,26 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
+  ArrowLeftRight,
+  BadgeCheck,
+  BarChart3,
   Bell,
   BellOff,
   BrainCircuit,
+  Cable,
+  Check,
+  Compass,
+  EyeOff,
+  FileSpreadsheet,
+  FileText,
+  Gavel,
+  Handshake,
+  KeyRound,
+  LogIn,
+  Network,
+  Send,
+  ShieldAlert,
+  TrendingDown,
+  Waves,
   ChevronDown,
   ChevronLeft,
   Coins,
@@ -34,66 +52,132 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { useMyNotifications } from "@/components/pricing/access";
+import { markRead } from "@/lib/pricing/deals";
+import { ROLE_LABEL, USERS, can, setPersona, useSession, type Module, type Role } from "@/lib/pricing/session";
 
 /* ------------------------------------------------------------------ */
 /* Navigation — single source of truth for every routed page          */
 /* ------------------------------------------------------------------ */
 
-export type NavLink = { icon: LucideIcon; label: string; to: string; keywords?: string };
+export type NavLink = {
+  icon: LucideIcon;
+  label: string;
+  to: string;
+  keywords?: string;
+  /** Role-aware navigation (SRS 3.1.1): shown when the role has at least View on this module… */
+  module?: Module;
+  /** …or, instead, only to these roles. */
+  roles?: Role[];
+  /** Roles that never see the item even if the module allows it. */
+  exclude?: Role[];
+};
 export type NavSection = { title: string; items: NavLink[] };
+
+const PARTNER: Role[] = ["CHANNEL_PARTNER"];
 
 export const APP_NAV: NavSection[] = [
   {
     title: "",
-    items: [{ icon: LayoutDashboard, label: "Pricing dashboard", to: "/pricing", keywords: "home overview" }],
+    items: [{ icon: LayoutDashboard, label: "Pricing dashboard", to: "/pricing", keywords: "home overview", exclude: PARTNER }],
   },
   // Rebate modeling (/rebate-modeling) and rebate reports (/reports) are hidden: the pricing BRD/SRS
   // (FR-F-01, SRS 3.2.13) leave rebate management to the existing Rebate Ninja product.
   {
     title: "Master data",
     items: [
-      { icon: Package, label: "Products", to: "/pricing/products", keywords: "sku catalogue" },
-      { icon: Users, label: "Customers", to: "/pricing/customers", keywords: "accounts" },
-      { icon: Coins, label: "Cost data", to: "/pricing/costs" },
+      { icon: Package, label: "Products", to: "/pricing/products", keywords: "sku catalogue", module: "MASTER_DATA" },
+      { icon: Users, label: "Customers", to: "/pricing/customers", keywords: "accounts", module: "MASTER_DATA" },
+      { icon: Coins, label: "Cost data", to: "/pricing/costs", module: "MASTER_DATA", exclude: ["SALES_REP", "SALES_MANAGER"] },
     ],
   },
   {
     title: "Price lists & catalog",
     items: [
-      { icon: Tags, label: "Price lists", to: "/pricing/price-lists" },
-      { icon: Layers, label: "Bulk update", to: "/pricing/bulk-update" },
-      { icon: Repeat, label: "Automated repricing", to: "/pricing/repricing" },
+      { icon: Tags, label: "Price lists", to: "/pricing/price-lists", module: "MASTER_DATA" },
+      { icon: Layers, label: "Bulk update", to: "/pricing/bulk-update", module: "MASTER_DATA", exclude: ["SALES_REP", "SALES_MANAGER", "IT_ADMIN"] },
+      { icon: Repeat, label: "Automated repricing", to: "/pricing/repricing", module: "MASTER_DATA", exclude: ["SALES_REP", "IT_ADMIN"] },
     ],
   },
   {
     title: "Strategy & segmentation",
     items: [
-      { icon: PieChart, label: "Segments", to: "/pricing/segments" },
-      { icon: ListChecks, label: "Pricing rules", to: "/pricing/rules" },
-      { icon: ListOrdered, label: "Rule precedence", to: "/pricing/precedence" },
-      { icon: FunctionSquare, label: "Formula pricing", to: "/pricing/formulas" },
-      { icon: ShieldCheck, label: "Guardrails", to: "/pricing/guardrails", keywords: "margin floor" },
-      { icon: RouteIcon, label: "Price trace", to: "/pricing/price-trace", keywords: "explain waterfall" },
+      { icon: PieChart, label: "Segments", to: "/pricing/segments", module: "STRATEGY" },
+      { icon: ListChecks, label: "Pricing rules", to: "/pricing/rules", module: "STRATEGY" },
+      { icon: ListOrdered, label: "Rule precedence", to: "/pricing/precedence", module: "STRATEGY" },
+      { icon: FunctionSquare, label: "Formula pricing", to: "/pricing/formulas", module: "STRATEGY" },
+      { icon: ShieldCheck, label: "Guardrails", to: "/pricing/guardrails", keywords: "margin floor", module: "STRATEGY" },
+      { icon: RouteIcon, label: "Price trace", to: "/pricing/price-trace", keywords: "explain why price", module: "STRATEGY" },
     ],
   },
   {
     title: "Price optimization",
     items: [
-      { icon: Sparkles, label: "Recommendations", to: "/pricing/recommendations" },
-      { icon: BrainCircuit, label: "Optimization runs", to: "/pricing/optimization" },
-      { icon: FlaskConical, label: "Scenario simulator", to: "/pricing/simulator", keywords: "what if" },
-      { icon: Swords, label: "Competitive intel", to: "/pricing/competitive", keywords: "competitor" },
+      { icon: Sparkles, label: "Recommendations", to: "/pricing/recommendations", module: "OPTIMIZATION", exclude: ["EXECUTIVE", "SALES_REP"] },
+      { icon: BrainCircuit, label: "Optimization runs", to: "/pricing/optimization", module: "OPTIMIZATION" },
+      { icon: FlaskConical, label: "Scenario simulator", to: "/pricing/simulator", keywords: "what if", module: "OPTIMIZATION" },
+      { icon: Swords, label: "Competitive intel", to: "/pricing/competitive", keywords: "competitor", module: "OPTIMIZATION", exclude: ["SALES_REP", "SALES_MANAGER", "EXECUTIVE"] },
+    ],
+  },
+  {
+    title: "CPQ & quoting",
+    items: [
+      { icon: FileText, label: "Quotes", to: "/pricing/quotes", keywords: "cpq quote proposal renewal", module: "CPQ", exclude: PARTNER },
+      { icon: Compass, label: "Guided selling", to: "/pricing/guided-selling", keywords: "decision tree questions wizard", roles: ["PRICING_ADMIN", "DEAL_DESK", "SALES_MANAGER"] },
+      { icon: Handshake, label: "Partner portal", to: "/pricing/partner-portal", keywords: "channel partner", roles: ["CHANNEL_PARTNER", "PRICING_ADMIN", "SALES_MANAGER", "DEAL_DESK"] },
+    ],
+  },
+  {
+    title: "Deal desk",
+    items: [
+      { icon: Gavel, label: "Approval queue", to: "/pricing/approvals", keywords: "approve reject deal desk sla", module: "DEAL_DESK" },
+      { icon: ShieldAlert, label: "Pricing exceptions", to: "/pricing/exceptions", keywords: "exception request justification", roles: ["SALES_REP", "SALES_MANAGER", "DEAL_DESK", "PRICING_ADMIN", "FINANCE_CONTROLLER"] },
+      { icon: BadgeCheck, label: "Approval matrix", to: "/pricing/approval-matrix", keywords: "delegation of authority segregation of duties sod", roles: ["PRICING_ADMIN", "DEAL_DESK", "FINANCE_CONTROLLER"] },
+    ],
+  },
+  {
+    title: "Price execution",
+    items: [{ icon: Send, label: "Publications", to: "/pricing/publications", keywords: "publish erp retry rollback idempotency", roles: ["PRICING_ADMIN", "IT_ADMIN", "FINANCE_CONTROLLER"] }],
+  },
+  {
+    title: "Analytics & reporting",
+    items: [
+      { icon: BarChart3, label: "Margin dashboard", to: "/pricing/analytics/margin", keywords: "profitability drill", module: "ANALYTICS" },
+      { icon: Waves, label: "Price waterfall", to: "/pricing/analytics/waterfall", keywords: "bridge pocket leakage", module: "ANALYTICS" },
+      { icon: ArrowLeftRight, label: "Compliance & variance", to: "/pricing/analytics/compliance", keywords: "outside band policy", module: "ANALYTICS" },
+      { icon: TrendingDown, label: "Deal profitability", to: "/pricing/analytics/deal-profitability", keywords: "expected actual margin renewal", module: "ANALYTICS" },
+      { icon: FileSpreadsheet, label: "BI export", to: "/pricing/analytics/bi-export", keywords: "power bi tableau dataset", module: "ANALYTICS", exclude: ["SALES_REP", "SALES_MANAGER"] },
     ],
   },
   {
     title: "Administration",
     items: [
-      { icon: Database, label: "Data quality log", to: "/pricing/data-quality" },
-      { icon: FileClock, label: "Audit log", to: "/pricing/audit-log", keywords: "history changes" },
+      { icon: KeyRound, label: "Users & roles", to: "/pricing/admin/users", keywords: "rbac permissions sessions", module: "SYSTEM_ADMIN" },
+      { icon: EyeOff, label: "Field security", to: "/pricing/admin/field-security", keywords: "mask hide cost margin", roles: ["PRICING_ADMIN", "IT_ADMIN"] },
+      { icon: LogIn, label: "SSO & identity", to: "/pricing/admin/sso", keywords: "saml oidc okta azure mfa", module: "SYSTEM_ADMIN", exclude: ["PRICING_ADMIN"] },
+      { icon: Network, label: "Integration monitor", to: "/pricing/admin/integrations", keywords: "erp crm kafka webhook dead letter", roles: ["IT_ADMIN", "PRICING_ADMIN"] },
+      { icon: Cable, label: "Service accounts", to: "/pricing/admin/service-accounts", keywords: "api key credential rotation", module: "SYSTEM_ADMIN", exclude: ["PRICING_ADMIN"] },
+      { icon: Database, label: "Data quality log", to: "/pricing/data-quality", roles: ["PRICING_ADMIN", "IT_ADMIN"] },
+      { icon: FileClock, label: "Audit log", to: "/pricing/audit-log", keywords: "history changes", module: "AUDIT_LOGS" },
+      { icon: Bell, label: "Notifications", to: "/pricing/notifications", keywords: "alerts preferences templates" },
       { icon: UserCircle, label: "My profile", to: "/profile", keywords: "settings account preferences" },
     ],
   },
 ];
+
+/** Whether a nav item is shown to a role. */
+export function navVisible(item: NavLink, role: Role) {
+  if (item.exclude?.includes(role)) return false;
+  if (item.roles) return item.roles.includes(role);
+  if (item.module) return can(role, item.module);
+  return true;
+}
+
+/** APP_NAV filtered to what the signed-in role may open; empty sections drop out. */
+function useVisibleNav() {
+  const { role } = useSession();
+  return APP_NAV.map((s) => ({ ...s, items: s.items.filter((i) => navVisible(i, role)) })).filter((s) => s.items.length > 0);
+}
 
 /** Modules on the product roadmap that have no screen yet — shown disabled so nothing is a dead click.
  *  Empty: the former entries were Rebate Ninja modules, outside the pricing scope. */
@@ -143,9 +227,10 @@ function Logo({ compact = false }: { compact?: boolean }) {
 function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [soonOpen, setSoonOpen] = useState(false);
+  const nav = useVisibleNav();
   return (
     <nav aria-label="Main" className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-3 text-sm">
-      {APP_NAV.map((section, i) => (
+      {nav.map((section, i) => (
         <div key={i} className={i > 0 ? "mt-4" : ""}>
           {section.title && !collapsed && (
             <div className="px-6 pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60">{section.title}</div>
@@ -261,6 +346,8 @@ export function Sidebar(_props: { activeLabel?: string } = {}) {
 
 function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const navigate = useNavigate();
+  const nav = useVisibleNav();
+  const { can: allowed } = useSession();
   const go = (to: string) => {
     onOpenChange(false);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -275,7 +362,7 @@ function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (
           <CommandInput placeholder="Jump to a page… (e.g. price lists, guardrails)" />
           <CommandList className="max-h-[60vh]">
             <CommandEmpty>No pages match. Try another word.</CommandEmpty>
-            {APP_NAV.map((section, i) => (
+            {nav.map((section, i) => (
               <CommandGroup key={i} heading={section.title || "Home"}>
                 {section.items.map((item) => {
                   const Icon = item.icon;
@@ -289,9 +376,21 @@ function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (
               </CommandGroup>
             ))}
             <CommandGroup heading="Actions">
-              <CommandItem value="create new price list" onSelect={() => go("/pricing/price-lists/new")}>
-                <Tags className="mr-2 size-4 text-muted-foreground" aria-hidden />
-                Create price list
+              {allowed("MASTER_DATA", "E") && (
+                <CommandItem value="create new price list" onSelect={() => go("/pricing/price-lists/new")}>
+                  <Tags className="mr-2 size-4 text-muted-foreground" aria-hidden />
+                  Create price list
+                </CommandItem>
+              )}
+              {allowed("CPQ", "E") && (
+                <CommandItem value="create new quote cpq" onSelect={() => go("/pricing/quotes/new")}>
+                  <FileText className="mr-2 size-4 text-muted-foreground" aria-hidden />
+                  Create quote
+                </CommandItem>
+              )}
+              <CommandItem value="request pricing exception" onSelect={() => go("/pricing/exceptions")}>
+                <ShieldAlert className="mr-2 size-4 text-muted-foreground" aria-hidden />
+                Request pricing exception
               </CommandItem>
             </CommandGroup>
           </CommandList>
@@ -378,8 +477,6 @@ export function TopBar({
   useGlobalShortcuts(openPalette, openHelp);
   useEffect(() => setMobileOpen(false), [pathname]);
 
-  const initials = (account ?? "RS").slice(0, 2).toUpperCase();
-
   return (
     <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b border-border px-4 sm:px-6 h-[72px] flex items-center gap-3">
       <button
@@ -441,30 +538,8 @@ export function TopBar({
         <Keyboard className="size-5" aria-hidden />
       </button>
 
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" aria-label="Notifications" className="size-10 shrink-0 grid place-items-center rounded-lg border border-border bg-card hover:bg-muted">
-            <Bell className="size-5" aria-hidden />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-80 p-0">
-          <div className="px-4 py-3 border-b border-border font-semibold text-sm">Notifications</div>
-          <div className="px-4 py-8 text-center">
-            <BellOff className="mx-auto size-6 text-muted-foreground" aria-hidden />
-            <p className="mt-2 text-sm font-medium">You’re all caught up</p>
-            <p className="mt-1 text-xs text-muted-foreground">Approvals, completed runs and data issues will appear here.</p>
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      <Link
-        to="/profile"
-        aria-label={`My profile${account ? ` — ${account}` : ""}`}
-        title="My profile"
-        className="size-10 shrink-0 rounded-full bg-brand text-brand-foreground grid place-items-center font-semibold text-sm hover:opacity-90"
-      >
-        {initials}
-      </Link>
+      <NotificationBell />
+      <AccountMenu />
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-72 p-0 bg-navy text-sidebar-foreground border-white/10 flex flex-col [&>button]:text-white">
@@ -480,6 +555,151 @@ export function TopBar({
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </header>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Notifications & account                                             */
+/* ------------------------------------------------------------------ */
+
+/** Bell with the signed-in user's unread count and latest five (US-DD-06, IN_APP channel). */
+function NotificationBell() {
+  const { items, unread } = useMyNotifications();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const latest = items.slice(0, 5);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
+          className="relative size-10 shrink-0 grid place-items-center rounded-lg border border-border bg-card hover:bg-muted"
+        >
+          <Bell className="size-5" aria-hidden />
+          {unread > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-brand text-brand-foreground text-[11px] font-bold grid place-items-center tabular-nums" aria-hidden>
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[22rem] max-w-[calc(100vw-2rem)] p-0">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
+          <span className="font-semibold text-sm">Notifications</span>
+          {unread > 0 && (
+            <button type="button" className="hit text-xs font-semibold text-brand hover:underline" onClick={() => markRead(items.map((n) => n.id))}>
+              Mark all as read
+            </button>
+          )}
+        </div>
+        {latest.length === 0 ? (
+          <div className="px-4 py-8 text-center">
+            <BellOff className="mx-auto size-6 text-muted-foreground" aria-hidden />
+            <p className="mt-2 text-sm font-medium">You’re all caught up</p>
+            <p className="mt-1 text-xs text-muted-foreground">Approvals, expiries and failures will appear here.</p>
+          </div>
+        ) : (
+          <ul className="max-h-96 overflow-y-auto divide-y divide-border">
+            {latest.map((n) => (
+              <li key={n.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    markRead([n.id]);
+                    setOpen(false);
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    if (n.link) navigate({ to: n.link.to as any, params: n.link.params as any });
+                  }}
+                  className="w-full text-left px-4 py-3 hover:bg-muted focus-visible:outline-none focus-visible:bg-muted flex gap-3"
+                >
+                  <span className={`mt-1.5 size-2 rounded-full shrink-0 ${n.read ? "bg-transparent" : "bg-brand"}`} aria-hidden />
+                  <span className="min-w-0">
+                    <span className={`block text-sm ${n.read ? "" : "font-semibold"}`}>
+                      {n.title}
+                      {!n.read && <span className="sr-only"> (unread)</span>}
+                    </span>
+                    <span className="block text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</span>
+                    <span className="block text-[11px] text-muted-foreground mt-1 tabular-nums">{n.at}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="border-t border-border px-4 py-2.5">
+          <Link to="/pricing/notifications" onClick={() => setOpen(false)} className="text-sm font-semibold text-brand hover:underline">
+            View all notifications
+          </Link>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** Avatar menu: who is signed in, "view as" another seeded user (prototype role demo), profile link. */
+function AccountMenu() {
+  const { user } = useSession();
+  const [open, setOpen] = useState(false);
+  const initials = user.name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  const people = USERS.filter((u) => u.status === "ACTIVE");
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Account — ${user.name}, ${ROLE_LABEL[user.role]}`}
+          className="size-10 shrink-0 rounded-full bg-brand text-brand-foreground grid place-items-center font-semibold text-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+        >
+          {initials}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] p-0">
+        <div className="px-4 py-3 border-b border-border">
+          <p className="font-semibold text-sm">{user.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {user.title} · {ROLE_LABEL[user.role]}
+          </p>
+          <Link to="/profile" onClick={() => setOpen(false)} className="mt-2 inline-block text-sm font-semibold text-brand hover:underline">
+            My profile
+          </Link>
+        </div>
+        <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground" id="view-as-label">
+          View as (prototype)
+        </p>
+        <ul className="max-h-72 overflow-y-auto pb-2" aria-labelledby="view-as-label">
+          {people.map((u) => {
+            const on = u.id === user.id;
+            return (
+              <li key={u.id}>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => {
+                    setPersona(u.id);
+                    setOpen(false);
+                  }}
+                  className={`w-full text-left px-4 py-2 flex items-center gap-3 hover:bg-muted focus-visible:outline-none focus-visible:bg-muted ${on ? "bg-brand-soft" : ""}`}
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium truncate">{u.name}</span>
+                    <span className="block text-xs text-muted-foreground truncate">
+                      {u.title} · {ROLE_LABEL[u.role]}
+                    </span>
+                  </span>
+                  {on && <Check className="size-4 text-brand shrink-0" aria-hidden />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </PopoverContent>
+    </Popover>
   );
 }
 

@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, ChevronRight, ClipboardCheck, Database, Repeat, Sparkles, type LucideIcon } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronRight, ClipboardCheck, Database, RefreshCw, Repeat, ShieldAlert, Sparkles, type LucideIcon } from "lucide-react";
 import { Btn, Card, DataAsOf, DetailTitle, EmptyState, FilterPills, PricingLayout, StatusPill, humanize, type Tone } from "@/components/pricing/kit";
 import { DQ_LOG, LIST_TYPES, PRICE_LISTS, PROPOSALS, RECOMMENDATIONS } from "@/lib/pricing/data";
 import { TODAY, daysBetween, downloadCsv } from "@/lib/pricing/csv";
+import { APPROVAL_TASKS, EXCEPTIONS, QUOTES, actingFor, currentStep, slaStatus } from "@/lib/pricing/deals";
+import { useSession } from "@/lib/pricing/session";
 
 export const Route = createFileRoute("/pricing/")({
   head: () => ({ meta: [{ title: "Pricing dashboard · Rebate Ninja" }] }),
@@ -192,11 +194,20 @@ type Task = {
   title: string;
   detail: string;
   action: string;
-  to: "/pricing/price-lists" | "/pricing/data-quality" | "/pricing/recommendations" | "/pricing/repricing";
+  to: "/pricing/price-lists" | "/pricing/data-quality" | "/pricing/recommendations" | "/pricing/repricing" | "/pricing/approvals" | "/pricing/quotes" | "/pricing/exceptions";
   search?: { status: string };
+  /** Only shown to roles that can act on it. */
+  show?: boolean;
 };
 
 function AttentionQueue() {
+  const { user, role, can } = useSession();
+  const mine = actingFor(user.id);
+  const myApprovals = APPROVAL_TASKS.filter((t) => t.status === "PENDING" && currentStep(t)?.approvers.some((a) => a.status === "PENDING" && mine.includes(a.userId)));
+  const overdue = myApprovals.filter((t) => slaStatus(currentStep(t)?.dueAt) === "BREACHED").length;
+  const syncIssues = QUOTES.filter((q) => (q.sync?.status === "FAILED" || q.sync?.status === "RETRYING") && (role !== "SALES_REP" || q.ownerId === user.id));
+  const sentBack = EXCEPTIONS.filter((e) => e.status === "SENT_BACK" && e.requesterId === user.id);
+  const pricingOps = role === "PRICING_ADMIN";
   const submitted = PRICE_LISTS.filter((l) => l.status === "SUBMITTED");
   const dq = DQ_LOG.filter((d) => d.status === "OPEN");
   const dqEntities = Array.from(new Set(dq.map((d) => d.entity.toLowerCase())));
@@ -206,7 +217,40 @@ function AttentionQueue() {
 
   const tasks: Task[] = [
     {
+      key: "deal-approvals",
+      icon: ClipboardCheck,
+      tone: overdue ? "danger" : "warning",
+      count: myApprovals.length,
+      title: `${plural(myApprovals.length, "deal")} waiting for your approval`,
+      detail: overdue ? `${overdue} past SLA. ${myApprovals.map((t) => t.refId).join(", ")}` : myApprovals.map((t) => `${t.refId} · ${t.title.split(" — ")[0]}`).join(", "),
+      action: "Decide",
+      to: "/pricing/approvals",
+      show: can("DEAL_DESK", "A") || can("DEAL_DESK", "F"),
+    },
+    {
+      key: "sync",
+      icon: RefreshCw,
+      tone: "danger",
+      count: syncIssues.length,
+      title: `${plural(syncIssues.length, "accepted quote")} not yet in the ERP`,
+      detail: syncIssues.map((q) => `${q.id} ${q.sync?.status === "RETRYING" ? "retrying" : `failed (${q.sync?.lastError?.code})`}`).join(", "),
+      action: "Fix",
+      to: "/pricing/quotes",
+      show: can("CPQ") && role !== "CHANNEL_PARTNER" && role !== "EXECUTIVE",
+    },
+    {
+      key: "sent-back",
+      icon: ShieldAlert,
+      tone: "warning",
+      count: sentBack.length,
+      title: `${plural(sentBack.length, "pricing exception")} sent back to you`,
+      detail: sentBack.map((e) => `${e.id}: “${e.decisionComment ?? "changes requested"}”`).join(" "),
+      action: "Revise",
+      to: "/pricing/exceptions",
+    },
+    {
       key: "approve",
+      show: pricingOps,
       icon: ClipboardCheck,
       tone: "warning",
       count: submitted.length,
@@ -218,6 +262,7 @@ function AttentionQueue() {
     },
     {
       key: "dq",
+      show: pricingOps,
       icon: Database,
       tone: "danger",
       count: dq.length,
@@ -229,6 +274,7 @@ function AttentionQueue() {
     },
     {
       key: "repricing",
+      show: pricingOps,
       icon: Repeat,
       tone: "warning",
       count: proposals.length,
@@ -239,6 +285,7 @@ function AttentionQueue() {
     },
     {
       key: "recs",
+      show: pricingOps,
       icon: Sparkles,
       tone: "info",
       count: recs.length,
@@ -248,7 +295,7 @@ function AttentionQueue() {
       to: "/pricing/recommendations",
     },
   ];
-  const open = tasks.filter((t) => t.count > 0);
+  const open = tasks.filter((t) => t.show !== false && t.count > 0);
   const totalItems = open.reduce((a, t) => a + t.count, 0);
 
   return (

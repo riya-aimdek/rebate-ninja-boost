@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useBlocker, useNavigate } from "@tanstack/react-router";
-import { useRef, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, CalendarX, Pause, Plus, Save, Trash2, Undo2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -12,6 +12,7 @@ import {
   Field,
   InfoBanner,
   LinkBtn,
+  MissingHint,
   Modal,
   PricingLayout,
   RecordId,
@@ -19,6 +20,7 @@ import {
   StatusPill,
   humanize,
   inputCls,
+  missingFields,
   notifyUndo,
   type ApiError,
 } from "@/components/pricing/kit";
@@ -96,6 +98,8 @@ function Editor({ id }: { id: string }) {
   const [reasonCode, setReasonCode] = useState("");
   const [reasonText, setReasonText] = useState("");
   const [reasonSubmitted, setReasonSubmitted] = useState(false);
+  const ruleHintId = useId();
+  const reasonHintId = useId();
 
   const versions = rules.filter((r) => r.name === rule.name && rule.name).sort((a, b) => b.version - a.version);
   const effective: PricingRule = rule.action.type === "APPLY_TIERS" ? { ...rule, action: { ...rule.action, value: tiersToValue(tiers) } } : rule;
@@ -161,6 +165,23 @@ function Editor({ id }: { id: string }) {
   };
   const errs = fieldErrors();
   const fe = (k: string) => (submitted ? errs[k] : undefined);
+  // Save/Activate stay disabled until required fields have values; format and business-rule checks run on submit.
+  const ruleMissing = missingFields([
+    ["Rule name", rule.name],
+    ["Priority", rule.priority],
+    ["Effective from", rule.effectiveFrom],
+    ...rule.conditions.map((c, i): [string, unknown] => [`Condition ${i + 1} value`, c.value]),
+    ...(rule.action.type === "APPLY_TIERS"
+      ? tiers.flatMap((t, i): Array<[string, unknown]> => [
+          [`Tier ${i + 1} from`, t.from],
+          [`Tier ${i + 1} discount`, t.pct],
+        ])
+      : [[rule.action.type === "APPLY_FORMULA" ? "Formula" : (ACTION_INPUT[rule.action.type]?.label ?? "Action value"), rule.action.value] as [string, unknown]]),
+  ]);
+  const reasonMissing = missingFields([
+    ["Reason code", reasonCode],
+    ["Reason text", reasonText, reasonCode === "OTHER"],
+  ]);
 
   /** Rejection banner with the US-ST-01 error code; field errors stay inline. */
   const rejection = (): ApiError | null => {
@@ -327,6 +348,7 @@ function Editor({ id }: { id: string }) {
         versions={versions.map((v) => ({ key: v.id, version: v.version, status: v.status, to: "/pricing/rules/$id", params: { id: v.id }, current: v.id === rule.id }))}
         actions={
           <>
+            {!readOnly && <MissingHint id={ruleHintId} missing={ruleMissing} />}
             {dirty ? (
               <Btn variant="subtle" icon={Undo2} onClick={() => setConfirmDiscard(true)} disabled={!!busy}>
                 Discard changes
@@ -348,12 +370,26 @@ function Editor({ id }: { id: string }) {
                 Deactivate
               </Btn>
             ) : (
-              <Btn variant="outline" icon={Save} type="submit" form="rule-form" loading={busy === "save"} disabled={readOnly || (!!busy && busy !== "save")}>
+              <Btn
+                variant="outline"
+                icon={Save}
+                type="submit"
+                form="rule-form"
+                loading={busy === "save"}
+                disabled={readOnly || (!!busy && busy !== "save") || ruleMissing.length > 0}
+                aria-describedby={ruleMissing.length ? ruleHintId : undefined}
+              >
                 Save draft
               </Btn>
             )}
             {rule.status !== "ACTIVE" && !scheduled && (
-              <Btn icon={Zap} onClick={requestActivate} disabled={readOnly || !!busy || dirty} title={dirty ? "Save your changes before activating" : undefined}>
+              <Btn
+                icon={Zap}
+                onClick={requestActivate}
+                disabled={readOnly || !!busy || dirty || ruleMissing.length > 0}
+                aria-describedby={ruleMissing.length ? ruleHintId : undefined}
+                title={dirty ? "Save your changes before activating" : undefined}
+              >
                 Activate
               </Btn>
             )}
@@ -605,10 +641,17 @@ function Editor({ id }: { id: string }) {
         subtitle={`Version ${original?.version} stays active until the new version is activated.`}
         footer={
           <>
+            <MissingHint id={reasonHintId} missing={reasonMissing} />
             <Btn variant="subtle" onClick={() => setReasonOpen(false)} disabled={busy === "version"}>
               Cancel
             </Btn>
-            <Btn type="submit" form="rule-reason-form" loading={busy === "version"}>
+            <Btn
+              type="submit"
+              form="rule-reason-form"
+              loading={busy === "version"}
+              disabled={reasonMissing.length > 0}
+              aria-describedby={reasonMissing.length ? reasonHintId : undefined}
+            >
               Create draft version
             </Btn>
           </>

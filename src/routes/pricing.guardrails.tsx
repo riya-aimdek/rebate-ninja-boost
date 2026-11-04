@@ -188,6 +188,10 @@ function Page() {
     const ceil = num(form.priceCeiling);
     if (floor !== undefined && ceil !== undefined && floor > ceil)
       return { errorClass: "VALIDATION", code: "FLOOR_ABOVE_CEILING", message: `The price floor (${form.priceFloor}) is above the ceiling (${form.priceCeiling}). Lower the floor or raise the ceiling.`, field: "priceCeiling" };
+    const maxD = num(form.maxDiscountPct);
+    const maxNA = num(form.maxDiscountNoApprovalPct);
+    if (maxD !== undefined && maxNA !== undefined && maxNA > maxD)
+      return { errorClass: "VALIDATION", code: "LIMIT_ORDER_INVALID", message: `The discount allowed without approval (${form.maxDiscountNoApprovalPct}%) can't exceed the maximum discount (${form.maxDiscountPct}%). Lower it or raise the maximum.`, field: "maxDiscountNoApprovalPct" };
     if ([form.priceFloor, form.priceCeiling, form.minMarginPct, form.maxDiscountPct, form.maxDiscountNoApprovalPct].every((x) => x.trim() === ""))
       return { errorClass: "VALIDATION", code: "GUARDRAIL_NEEDS_LIMIT", message: "Set at least one limit: a floor, ceiling, minimum margin or discount limit.", field: "limits" };
     if (errs["gr-product"]?.includes("already covers"))
@@ -570,7 +574,7 @@ function Page() {
                   { label: "Price ceiling", value: fmtLimit(preview.priceCeiling, "money", preview.currency) },
                   { label: "Min margin", value: fmtLimit(preview.minMarginPct, "pct", preview.currency) },
                   { label: "Max discount", value: fmtLimit(preview.maxDiscountPct, "pct", preview.currency) },
-                  { label: "Max discount without approval", value: fmtLimit(preview.maxDiscountNoApprovalPct, "pct", preview.currency), full: true },
+                  { label: "Max discount without approval", value: fmtLimit(preview.maxDiscountNoApprovalPct, "pct", preview.currency) },
                   { label: "Enforcement", value: ENFORCEMENT_HINT[preview.enforcement], full: true },
                 ]}
               />

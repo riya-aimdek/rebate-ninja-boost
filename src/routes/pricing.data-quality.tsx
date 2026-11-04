@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   Check,
   Clock,
@@ -30,12 +30,14 @@ import {
   FilterChip,
   FilterPills,
   ListHeader,
+  MissingHint,
   PricingLayout,
   RecordLink,
   StatusPill,
   Tag,
   humanize,
   inputCls,
+  missingFields,
   notifyUndo,
   toneCls,
   type ApiError,
@@ -125,6 +127,7 @@ function Page() {
   const [bulkNoteErr, setBulkNoteErr] = useState<string | undefined>();
   const [refreshing, setRefreshing] = useState(false);
   const [refreshedAt, setRefreshedAt] = useState<Date | undefined>(undefined);
+  const ignoreHintId = useId();
   const [showFilters, setShowFilters] = useState(false);
 
   const rows = useMemo(
@@ -621,6 +624,7 @@ function Page() {
         title={`Ignore ${canIgnore.length} ${canIgnore.length === 1 ? "record" : "records"}?`}
         description="Ignored records stop appearing as open issues and will not be reprocessed. The note is stored on each record."
         confirmLabel={`Ignore ${canIgnore.length}`}
+        missing={missingFields([["Resolution note", bulkNote]])}
         onConfirm={confirmBulkIgnore}
         onCancel={() => {
           setBulkIgnore(false);
@@ -652,11 +656,24 @@ function Page() {
         footer={
           selected && (
             <>
+              {/* Only Ignore needs the note, so the hint names that action. */}
+              {NEXT[selected.status].includes("IGNORED") && (
+                <MissingHint
+                  id={ignoreHintId}
+                  missing={missingFields([["Resolution note (to ignore)", note]])}
+                />
+              )}
               <Btn variant="subtle" onClick={() => setSelectedId(null)}>
                 Close
               </Btn>
               {NEXT[selected.status].includes("IGNORED") && (
-                <Btn variant="subtle" icon={EyeOff} onClick={() => transition("IGNORED")}>
+                <Btn
+                  variant="subtle"
+                  icon={EyeOff}
+                  onClick={() => transition("IGNORED")}
+                  disabled={!note.trim()}
+                  aria-describedby={!note.trim() ? ignoreHintId : undefined}
+                >
                   Ignore
                 </Btn>
               )}

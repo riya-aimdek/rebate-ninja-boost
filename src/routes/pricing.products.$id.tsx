@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { AlertTriangle, ArrowLeft, History, Lock, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -13,6 +13,7 @@ import {
   InfoBanner,
   LinkBtn,
   Locked,
+  MissingHint,
   Modal,
   PillTabs,
   Price,
@@ -22,6 +23,7 @@ import {
   RecordId,
   humanize,
   inputCls,
+  missingFields,
 } from "@/components/pricing/kit";
 import { COSTS, PRICE_LISTS, PRODUCT_SEGMENTS, PRODUCTS, type CostRecord } from "@/lib/pricing/data";
 
@@ -59,6 +61,7 @@ function Page() {
   const [draft, setDraft] = useState({ segment, ...ext, reason: "" });
   const [errors, setErrors] = useState<EditErrors>({});
   const [saving, setSaving] = useState(false);
+  const hintId = useId();
 
   if (!product) {
     return (
@@ -84,6 +87,11 @@ function Page() {
   );
   const segmentChanged = draft.segment !== segment;
   const dirty = draft.segment !== segment || draft.pricingFamily !== ext.pricingFamily || draft.minOrderMultiple !== ext.minOrderMultiple;
+  const missing = missingFields([
+    ["Product segment", draft.segment],
+    ["Min order multiple", draft.minOrderMultiple],
+    ["Reason for segment change", draft.reason, segmentChanged],
+  ]);
 
   const save = () => {
     const e: EditErrors = {};
@@ -255,7 +263,7 @@ function Page() {
               { label: "Source identifier", value: <span className="font-mono">{product.sourceId}</span> },
               { label: "Import timestamp", value: product.importedAt },
               { label: "Last sync job", value: "SYNC-PROD-1029 (nightly batch)" },
-              { label: "Product hierarchy", value: product.hierarchy.join(" › "), full: true },
+              { label: "Product hierarchy", value: product.hierarchy.join(" › ") },
             ]}
           />
         </Card>
@@ -270,15 +278,27 @@ function Page() {
         subtitle="ERP-owned fields (identity, description, UoM, base cost) cannot be edited."
         footer={
           <>
-            {dirty && (
-              <span role="status" className="mr-auto self-center text-xs font-medium text-warning-foreground">
-                Unsaved changes
-              </span>
+            {(dirty || missing.length > 0) && (
+              <div className="mr-auto self-center flex flex-col gap-0.5">
+                {dirty && (
+                  <span role="status" className="text-xs font-medium text-warning-foreground">
+                    Unsaved changes
+                  </span>
+                )}
+                <MissingHint id={hintId} missing={missing} />
+              </div>
             )}
             <Btn variant="subtle" onClick={() => setEditOpen(false)} disabled={saving}>
               Cancel
             </Btn>
-            <Btn type="submit" form="pricing-attributes" loading={saving} disabled={!dirty} title={!dirty ? "No changes to save" : undefined}>
+            <Btn
+              type="submit"
+              form="pricing-attributes"
+              loading={saving}
+              disabled={!dirty || missing.length > 0}
+              aria-describedby={missing.length ? hintId : undefined}
+              title={!dirty ? "No changes to save" : undefined}
+            >
               Save
             </Btn>
           </>

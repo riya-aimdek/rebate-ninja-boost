@@ -15,10 +15,12 @@ import {
   DataTable,
   DetailGrid,
   Field,
+  MissingHint,
   PillTabs,
   StatusPill,
   Tag,
   inputCls,
+  missingFields,
   notifySuccess,
 } from "@/components/pricing/kit";
 
@@ -108,6 +110,13 @@ function ProfilePage() {
 
   const errors = validateProfile(draft);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  const hintId = useId();
+  const missing = missingFields([
+    ["User name", draft.username],
+    ["Email address", draft.email],
+    ["First name", draft.firstName],
+    ["Last name", draft.lastName],
+  ]);
   const showError = (k: keyof Profile) => ((submitted || touched[k]) && errors[k]) || undefined;
 
   const startEdit = () => {
@@ -205,10 +214,11 @@ function ProfilePage() {
                     Unsaved changes
                   </span>
                 )}
+                <MissingHint id={hintId} missing={missing} />
                 <Btn variant="subtle" onClick={cancel} disabled={saving}>
                   Cancel
                 </Btn>
-                <Btn type="submit" form="profile-form" loading={saving}>
+                <Btn type="submit" form="profile-form" loading={saving} disabled={missing.length > 0} aria-describedby={missing.length ? hintId : undefined}>
                   Save changes
                 </Btn>
               </>
@@ -460,6 +470,7 @@ function SecurityTab() {
     <div className="grid gap-6 lg:grid-cols-2">
       <Card title="Sign-in" subtitle="You sign in with your company account through single sign-on.">
         <DetailGrid
+          columns={2}
           items={[
             { label: "Method", value: "Corporate SSO · Azure AD (OIDC)" },
             { label: "Multi-factor authentication", value: <StatusPill status="ACTIVE" tone="success" label="Required — enforced by your identity provider" />, full: true },

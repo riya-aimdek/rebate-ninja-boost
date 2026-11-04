@@ -200,7 +200,7 @@ function SavedViewsPage() {
         <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((v) => (
             <li key={v.id}>
-              <article className="h-full flex flex-col bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md hover:border-brand/40 transition">
+              <article className="h-full flex flex-col bg-card border border-border rounded-xl p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">

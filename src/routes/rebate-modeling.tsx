@@ -1286,7 +1286,7 @@ function GrowthConfig({
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.label} className="border-b border-border/60 last:border-0 hover:bg-muted/30">
+              <tr key={r.label} className="border-b border-border/60 last:border-0">
                 <th scope="row" className="sticky left-0 z-10 bg-card py-2 px-4 sm:px-6 font-medium align-top text-left">
                   <div className="leading-tight">
                     <div>{r.label}</div>

@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useBlocker } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { ArrowDown, ArrowUp, Check, GripVertical, Lock, RotateCcw, Save, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -11,6 +11,7 @@ import {
   ErrorBanner,
   Field,
   ListHeader,
+  MissingHint,
   Modal,
   PricingLayout,
   StatusPill,
@@ -18,6 +19,7 @@ import {
   Toggle,
   humanize,
   inputCls,
+  missingFields,
   notifyUndo,
   type ApiError,
 } from "@/components/pricing/kit";
@@ -81,6 +83,8 @@ function Page() {
   const [rejectComment, setRejectComment] = useState("");
   const [rejectSubmitted, setRejectSubmitted] = useState(false);
   const [deciding, setDeciding] = useState(false);
+  const precHintId = useId();
+  const rejectHintId = useId();
 
   /** Keep the in-memory store in sync so the price trace uses the approved order. */
   const setVersions = (next: PrecedenceVersion[]) => {
@@ -136,6 +140,12 @@ function Page() {
   if (!reasonCode) errs["prec-reason"] = "Select why the order is changing — it is kept in the audit trail.";
   else if (reasonCode === "OTHER" && !reasonText.trim()) errs["prec-reason-text"] = "Describe the reason for this change.";
   const fe = (k: string) => (submitted ? errs[k] : undefined);
+  const precMissing = missingFields([
+    ["Tie-breaker", tieBreaker],
+    ["Effective from", effectiveFrom],
+    ["Reason code", reasonCode],
+    ["Reason text", reasonText, reasonCode === "OTHER"],
+  ]);
 
   const requestSave = (e?: FormEvent) => {
     e?.preventDefault();
@@ -486,7 +496,13 @@ function Page() {
               )}
               <Toggle checked={routeApproval} onChange={setRouteApproval} label="Route for approval before it takes effect" />
               <div className="flex flex-wrap justify-end gap-2 pt-2">
-                <Btn type="submit" icon={Save} disabled={!dirty || !!pending}>
+                {dirty && !pending && <MissingHint id={precHintId} missing={precMissing} />}
+                <Btn
+                  type="submit"
+                  icon={Save}
+                  disabled={!dirty || !!pending || precMissing.length > 0}
+                  aria-describedby={precMissing.length ? precHintId : undefined}
+                >
                   {routeApproval ? "Submit for approval" : "Save new version"}
                 </Btn>
               </div>
@@ -551,10 +567,18 @@ function Page() {
         subtitle={`v${active.version} stays active. The submitter sees your comment.`}
         footer={
           <>
+            <MissingHint id={rejectHintId} missing={missingFields([["Comment", rejectComment]])} />
             <Btn variant="subtle" onClick={() => setRejectOpen(false)} disabled={deciding}>
               Cancel
             </Btn>
-            <Btn type="submit" form="prec-reject-form" variant="danger" loading={deciding}>
+            <Btn
+              type="submit"
+              form="prec-reject-form"
+              variant="danger"
+              loading={deciding}
+              disabled={!rejectComment.trim()}
+              aria-describedby={!rejectComment.trim() ? rejectHintId : undefined}
+            >
               Reject
             </Btn>
           </>

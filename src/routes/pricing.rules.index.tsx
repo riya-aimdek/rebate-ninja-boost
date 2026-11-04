@@ -208,7 +208,7 @@ function RuleQuickView({ rule: r, onClose, onOpen }: { rule: PricingRule | null;
                 { label: "Effective", value: <span className="tabular-nums whitespace-nowrap">{r.effectiveFrom} → {r.effectiveTo ?? "open"}</span> },
                 { label: "Owner", value: r.owner },
                 { label: "Last updated", value: <span className="tabular-nums">{r.lastUpdated}</span> },
-                ...(r.reasonCode ? [{ label: "Reason code", value: humanize(r.reasonCode), full: true }] : []),
+                ...(r.reasonCode ? [{ label: "Reason code", value: humanize(r.reasonCode) }] : []),
               ]}
             />
           </section>

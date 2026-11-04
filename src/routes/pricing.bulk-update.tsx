@@ -1070,7 +1070,7 @@ function JobDrawer({
             items={[
               { label: "Method", value: `${humanize(job.method)} · ${job.value}` },
               { label: "Guardrail handling", value: humanize(job.handling) },
-              { label: "Selection", value: job.selection, full: true },
+              { label: "Selection", value: job.selection },
               { label: "Total", value: job.total.toLocaleString("en-GB") },
               { label: "Succeeded", value: job.succeeded.toLocaleString("en-GB") },
               { label: "Failed", value: job.failed.toLocaleString("en-GB") },

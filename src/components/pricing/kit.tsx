@@ -19,7 +19,9 @@ import {
 import {
   Children,
   cloneElement,
+  createContext,
   isValidElement,
+  useContext,
   useEffect,
   useId,
   useRef,
@@ -29,14 +31,11 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "sonner";
-import { AppLayout, APP_NAV } from "@/components/AppShell";
+import { AppLayout } from "@/components/AppShell";
 
 /* ------------------------------------------------------------------ */
 /* Layout — every pricing page uses the shared app frame               */
 /* ------------------------------------------------------------------ */
-
-/** @deprecated use APP_NAV from AppShell — kept so existing imports compile. */
-export const PRICING_NAV = APP_NAV;
 
 export type Crumb = { label: string; to?: string };
 
@@ -738,19 +737,49 @@ export function Card({
 
 export type DetailItem = { label: string; value: ReactNode; full?: boolean };
 
-/** Two-column label/value grid with dividers — the "Rebate Details" pattern. */
-export function DetailGrid({ items }: { items: DetailItem[] }) {
+/**
+ * Max columns a DetailGrid may use where it is rendered. Drawers and modals cap it at 2 and
+ * confirm dialogs at 1, so a grid is never squeezed into 3 narrow columns on a wide screen.
+ */
+const DetailColumns = createContext<1 | 2 | 3>(3);
+
+const DETAIL_COLS: Record<1 | 2 | 3, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-1 sm:grid-cols-2",
+  3: "grid-cols-1 md:grid-cols-2 xl:grid-cols-3",
+};
+
+/**
+ * Label/value grid — the "Rebate Type Details" pattern (uppercase label above a semibold value).
+ * Responsive to screen size: 1 column on mobile, 2 from md (768px), 3 from xl (1280px).
+ * Pass `columns` for a card in a narrow column (e.g. a 1/3-width side card -> 1).
+ */
+export function DetailGrid({ items, columns }: { items: DetailItem[]; columns?: 1 | 2 | 3 }) {
+  const max = useContext(DetailColumns);
+  const cols = Math.min(columns ?? 3, max) as 1 | 2 | 3;
   return (
-    <dl className="grid md:grid-cols-2 gap-x-10">
-      {items.map((it, i) => (
-        <div key={i} className={`py-3.5 border-b border-border ${it.full ? "md:col-span-2" : ""}`}>
-          <dt className="text-sm text-muted-foreground">
-            {it.label}
-          </dt>
-          <dd className="mt-1.5 text-[15px] font-medium text-foreground">{it.value ?? "—"}</dd>
-        </div>
-      ))}
-    </dl>
+    <div>
+      <dl className={`grid ${DETAIL_COLS[cols]} gap-x-10`}>
+        {items.map((it, i) => {
+          const empty = it.value === null || it.value === undefined || it.value === "";
+          return (
+            <div
+              key={i}
+              className={`min-w-0 py-4 border-b border-border/70 ${it.full ? "col-span-full" : ""}`}
+            >
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {it.label}
+              </dt>
+              <dd
+                className={`mt-1.5 text-[15px] leading-snug break-words ${empty ? "text-muted-foreground" : "font-semibold text-foreground"}`}
+              >
+                {empty ? "—" : it.value}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </div>
   );
 }
 
@@ -760,7 +789,7 @@ export function Locked({ children, owner = "ERP" }: { children: ReactNode; owner
     <span className="inline-flex items-center gap-1.5">
       {children}
       <Lock
-        className="size-3.5 shrink-0 text-muted-foreground"
+        className="size-3 shrink-0 text-muted-foreground/70"
         role="img"
         aria-label={`Read-only, owned by ${owner}`}
       />
@@ -1220,7 +1249,7 @@ export function DataTable<T>({
                         : undefined
                     }
                     aria-selected={selectedKey !== undefined ? sel : undefined}
-                    className={`${sel ? "bg-brand-soft" : i % 2 === 1 ? "bg-muted/30" : ""} ${onRowClick ? "cursor-pointer hover:bg-brand-soft/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand" : "hover:bg-muted/40"} ${rowClassName?.(r) ?? ""}`}
+                    className={`${sel ? "bg-brand-soft" : i % 2 === 1 ? "bg-muted/30" : ""} ${onRowClick ? "cursor-pointer hover:bg-brand-soft/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand" : ""} ${rowClassName?.(r) ?? ""}`}
                   >
                     {numbered && (
                       <td className="px-4 py-3.5 text-muted-foreground tabular-nums">
@@ -1436,7 +1465,9 @@ export function Modal({
             <X className="size-4" aria-hidden />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <DetailColumns.Provider value={2}>{children}</DetailColumns.Provider>
+        </div>
         {footer && (
           <div className="px-6 py-4 border-t border-border flex flex-wrap justify-end gap-2 bg-muted/30 rounded-b-xl">
             {footer}
@@ -1502,7 +1533,9 @@ export function Drawer({
             <X className="size-4" aria-hidden />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">{children}</div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <DetailColumns.Provider value={2}>{children}</DetailColumns.Provider>
+        </div>
         {footer && (
           <div className="px-6 py-4 border-t border-border flex flex-wrap justify-end gap-2 bg-card">
             {footer}
@@ -1525,6 +1558,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   tone = "primary",
   loading = false,
+  missing = [],
   onConfirm,
   onCancel,
   children,
@@ -1536,10 +1570,13 @@ export function ConfirmDialog({
   cancelLabel?: string;
   tone?: "primary" | "danger";
   loading?: boolean;
+  /** Labels of required fields still empty; the confirm button stays disabled until it is []. */
+  missing?: string[];
   onConfirm: () => void;
   onCancel: () => void;
   children?: ReactNode;
 }) {
+  const hintId = useId();
   return (
     <Modal
       open={open}
@@ -1554,6 +1591,7 @@ export function ConfirmDialog({
       dismissible={!loading}
       footer={
         <>
+          <MissingHint id={hintId} missing={missing} />
           {/* Destructive dialogs focus Cancel first so Enter never deletes by accident. */}
           <Btn
             variant="subtle"
@@ -1567,6 +1605,8 @@ export function ConfirmDialog({
             variant={tone === "danger" ? "danger" : "primary"}
             onClick={onConfirm}
             loading={loading}
+            disabled={missing.length > 0}
+            aria-describedby={missing.length > 0 ? hintId : undefined}
             data-autofocus={tone === "danger" ? undefined : true}
           >
             {confirmLabel}
@@ -1575,8 +1615,41 @@ export function ConfirmDialog({
       }
     >
       {description && <p className="text-sm text-foreground">{description}</p>}
-      {children}
+      <DetailColumns.Provider value={1}>{children}</DetailColumns.Provider>
     </Modal>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Required fields — the submit button stays disabled until they are   */
+/* filled, and a hint beside it says which ones are missing.           */
+/* ------------------------------------------------------------------ */
+
+/** Labels whose value is still empty (undefined, null, blank string, empty array or NaN). */
+export function missingFields(fields: Array<[label: string, value: unknown, required?: boolean]>) {
+  return fields
+    .filter(([, v, req = true]) => {
+      if (!req) return false;
+      if (v === undefined || v === null) return true;
+      if (typeof v === "string") return v.trim() === "";
+      if (typeof v === "number") return Number.isNaN(v);
+      if (Array.isArray(v)) return v.length === 0;
+      return false;
+    })
+    .map(([label]) => label);
+}
+
+/**
+ * Says why the submit button is disabled. Put it first in a footer/action row (it pushes the
+ * buttons right) and point the button's aria-describedby at its id.
+ */
+export function MissingHint({ id, missing, className = "" }: { id?: string; missing: string[]; className?: string }) {
+  if (missing.length === 0) return null;
+  const list = missing.length > 3 ? `${missing.slice(0, 3).join(", ")} +${missing.length - 3} more` : missing.join(", ");
+  return (
+    <p id={id} className={`mr-auto self-center text-xs text-muted-foreground ${className}`} role="status">
+      Required: <span className="font-medium text-foreground">{list}</span>
+    </p>
   );
 }
 
@@ -1603,7 +1676,8 @@ export function notifyUndo(message: string, onUndo: () => void, description?: st
 /* ------------------------------------------------------------------ */
 
 export type ApiError = {
-  errorClass: "VALIDATION" | "BUSINESS_RULE" | "AUTHORIZATION" | "CONFLICT";
+  /** FR-J-01 classes (+ CONFLICT for stale versions). */
+  errorClass: "VALIDATION" | "BUSINESS_RULE" | "AUTHORIZATION" | "CONFLICT" | "TRANSIENT_TECHNICAL" | "PERMANENT_TECHNICAL" | "DOWNSTREAM_REJECTION";
   code: string;
   message: string;
   field?: string;

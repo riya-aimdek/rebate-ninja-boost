@@ -221,7 +221,7 @@ function ProductQuickView({ product: p, onClose, onOpen }: { product: Product | 
                 { label: "Unit of measure", value: <Locked>{p.uom}</Locked> },
                 { label: "Category", value: <Locked>{p.category}</Locked> },
                 { label: "Brand", value: <Locked>{p.brand}</Locked> },
-                { label: "Base cost", value: <Locked><Price value={p.cost} currency={p.currency} uom={p.uom} /></Locked>, full: true },
+                { label: "Base cost", value: <Locked><Price value={p.cost} currency={p.currency} uom={p.uom} /></Locked> },
                 { label: "Source", value: <span className="font-mono text-sm">{p.sourceSystem} · {p.sourceId}</span> },
                 { label: "Last updated", value: p.lastUpdated },
               ]}
