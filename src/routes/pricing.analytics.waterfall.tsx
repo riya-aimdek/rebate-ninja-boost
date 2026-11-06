@@ -25,6 +25,7 @@ import {
   type ApiError,
   MissingHint,
   missingFields,
+  TableSection,
 } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
 import { ChartLegend, DrillTrail, Freshness } from "@/components/pricing/analytics-ui";
@@ -320,14 +321,14 @@ function Page() {
                   ].map(([k, v]) => (
                     <div key={k}>
                       <dt className="text-muted-foreground">{k}</dt>
-                      <dd className="mt-1 text-lg font-semibold tabular-nums">{v}</dd>
+                      <dd className="mt-1 text-xl font-semibold tabular-nums">{v}</dd>
                     </div>
                   ))}
                 </dl>
               </Card>
-              <Card title="Price bridge" subtitle={single ? "Bridge compares groups — pick group view to compare periods." : `${period === "2026-Q3" ? "Q3 vs Q2" : "Q2 vs Q3"} 2026, same filters`}>
+              <Card title="Price bridge" subtitle={single ? undefined : `${period === "2026-Q3" ? "Q3 vs Q2" : "Q2 vs Q3"} 2026, same filters`}>
                 {single || prior.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">{single ? "Clear the transaction to compare this group with the prior period." : "No transactions in the comparison period."}</p>
+                  <p className="text-base text-muted-foreground">{single ? "Clear the transaction to compare this group with the prior period." : "No transactions in the comparison period."}</p>
                 ) : (
                   <BridgeTable def={visibleDef} cur={wf} prev={prev} period={period} />
                 )}
@@ -336,7 +337,7 @@ function Page() {
           </div>
 
           {!single && (
-            <Card
+            <TableSection
               title="Leakage by group"
               subtitle="Where the gap between list and pocket price is largest. Select a row to drill in."
               actions={
@@ -346,7 +347,6 @@ function Page() {
                   options={GROUPS.filter((g) => !(g === "CUSTOMER" && customer) && !(g === "PRODUCT" && search.product) && !(g === "CHANNEL" && search.channel)).map((g) => ({ key: g, label: DIMENSION_LABEL[g] }))}
                 />
               }
-              padded={false}
             >
               <DataTable
                 caption={`Leakage by ${DIMENSION_LABEL[group].toLowerCase()}`}
@@ -355,7 +355,7 @@ function Page() {
                 onRowClick={(g) => drill(g.key)}
                 pageSize={10}
                 columns={[
-                  { key: "g", header: DIMENSION_LABEL[group], cell: (g) => <span className="font-medium text-brand">{g.label}</span> },
+                  { key: "g", header: DIMENSION_LABEL[group], cell: (g) => <span className="font-medium text-brand-strong">{g.label}</span> },
                   { key: "n", header: "Lines", align: "right", cell: (g) => <span className="tabular-nums">{g.lines}</span> },
                   { key: "l", header: "Avg list", align: "right", cell: (g) => <span className="tabular-nums">{money(g.list)}</span> },
                   { key: "p", header: "Avg pocket", align: "right", cell: (g) => <span className="tabular-nums">{money(g.pocket)}</span> },
@@ -363,7 +363,7 @@ function Page() {
                   { key: "lt", header: "Leakage £", align: "right", cell: (g) => <span className="tabular-nums font-semibold">{money(g.leakageTotal, "GBP", 0)}</span> },
                 ]}
               />
-            </Card>
+            </TableSection>
           )}
         </>
       )}

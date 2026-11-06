@@ -36,5 +36,11 @@ Run this per page/flow before calling work done. Each line must be ✅ or have a
 - [ ] Enter submits forms; `/` focuses page search; Ctrl/⌘+K works; bulk actions where users act on many rows.
 - [ ] Advanced/rarely used options behind progressive disclosure.
 
+## Typography
+- [ ] Every text element matches its role in SKILL.md › Typography (h1/h2/h3 scale, body & descriptions 16px, inputs 16px, buttons ≥ 14px, captions ≥ 12px).
+- [ ] Text fills its container — no `max-w-prose` / `max-w-2xl` / `max-w-3xl` caps (only centred `mx-auto` blocks); no tight leading on body text.
+- [ ] Brand text uses `text-brand-strong`, white-on-orange uses `bg-brand-strong`, warning text uses `text-warning-foreground`; no faded text below 4.5:1.
+
 ## Verify
+- [ ] `npm run check:typography` → 0 errors (review `--warn` output for tight leading).
 - [ ] `node node_modules/typescript/bin/tsc --noEmit -p .` passes with no new errors.

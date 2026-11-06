@@ -163,7 +163,7 @@ function SavedViewsPage() {
           ]}
         />
         <p role="status" className="text-sm text-muted-foreground">
-          Showing {filtered.length} of {views.length} views
+          {filtered.length === views.length ? `${views.length} views` : `Showing ${filtered.length} of ${views.length} views`}
         </p>
       </div>
 
@@ -203,14 +203,14 @@ function SavedViewsPage() {
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="font-semibold text-base leading-tight truncate" title={v.name}>
+                      <h2 className="text-xl lg:text-2xl leading-[1.2] font-semibold truncate" title={v.name}>
                         {v.name}
                       </h2>
                       {v.starred && (
-                        <Star className="size-4 text-warning fill-warning shrink-0" aria-label="Starred" role="img" />
+                        <Star className="size-4 text-warning-foreground fill-warning shrink-0" aria-label="Starred" role="img" />
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-sm text-muted-foreground mt-1">
                       Based on <span className="font-medium text-foreground">{v.base}</span>
                     </p>
                   </div>
@@ -225,9 +225,9 @@ function SavedViewsPage() {
                   ))}
                 </ul>
 
-                <div className="mt-auto flex items-center justify-between gap-2 text-xs text-muted-foreground border-t border-border pt-3">
+                <div className="mt-auto flex items-center justify-between gap-2 text-sm text-muted-foreground border-t border-border pt-3">
                   <div className="flex items-center gap-2">
-                    <div className="size-6 rounded-full bg-brand/10 text-brand grid place-items-center text-[11px] font-bold" aria-hidden>
+                    <div className="size-6 rounded-full bg-brand/10 text-brand-strong grid place-items-center text-xs font-bold" aria-hidden>
                       {v.owner.split(" ").map((w) => w[0]).join("")}
                     </div>
                     <span>

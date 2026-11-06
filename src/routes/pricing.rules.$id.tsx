@@ -116,7 +116,7 @@ function Editor({ id }: { id: string }) {
 
   if (!isNew && !original) {
     return (
-      <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Pricing rules", to: "/pricing/rules" }, { label: id }]}>
+      <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segments" }, { label: "Pricing rules", to: "/pricing/rules" }, { label: id }]}>
         <h1 className="sr-only">Rule not found</h1>
         <EmptyState
           title={`Rule ${id} not found`}
@@ -334,7 +334,7 @@ function Editor({ id }: { id: string }) {
   const actionSpec = ACTION_INPUT[rule.action.type];
 
   return (
-    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Pricing rules", to: "/pricing/rules" }, { label: isNew ? "Create rule" : rule.name }]}>
+    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segments" }, { label: "Pricing rules", to: "/pricing/rules" }, { label: isNew ? "Create rule" : rule.name }]}>
       <DetailTitle
         title={isNew && rule.id === "new" ? "Create pricing rule" : rule.name || "Untitled rule"}
         status={rule.status}
@@ -403,7 +403,7 @@ function Editor({ id }: { id: string }) {
       ) : (
         readOnly && <InfoBanner title="Superseded version">This version is read-only. Open the current version above to make changes.</InfoBanner>
       )}
-      {rule.status !== "ACTIVE" && dirty && !readOnly && <p className="text-xs text-muted-foreground -mt-2 mb-4">Save your changes before activating.</p>}
+      {rule.status !== "ACTIVE" && dirty && !readOnly && <p className="text-base text-muted-foreground -mt-2 mb-4">Save your changes before activating.</p>}
 
       {original?.status === "ACTIVE" && (
         <InfoBanner title="Editing an active rule">Saving creates a new draft version with a reason code. This version stays active until the new version is activated.</InfoBanner>
@@ -448,7 +448,7 @@ function Editor({ id }: { id: string }) {
             </div>
             <p className="text-xs text-muted-foreground mt-4">
               See how this rule ranks against other rule tiers in{" "}
-              <Link to="/pricing/precedence" className="text-brand font-medium hover:underline">
+              <Link to="/pricing/precedence" className="text-brand-strong font-medium hover:underline">
                 Rule precedence
               </Link>
               .
@@ -507,7 +507,7 @@ function Editor({ id }: { id: string }) {
             {rule.action.type === "APPLY_FORMULA" && (
               <p className="text-xs text-muted-foreground mt-3">
                 Build or edit formulas in{" "}
-                <Link to="/pricing/formulas" className="text-brand font-medium hover:underline">
+                <Link to="/pricing/formulas" className="text-brand-strong font-medium hover:underline">
                   Formula pricing
                 </Link>
                 .
@@ -562,7 +562,7 @@ function Editor({ id }: { id: string }) {
 
         <div className="space-y-6 min-w-0">
           <Card title="Rule summary">
-            <p className="text-sm leading-relaxed">
+            <p className="text-base">
               <b>When</b> {friendlySummary(rule.conditions)}
               <br />
               <b>then</b> {actionSummary(effective.action)}
@@ -573,14 +573,14 @@ function Editor({ id }: { id: string }) {
             </p>
           </Card>
           <div className="[&>div]:mb-0">
-          <InfoBanner tone="success" title="No custom code">
-            Rules are stored as configuration (attributes, operators, one action) and evaluated by the pricing engine. Lifecycle: Draft → Active → Inactive → Superseded. Activating with a future date schedules the rule until that date.
+          <InfoBanner tone="success" title="Lifecycle">
+            Draft → Active → Inactive → Superseded.
           </InfoBanner>
           </div>
           <Card title="Version history" padded={false}>
             <ul className="divide-y divide-border" aria-label="Rule version history">
               {(versions.length ? versions : [rule]).map((r) => (
-                <li key={r.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-6 py-3 text-sm ${r.id === rule.id ? "bg-brand-soft/60" : ""}`}>
+                <li key={r.id} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 text-sm ${r.id === rule.id ? "bg-brand-soft/60" : ""}`}>
                   {r.id === rule.id || r.id === "new" ? (
                     <span className="font-semibold tabular-nums">v{r.version}</span>
                   ) : (

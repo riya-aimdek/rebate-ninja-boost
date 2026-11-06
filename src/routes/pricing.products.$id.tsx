@@ -138,7 +138,7 @@ function Page() {
 
       {product.lifecycleStatus === "BLOCKED" && (
         <InfoBanner tone="danger" title="Product blocked">
-          This product cannot be added to price lists (PRODUCT_BLOCKED). Lines referencing it are rejected.
+          This product cannot be added to price lists. Lines referencing it are rejected.
         </InfoBanner>
       )}
       {product.lifecycleStatus === "END_OF_LIFE" && (
@@ -211,8 +211,8 @@ function Page() {
 
       {tab === "costs" && (
         <>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <p className="text-sm text-muted-foreground">Effective-dated; a new cost closes the previous record instead of overwriting it.</p>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-8 [&>p]:min-w-0 [&>p]:flex-1 [&>:not(p)]:shrink-0 mb-4">
+          <p className="text-base text-muted-foreground">Effective-dated; a new cost closes the previous record instead of overwriting it.</p>
           {costs.length > 0 && (
             <LinkBtn to="/pricing/costs" search={{ tab: "history", sku: product.sku }} variant="outline" size="sm" icon={History}>
               View cost history

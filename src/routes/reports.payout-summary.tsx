@@ -111,7 +111,7 @@ function PayoutSummaryPage() {
   };
 
   const columns: Column<Row>[] = [
-    { key: "id", header: "Payout ID", className: "font-mono text-xs text-muted-foreground whitespace-nowrap", cell: (r) => r.id },
+    { key: "id", header: "Payout ID", className: "font-mono text-sm text-muted-foreground whitespace-nowrap", cell: (r) => r.id },
     { key: "account", header: "Account", className: "font-semibold", cell: (r) => r.account },
     {
       key: "program",
@@ -120,7 +120,7 @@ function PayoutSummaryPage() {
         <button
           type="button"
           onClick={() => setProgram(r.program)}
-          className="hit text-brand font-medium hover:underline text-left"
+          className="hit text-brand-strong font-medium hover:underline text-left"
           aria-label={`Filter by program ${r.program}`}
           title="Filter by this program"
         >
@@ -140,8 +140,9 @@ function PayoutSummaryPage() {
       title="Payout summary"
       subtitle="Approved, pending and paid rebate payouts across programs — reconcile them against finance ledgers."
       onExport={exportCsv}
+      exportCount={filtered.length}
       kpis={[
-        { label: "Total payouts", value: fmt(totals.total), hint: `${filtered.length} ${filtered.length === 1 ? "payout" : "payouts"}` },
+        { label: "Total payouts", value: fmt(totals.total) },
         { label: "Paid", value: fmt(totals.paid), tone: "success" },
         { label: "Approved, not yet paid", value: fmt(totals.approved), tone: "info" },
         { label: "Pending or on hold", value: fmt(totals.pending), tone: "warning" },

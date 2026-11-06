@@ -149,6 +149,7 @@ function ProgramRegisterPage() {
       title="Program register"
       subtitle="Revenue, accrued rebate, claim rebate and outstanding settlement for every rebate program."
       onExport={exportCsv}
+      exportCount={filtered.length}
       kpis={[
         { label: "Programs", value: `${filtered.length}` },
         { label: "Active programs", value: `${active}`, tone: "success" },

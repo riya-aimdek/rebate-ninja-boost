@@ -37,7 +37,6 @@ import {
   APPROVAL_TASKS,
   DELEGATIONS,
   JUSTIFICATIONS,
-  NOW,
   SLA_RANK,
   currentStep,
   slaStatus,
@@ -170,11 +169,11 @@ function Page() {
             <span className="font-medium">{t.refId}</span>
           )}
           <span className="ml-2 font-mono text-xs text-muted-foreground">{t.id}</span>
-          <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{t.title}</div>
+          <div className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{t.title}</div>
         </div>
       ),
     },
-    { key: "type", header: "Type", cell: (t) => <Tag tone={t.requestType === "EXCEPTION" ? "brand" : "info"}>{humanize(t.requestType)}</Tag> },
+    { key: "type", header: "Type", className: "whitespace-nowrap", cell: (t) => humanize(t.requestType) },
     {
       key: "cust",
       header: "Customer",
@@ -236,7 +235,7 @@ function Page() {
         search={search}
         onSearch={setSearch}
         actions={
-          <Btn variant="outline" icon={Download} onClick={exportCsv}>
+          <Btn variant="outline" icon={Download} onClick={exportCsv} disabled={rows.length === 0}>
             Export CSV
           </Btn>
         }
@@ -285,7 +284,7 @@ function Page() {
           </Field>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-x-6">
+      <div className="flex flex-wrap items-center gap-x-6 empty:hidden">
         <FilterPills<Kind> label="Type" selected={kinds} onChange={setKinds} options={APPLIES_TO.map((k) => ({ key: k, label: humanize(k), count: all.filter((t) => t.requestType === k).length }))} />
         <FilterPills<SlaStatus> label="SLA" selected={slas} onChange={setSlas} options={(["BREACHED", "AT_RISK", "ON_TRACK"] as SlaStatus[]).map((s) => ({ key: s, label: SLA_META[s].label, count: pending.filter((t) => sla(t) === s).length }))} />
       </div>
@@ -350,25 +349,25 @@ function Metrics({ tasks }: { tasks: ApprovalTask[] }) {
   }
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-      <Card title="Approval rate by approver" subtitle={`${decided.length} decided requests`} padded={false}>
+      <Card title="Approval rate by approver" padded={false}>
         <div className="overflow-x-auto overflow-y-hidden">
           <table className="w-full text-sm">
             <caption className="sr-only">Approval rate by approver</caption>
             <thead>
               <tr className="text-left text-muted-foreground border-b border-border">
-                <th scope="col" className="px-6 py-2.5 font-medium">Approver</th>
+                <th scope="col" className="px-5 py-2.5 font-medium">Approver</th>
                 <th scope="col" className="px-4 py-2.5 font-medium text-right">Decisions</th>
                 <th scope="col" className="px-4 py-2.5 font-medium text-right">Approved</th>
-                <th scope="col" className="px-6 py-2.5 font-medium text-right">Avg time</th>
+                <th scope="col" className="px-5 py-2.5 font-medium text-right">Avg time</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {[...byApprover.entries()].map(([id, m]) => (
                 <tr key={id}>
-                  <td className="px-6 py-2.5">{userName(id)} <span className="text-xs text-muted-foreground">· {userById(id)?.title}</span></td>
+                  <td className="px-5 py-2.5">{userName(id)} <span className="text-xs text-muted-foreground">· {userById(id)?.title}</span></td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{m.n}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{Math.round((m.approved / m.n) * 100)}%</td>
-                  <td className="px-6 py-2.5 text-right tabular-nums">{(m.hours.reduce((a, b) => a + b, 0) / m.hours.length).toFixed(1)} h</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{(m.hours.reduce((a, b) => a + b, 0) / m.hours.length).toFixed(1)} h</td>
                 </tr>
               ))}
             </tbody>
@@ -381,19 +380,19 @@ function Metrics({ tasks }: { tasks: ApprovalTask[] }) {
             <caption className="sr-only">Requests by category</caption>
             <thead>
               <tr className="text-left text-muted-foreground border-b border-border">
-                <th scope="col" className="px-6 py-2.5 font-medium">Category</th>
+                <th scope="col" className="px-5 py-2.5 font-medium">Category</th>
                 <th scope="col" className="px-4 py-2.5 font-medium text-right">Requests</th>
                 <th scope="col" className="px-4 py-2.5 font-medium text-right">Approved</th>
-                <th scope="col" className="px-6 py-2.5 font-medium text-right">SLA breaches</th>
+                <th scope="col" className="px-5 py-2.5 font-medium text-right">SLA breaches</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {[...byCat.entries()].map(([k, m]) => (
                 <tr key={k}>
-                  <td className="px-6 py-2.5">{k}</td>
+                  <td className="px-5 py-2.5">{k}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{m.n}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">{m.approved}</td>
-                  <td className="px-6 py-2.5 text-right tabular-nums">{m.breached}</td>
+                  <td className="px-5 py-2.5 text-right tabular-nums">{m.breached}</td>
                 </tr>
               ))}
             </tbody>
@@ -505,7 +504,7 @@ function TaskDrawer({ task, onClose, onDecided }: { task: ApprovalTask | null; o
 
       {/* Context panel (US-DD-07): waterfall, customer profitability, prior exceptions */}
       <section aria-labelledby="ctx-h" className="bg-card border border-border rounded-xl p-5">
-        <h3 id="ctx-h" className="font-semibold mb-3">Deal context</h3>
+        <h3 id="ctx-h" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-3">Deal context</h3>
         {ref && (
           <dl className="text-sm divide-y divide-border">
             <Row label={`List price · ${ref.sku} ${ref.name}`} value={money(ref.listPrice)} />
@@ -523,7 +522,7 @@ function TaskDrawer({ task, onClose, onDecided }: { task: ApprovalTask | null; o
             <Stat label="Leakage" value={`${snap.leakagePct.toFixed(1)}%`} />
           </div>
         )}
-        <h4 className="text-sm font-semibold mt-4 mb-2">Prior exceptions for this customer</h4>
+        <h4 className="text-base leading-[1.2] font-semibold mt-4 mb-2">Prior exceptions for this customer</h4>
         {prior.length ? (
           <ul className="text-sm space-y-1.5">
             {prior.map((e) => (
@@ -541,7 +540,7 @@ function TaskDrawer({ task, onClose, onDecided }: { task: ApprovalTask | null; o
       </section>
 
       <section aria-labelledby="steps-h" className="bg-card border border-border rounded-xl p-5">
-        <h3 id="steps-h" className="font-semibold mb-3">Approval levels</h3>
+        <h3 id="steps-h" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-3">Approval levels</h3>
         <ol className="space-y-3">
           {task.steps.map((s) => (
             <li key={s.level} aria-current={s.level === task.currentLevel && task.status === "PENDING" ? "step" : undefined} className={`rounded-lg border p-3 ${s.level === task.currentLevel && task.status === "PENDING" ? "border-brand/50 bg-brand-soft/40" : "border-border"}`}>
@@ -569,13 +568,13 @@ function TaskDrawer({ task, onClose, onDecided }: { task: ApprovalTask | null; o
 
       {task.status === "PENDING" && (
         <section aria-labelledby="dec-h" className="bg-card border border-border rounded-xl p-5">
-          <h3 id="dec-h" className="font-semibold mb-3">Your decision</h3>
+          <h3 id="dec-h" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-3">Your decision</h3>
           {isRequester ? (
             <InfoBanner tone="warning" title="You can't decide your own request" className="">
-              Segregation of duties: the requester and approver must be different people. Approving through the API returns AUTHORIZATION · SELF_APPROVAL_DENIED.
+              Segregation of duties: the requester and approver must be different people.
             </InfoBanner>
           ) : !el.can ? (
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
+            <p className="text-base text-muted-foreground flex items-center gap-2">
               <Clock className="size-4" aria-hidden /> Waiting for {currentApprovers(task).map(userName).join(", ") || "the next approver"}.
             </p>
           ) : (
@@ -627,7 +626,7 @@ function TaskDrawer({ task, onClose, onDecided }: { task: ApprovalTask | null; o
 
       <section aria-labelledby="trail-h" className="bg-card border border-border rounded-xl p-5">
         <div className="flex items-center justify-between gap-2 mb-3">
-          <h3 id="trail-h" className="font-semibold">Approval trail</h3>
+          <h3 id="trail-h" className="text-lg lg:text-xl leading-[1.2] font-semibold">Approval trail</h3>
           <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
             <Lock className="size-3.5" aria-hidden /> Immutable — edits and deletions are denied and logged
           </span>
@@ -651,7 +650,6 @@ function TaskDrawer({ task, onClose, onDecided }: { task: ApprovalTask | null; o
             </li>
           ))}
         </ol>
-        <p className="text-xs text-muted-foreground mt-3">Requester {userName(task.requesterId)} · recorded {NOW.slice(0, 10)}.</p>
       </section>
     </Drawer>
   );
@@ -669,7 +667,7 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-muted/50 px-3 py-2">
-      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="text-sm text-muted-foreground">{label}</div>
       <div className="font-semibold tabular-nums">{value}</div>
     </div>
   );

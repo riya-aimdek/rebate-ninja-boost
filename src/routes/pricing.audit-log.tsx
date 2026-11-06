@@ -210,7 +210,7 @@ function Page() {
             e.stopPropagation();
             setSelected(a);
           }}
-          className="hit text-brand font-medium hover:underline whitespace-nowrap"
+          className="hit text-brand-strong font-medium hover:underline whitespace-nowrap"
           aria-label={`View details of audit entry ${a.id}`}
         >
           {a.id}
@@ -276,7 +276,7 @@ function Page() {
               <Tag tone="brand">{humanize(a.reasonCode)}</Tag>
             </span>
             {a.reasonText && (
-              <div className="text-xs text-muted-foreground mt-1">“{a.reasonText}”</div>
+              <div className="text-sm text-muted-foreground mt-1">“{a.reasonText}”</div>
             )}
           </div>
         ) : (
@@ -402,14 +402,14 @@ function Page() {
         >
           Entries are append-only: there is no edit or delete in the UI or API. Each entry is hash-chained to the one before it.
           Last verified {integrity.at}
-          {integrity.checked ? ` · ${integrity.checked} entries intact` : ""}. Retained for {retention} years (minimum {MIN_RETENTION_YEARS}).
+          {integrity.checked ? ` · ${integrity.checked} entries intact` : ""}.
         </InfoBanner>
       ) : (
-        <div role="alert" className="flex flex-wrap items-start gap-3 rounded-lg border border-destructive/40 bg-danger-soft px-4 py-3 mb-4 text-sm">
+        <div role="alert" className="flex flex-wrap items-start gap-3 rounded-lg border border-destructive/40 bg-danger-soft px-4 py-3 mb-4 text-base">
           <ShieldX className="size-5 text-destructive shrink-0 mt-0.5" aria-hidden />
           <div className="flex-1 min-w-[200px]">
             <div className="font-semibold text-destructive">Integrity check failed — hash chain broken at {integrity.brokenAt}</div>
-            <div>Stored data for that entry was changed outside the application. An alert was sent to the IT administrator. Entries after it can't be trusted until the storage is restored from backup.</div>
+            <div className="">Stored data for that entry was changed outside the application. An alert was sent to the IT administrator. Entries after it can't be trusted until the storage is restored from backup.</div>
           </div>
           {tampered && (
             <Btn
@@ -576,15 +576,15 @@ function Page() {
                 },
                 { label: "Event type", value: humanize(eventTypeOf(selected)) },
                 { label: "Actor type", value: humanize(actorTypeOf(selected)) },
-                { label: "Hash", value: <span className="font-mono text-sm">{selected.hash}</span> },
-                { label: "Previous hash", value: <span className="font-mono text-sm">{selected.prevHash}</span> },
+                { label: "Hash", value: <span className="font-mono text-sm break-all">{selected.hash}</span> },
+                { label: "Previous hash", value: <span className="font-mono text-sm break-all">{selected.prevHash}</span> },
               ]}
             />
           </section>
         )}
         {selected && (
-          <p className="flex items-start gap-2 text-sm text-muted-foreground">
-            <Lock className="size-4 shrink-0 mt-0.5" aria-hidden />
+          <p className="flex items-start gap-2 text-base text-muted-foreground">
+            <Lock className="size-4 shrink-0 mt-1" aria-hidden />
             Read-only. Audit entries can't be edited or deleted through the UI or API — a correction is a new entry.
           </p>
         )}

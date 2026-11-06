@@ -7,7 +7,8 @@ All values come from `src/styles.css` tokens. **Never** use raw Tailwind palette
 
 | Token | Use for | Never use for |
 |---|---|---|
-| `brand` / `primary` (orange) | primary action, active nav, links, focus ring, key highlight | errors, large background fills |
+| `brand` (vivid orange) | non-text marks only: active-nav bar, focus ring, icons, progress fill, dots, accent stripes (3.1:1 — fails for text) | any text, fills behind text |
+| `brand-strong` / `primary` (deep orange) | brand-coloured text & links (`text-brand-strong`), primary button fill with white text (`bg-brand-strong` / `bg-primary`) | errors, large background fills |
 | `brand-soft` | selected row, chip, hover on outline button | text |
 | `navy` | table headers, active pill tab, sidebar | body text blocks |
 | `success` / `success-soft` | completed, approved, positive delta, GP / profit | decoration |
@@ -26,16 +27,22 @@ Rules:
 
 | Role | Class | Element |
 |---|---|---|
-| Page title | `text-2xl md:text-3xl font-bold tracking-tight` | `h1` (exactly one per page) |
-| Section / card title | `text-lg font-semibold tracking-tight` | `h2` |
-| Sub-section | `text-base font-semibold` | `h3` |
-| Body | `text-sm` (14 px) | `p`, cells |
-| Helper / meta | `text-xs text-muted-foreground` | hints, timestamps |
+| Page title | `text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight leading-[1.2]` | `h1` (exactly one per page) |
+| Section / card title | `text-xl lg:text-2xl font-semibold tracking-tight leading-[1.2]` | `h2` |
+| Sub-section | `text-lg lg:text-xl font-semibold leading-[1.2]` | `h3` |
+| Subtitle / lead | `text-base lg:text-lg text-muted-foreground` | page/section intro |
+| Body | `text-base leading-normal` (16 px / 24 px) | `p` |
+| Form inputs, selects, textareas | `text-base` (16 px — never smaller, prevents mobile zoom) | `input`, `select` |
+| Buttons | `text-sm sm:text-base font-semibold` | `button` |
+| Dense table cells | `text-sm` (14 px) | `td` |
+| Helper / meta / captions | `text-xs text-muted-foreground` (12 px) | hints, timestamps, footnotes |
 | Overline label | `text-xs font-semibold uppercase tracking-wide text-muted-foreground` | field labels, KPI labels |
 | Numbers | add `tabular-nums`; right-align in tables | money, %, counts |
 
-- Max **3 weights** per view (400/600/700). No text below 11 px. Line length ≤ 75ch for paragraphs (`max-w-prose`/`max-w-2xl`).
-- Use rem-based Tailwind sizes so browser zoom/Dynamic Type scales.
+- Full desktop/mobile scale and rules: see **Typography** in `SKILL.md` (it wins on any conflict).
+- Max **3 weights** per view (400/600/700), max **2 typefaces** (Inter + monospace for codes). No text below 12 px. Text fills its container — never cap with `max-w-prose`/`max-w-2xl`/`max-w-3xl` (only centred `mx-auto` blocks).
+- Line height: body 1.5× (`leading-normal`), headings 1.2× (`leading-[1.2]`).
+- Use rem-based Tailwind sizes so browser zoom/Dynamic Type scales to 200 %.
 
 ## Spacing — 8-point grid
 

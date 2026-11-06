@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { ArrowLeftRight } from "lucide-react";
-import { Btn, Card, DataTable, DetailTitle, EmptyState, FilterPills, Flag, InfoBanner, KpiTile, PricingLayout, ProgressBar, RecordLink, Segmented, Toggle, money, pct, type Column } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, DetailTitle, EmptyState, FilterPills, Flag, InfoBanner, KpiTile, PricingLayout, ProgressBar, RecordLink, Segmented, Toggle, money, pct, type Column, TableSection } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
 import { Freshness, MetricLabel } from "@/components/pricing/analytics-ui";
 import { PRICE_LIST_TOLERANCE_PCT, complianceOf, complianceRate, customerName, keyOf, labelOf, productName, rlsNote, scopedTransactions, DIMENSION_LABEL, type BandSource, type ComplianceRow, type Dimension } from "@/lib/pricing/analytics";
@@ -123,7 +123,7 @@ function Page() {
         actions={
           <>
             <Freshness />
-            <Btn variant="outline" onClick={exportCsv}>
+            <Btn variant="outline" onClick={exportCsv} disabled={report.length === 0}>
               Export CSV
             </Btn>
           </>
@@ -175,19 +175,18 @@ function Page() {
       </InfoBanner>
 
       <div className="grid gap-6 lg:grid-cols-2 mb-6">
-        <Card title="Policy adherence by rep" padded={false}>
+        <TableSection title="Policy adherence by rep">
           <DataTable<Adherence> caption="Policy adherence by sales rep" rows={byRep} rowKey={(a) => a.key} numbered={false} columns={adhCols("SALES_REP")} />
-        </Card>
-        <Card title="Policy adherence by region" padded={false}>
+        </TableSection>
+        <TableSection title="Policy adherence by region">
           <DataTable<Adherence> caption="Policy adherence by region" rows={byRegion} rowKey={(a) => a.key} numbered={false} columns={adhCols("REGION")} />
-        </Card>
+        </TableSection>
       </div>
 
-      <Card
+      <TableSection
         title="Compliance by group"
         subtitle="Lowest compliance first."
         actions={<Segmented<GroupBy> value={by} onChange={(b) => set({ by: b === "CUSTOMER" ? undefined : b })} options={GROUP_BY.map((g) => ({ key: g, label: DIMENSION_LABEL[g] }))} />}
-        padded={false}
         className="mb-6"
       >
         <DataTable<Adherence>
@@ -202,13 +201,12 @@ function Page() {
             { key: "v", header: "Net variance", align: "right", cell: (a) => <span className="tabular-nums">{money(a.variance, "GBP", 0)}</span> },
           ]}
         />
-      </Card>
+      </TableSection>
 
-      <Card
+      <TableSection
         title="Price variance report"
         subtitle={search.all ? "All invoice lines" : "Customers transacting outside the published band"}
         actions={<Toggle checked={!!search.all} onChange={(v) => set({ all: v || undefined })} label="Show compliant lines too" />}
-        padded={false}
       >
         <DataTable<ComplianceRow>
           caption="Price variance report"
@@ -241,7 +239,7 @@ function Page() {
             },
           ]}
         />
-      </Card>
+      </TableSection>
     </PricingLayout>
   );
 }

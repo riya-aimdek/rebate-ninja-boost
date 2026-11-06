@@ -3,7 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Btn, Flag, inputCls, money, pct } from "@/components/pricing/kit";
 import { Secure, pctBand } from "@/components/pricing/access";
 import { PRODUCTS } from "@/lib/pricing/data";
-import { priceBatch, type LineResult, type PricedLine, type Quote, type QuoteLineInput } from "@/lib/pricing/deals";
+import { priceBatch, type ApprovalReason, type LineResult, type PricedLine, type Quote, type QuoteLineInput } from "@/lib/pricing/deals";
 import { requiredApproverFor } from "@/lib/pricing/cpq";
 import { useSession } from "@/lib/pricing/session";
 
@@ -19,12 +19,20 @@ export function useLivePricing(quote: Pick<Quote, "customerId" | "channel" | "pr
 
 const numOrUndef = (s: string) => (s.trim() === "" ? undefined : Number(s));
 
+const REASON_LABEL: Record<ApprovalReason, string> = {
+  BELOW_PRICE_FLOOR: "Below price floor",
+  ABOVE_PRICE_CEILING: "Above price ceiling",
+  BELOW_MIN_MARGIN: "Below minimum margin",
+  ABOVE_MAX_DISCOUNT: "Above maximum discount",
+  DISCOUNT_NEEDS_APPROVAL: "Discount needs approval",
+};
+
 /** Guardrail outcome for one line — text + icon, never colour alone. */
 export function GuardrailCell({ quote, r }: { quote: Quote; r: LineResult }) {
   if (!r.ok)
     return (
       <div className="space-y-1 min-w-48">
-        <Flag tone="danger">{r.error.code}</Flag>
+        <Flag tone="danger">Can't be priced</Flag>
         <p className="text-xs text-muted-foreground">{r.error.message}</p>
       </div>
     );
@@ -53,9 +61,9 @@ export function GuardrailCell({ quote, r }: { quote: Quote; r: LineResult }) {
       {g.reasons.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {g.reasons.map((x) => (
-            <code key={x} className="text-[11px] px-1 rounded bg-muted">
-              {x}
-            </code>
+            <span key={x} className="text-xs px-1 rounded bg-muted">
+              {REASON_LABEL[x]}
+            </span>
           ))}
         </div>
       )}
@@ -109,13 +117,20 @@ export function QuoteLinesTable({ quote, editable, onChange }: { quote: Quote; e
           </option>
         ))}
       </datalist>
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border text-sm" role="status" aria-live="polite">
-        <span className="text-muted-foreground">
-          Priced {quote.lines.length} {quote.lines.length === 1 ? "line" : "lines"} in <b className="text-foreground tabular-nums">{live.ms} ms</b> · pricing date {quote.pricingDate}
-        </span>
-        {live.status === "PARTIAL_SUCCESS" && <Flag tone="warning">Partial success — {live.failed} of {quote.lines.length} lines failed</Flag>}
-        {live.status === "FAILED" && quote.lines.length > 0 && <Flag tone="danger">No lines could be priced</Flag>}
+      {/* Line count and pricing date are already in the total row and page header, so the strip only appears when
+          something failed; screen readers still hear each reprice. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        Priced {quote.lines.length} {quote.lines.length === 1 ? "line" : "lines"}.
       </div>
+      {(live.status === "PARTIAL_SUCCESS" || (live.status === "FAILED" && quote.lines.length > 0)) && (
+        <div className="px-4 py-3 border-b border-border">
+          {live.status === "PARTIAL_SUCCESS" ? (
+            <Flag tone="warning">{live.failed} of {quote.lines.length} lines couldn't be priced</Flag>
+          ) : (
+            <Flag tone="danger">No lines could be priced</Flag>
+          )}
+        </div>
+      )}
       <div className="overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label="Quote lines">
         <table className="w-full text-sm" style={{ minWidth: editable ? 1200 : 1000 }}>
           <caption className="sr-only">Quote lines with real-time pricing</caption>
@@ -142,7 +157,7 @@ export function QuoteLinesTable({ quote, editable, onChange }: { quote: Quote; e
           <tbody className="divide-y divide-border">
             {quote.lines.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={12} className="px-4 py-10 text-center text-base text-muted-foreground">
                   No lines yet. Add a product to see its price, discount and guardrail status.
                 </td>
               </tr>
@@ -168,7 +183,6 @@ export function QuoteLinesTable({ quote, editable, onChange }: { quote: Quote; e
                     )}
                     <div className="text-xs text-muted-foreground mt-1">
                       {p?.productName ?? "—"}
-                      {l.clientRequestId && <span className="ml-1 font-mono">· {l.clientRequestId}</span>}
                     </div>
                   </td>
                   <td className="px-3 py-3 text-right">
@@ -258,7 +272,7 @@ export function QuoteLinesTable({ quote, editable, onChange }: { quote: Quote; e
           <Btn variant="outline" size="sm" icon={Plus} onClick={() => onChange?.([...quote.lines, { id: nextId(), clientRequestId: `R${quote.lines.length + 1}`, sku: "", qty: 1 }])}>
             Add line
           </Btn>
-          <span className="text-xs text-muted-foreground">Enter a requested price <i>or</i> a requested discount, not both. Leave both blank to use the engine price.</span>
+          <span className="text-base text-muted-foreground">Enter a requested price <i>or</i> a requested discount, not both. Leave both blank to use the engine price.</span>
         </div>
       )}
     </div>

@@ -23,6 +23,7 @@ import {
   Toggle,
   humanize,
   type Tone,
+  TableSection,
 } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
 import { useSession } from "@/lib/pricing/session";
@@ -161,7 +162,7 @@ function IntegrationsTab({ rows, setRows, editable }: { rows: Integration[]; set
             className: "min-w-60",
             cell: (r) => (
               <div>
-                <div className="font-medium text-brand">{r.name}</div>
+                <div className="font-medium text-brand-strong">{r.name}</div>
                 <div className="text-xs text-muted-foreground">
                   {humanize(r.type)} · {humanize(r.mode)} · {humanize(r.direction)}
                 </div>
@@ -218,7 +219,7 @@ function IntegrationsTab({ rows, setRows, editable }: { rows: Integration[]; set
             </section>
             <section className="bg-card border border-border rounded-xl p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h3 className="font-semibold">Sync status endpoint</h3>
+                <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold">Sync status endpoint</h3>
                 <Btn variant="outline" size="sm" icon={RefreshCw} loading={checking} onClick={checkSync}>
                   Check sync status
                 </Btn>
@@ -232,7 +233,7 @@ function IntegrationsTab({ rows, setRows, editable }: { rows: Integration[]; set
             </section>
             <section className="bg-card border border-border rounded-xl p-5">
               {!editable ? (
-                <p className="text-sm">
+                <p className="text-base">
                   <StatusPill status={open.status === "DISABLED" ? "DISABLED" : "ACTIVE"} label={open.status === "DISABLED" ? "Disabled" : "Enabled"} />{" "}
                   <span className="text-muted-foreground">{VIEW_ONLY}</span>
                 </p>
@@ -294,7 +295,6 @@ function EventsTab({ events, setEvents, editable }: { events: BusEvent[]; setEve
 
       <Card
         title="Dead-letter queue"
-        subtitle={dead.length ? `${dead.length} ${dead.length === 1 ? "event needs" : "events need"} attention.` : "Empty — every event was processed."}
         className="mb-6"
         padded={false}
       >
@@ -303,7 +303,7 @@ function EventsTab({ events, setEvents, editable }: { events: BusEvent[]; setEve
         ) : (
           <ul className="divide-y divide-border">
             {dead.map((e) => (
-              <li key={e.id} className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+              <li key={e.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
                 <div className="text-sm min-w-0">
                   <div className="font-medium">
                     <RecordId>{e.id}</RecordId> · {e.topic} · {e.key}
@@ -317,7 +317,7 @@ function EventsTab({ events, setEvents, editable }: { events: BusEvent[]; setEve
                     Replay
                   </Btn>
                 ) : (
-                  <span className="text-xs text-muted-foreground max-w-56">{VIEW_ONLY}</span>
+                  <span className="text-sm text-muted-foreground max-w-56">{VIEW_ONLY}</span>
                 )}
               </li>
             ))}
@@ -348,7 +348,7 @@ function EventsTab({ events, setEvents, editable }: { events: BusEvent[]; setEve
           { key: "id", header: "Event", cell: (e) => <RecordId>{e.id}</RecordId> },
           { key: "at", header: "Received", cell: (e) => <span className="tabular-nums whitespace-nowrap">{e.at}</span> },
           { key: "topic", header: "Topic · key", className: "min-w-56", cell: (e) => <span><span className="font-mono text-xs">{e.topic}</span><span className="block text-xs text-muted-foreground">{humanize(e.changeType)} {e.entityType} · {e.key}</span></span> },
-          { key: "style", header: "Style", cell: (e) => <Tag tone={e.style === "DATA_MESSAGE" ? "info" : "neutral"}>{humanize(e.style)}</Tag> },
+          { key: "style", header: "Style", className: "whitespace-nowrap", cell: (e) => humanize(e.style) },
           { key: "sig", header: "Authenticity", cell: (e) => <span className="whitespace-nowrap text-sm">{e.signature}</span> },
           { key: "lat", header: "Latency", align: "right", cell: (e) => (e.latencyMs ? <span className="tabular-nums">{(e.latencyMs / 1000).toFixed(1)} s</span> : <span className="text-muted-foreground">—</span>) },
           { key: "att", header: "Attempts", align: "right", cell: (e) => <span className="tabular-nums">{e.attempts}</span> },
@@ -383,7 +383,7 @@ function ErrorsTab() {
   };
   return (
     <div className="grid gap-6">
-      <Card title="Error classes" subtitle="Every API, job and integration returns one of six classes, so callers know whether to retry." padded={false}>
+      <TableSection title="Error classes" subtitle="Every API, job and integration returns one of six classes, so callers know whether to retry.">
         <DataTable
           caption="Error classes"
           rows={ERROR_CLASSES}
@@ -395,12 +395,12 @@ function ErrorsTab() {
             { key: "e", header: "Example", cell: (r) => <span className="font-mono text-xs">{r.example}</span> },
           ]}
         />
-      </Card>
+      </TableSection>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card title="Standard error response" subtitle="Example: the ERP times out during a quote sync.">
           <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(timeoutResponse, null, 2)}</pre>
-          <p className="text-sm mt-3">
+          <p className="text-base mt-3">
             <Flag tone="success">Retryable</Flag> <span className="text-muted-foreground">Transient technical errors retry automatically; validation, authorisation and business-rule errors never do.</span>
           </p>
         </Card>
@@ -416,14 +416,14 @@ function ErrorsTab() {
           {exception ? (
             <>
               <pre role="status" className="bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(internal, null, 2)}</pre>
-              <ul className="mt-3 space-y-1 text-sm">
+              <ul className="mt-3 space-y-1 text-base">
                 <li><Flag tone="success">No stack trace</Flag></li>
                 <li><Flag tone="success">No credentials or connection strings</Flag></li>
                 <li className="text-muted-foreground">The full exception is written only to the restricted platform log under correlation ID c-8b33e0.</li>
               </ul>
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">Trigger a test exception to see the sanitised response.</p>
+            <p className="text-base text-muted-foreground">Trigger a test exception to see the sanitised response.</p>
           )}
         </Card>
       </div>
@@ -474,7 +474,7 @@ function ApiTab() {
   };
   return (
     <div className="grid gap-6 lg:grid-cols-[3fr_2fr] items-start">
-      <Card title="Rate limits" subtitle="Documented per API; current usage is returned in response headers." padded={false} actions={<Btn variant="outline" size="sm" icon={Download} onClick={download}>Download OpenAPI spec</Btn>}>
+      <TableSection title="Rate limits" subtitle="Documented per API; current usage is returned in response headers." actions={<Btn variant="outline" size="sm" icon={Download} onClick={download}>Download OpenAPI spec</Btn>}>
         <DataTable
           caption="API rate limits"
           rows={RATE_LIMITS}
@@ -486,7 +486,7 @@ function ApiTab() {
             { key: "b", header: "Burst", align: "right", cell: (r) => <span className="tabular-nums">{r.burst}</span> },
           ]}
         />
-      </Card>
+      </TableSection>
       <Card title="Response headers">
         <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{`X-RateLimit-Limit: 600
 X-RateLimit-Remaining: 587

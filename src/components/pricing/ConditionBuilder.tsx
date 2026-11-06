@@ -196,7 +196,7 @@ function OptionPicker({
                 <span
                   key={v}
                   title={show({ attribute, operator: "In", value: "" }, v)}
-                  className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium max-w-full"
+                  className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-sm font-medium max-w-full"
                 >
                   {/* Products show the SKU in the chip; the full name is in the tooltip and the summary. */}
                   <span className="truncate">{attribute === "Product" ? (findOption(attribute, v)?.value ?? v) : show({ attribute, operator: "In", value: "" }, v)}</span>
@@ -254,7 +254,7 @@ function ValueInput({ c, i, name, onChange, disabled, err, describedBy }: { c: C
     return (
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <input id={id} type={typeAttr} {...numProps} className={inputCls} value={a} placeholder={m.kind === "number" ? "From" : undefined} aria-label={`${name} from`} aria-invalid={!!err || undefined} aria-describedby={describedBy} disabled={disabled} onChange={(e) => onChange(`${e.target.value}${SEP}${b}`)} />
-        <span className="text-xs text-muted-foreground">and</span>
+        <span className="text-sm text-muted-foreground">and</span>
         <input type={typeAttr} {...numProps} min={m.kind === "date" ? a || undefined : numProps.min} className={inputCls} value={b} placeholder={m.kind === "number" ? "To" : undefined} aria-label={`${name} to`} aria-invalid={!!err || undefined} disabled={disabled} onChange={(e) => onChange(`${a}${SEP}${e.target.value}`)} />
       </div>
     );
@@ -397,7 +397,7 @@ export function ConditionBuilder({
   return (
     <div className="space-y-4">
       {conditions.length === 0 && (
-        <div role={emptyError ? "alert" : undefined} className={`rounded-lg border border-dashed p-6 text-center text-sm ${emptyError ? "border-destructive text-destructive" : "border-border text-muted-foreground"}`}>
+        <div role={emptyError ? "alert" : undefined} className={`rounded-lg border border-dashed p-6 text-center text-base ${emptyError ? "border-destructive text-destructive" : "border-border text-muted-foreground"}`}>
           {emptyError ?? "No conditions yet. Add one so the rule knows when to apply."}
         </div>
       )}
@@ -441,9 +441,9 @@ export function ConditionBuilder({
         </div>
       )}
 
-      <div className="rounded-lg bg-muted/50 px-4 py-3 text-sm" aria-live="polite">
-        <span className="font-semibold">Applies when </span>
-        {friendlySummary(conditions)}
+      {/* The rule summary card shows this visibly; keep the live announcement for screen readers. */}
+      <div className="sr-only" aria-live="polite">
+        Applies when {friendlySummary(conditions)}
       </div>
     </div>
   );

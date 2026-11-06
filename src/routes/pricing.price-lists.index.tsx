@@ -241,6 +241,7 @@ function Page() {
           ref={(el) => {
             if (el) el.indeterminate = visibleSelected.length > 0 && !allOn;
           }}
+          disabled={rows.length === 0}
           onChange={() => setSelected(allOn ? new Set() : new Set(rows.map((r) => r.id)))}
           aria-label="Select all price lists"
         />
@@ -272,7 +273,7 @@ function Page() {
         </div>
       ),
     },
-    { key: "type", header: "Type", cell: (l) => <Tag>{humanize(l.type)}</Tag> },
+    { key: "type", header: "Type", className: "whitespace-nowrap", cell: (l) => humanize(l.type) },
     { key: "status", header: "Status", cell: (l) => <StatusPill status={l.status} /> },
     {
       key: "scope",
@@ -422,7 +423,7 @@ function Page() {
                 </LinkBtn>
               }
             >
-              Price lists hold the prices quoted to customers. Create the first one to get started.
+              Create the first one to get started.
             </EmptyState>
           )
         }

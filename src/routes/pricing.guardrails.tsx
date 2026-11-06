@@ -295,7 +295,7 @@ function Page() {
   const reasonLabel = (r: string) => (r.startsWith("OTHER: ") ? `Other: ${r.slice(7)}` : humanize(r));
 
   return (
-    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Guardrails" }]}>
+    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segments" }, { label: "Guardrails" }]}>
       <ListHeader
         title="Guardrails"
         count={list.length}
@@ -310,10 +310,10 @@ function Page() {
         }
       />
       <InfoBanner title="Resolution by specificity">
-        A guardrail can be defined at several scopes (Global → Segment → Customer). The most specific scope wins. Every quote, recommendation and automated reprice must stay inside it.
+        A guardrail can be defined at several scopes (Global → Segment → Customer). The most specific scope wins.
       </InfoBanner>
 
-      <div className="flex flex-wrap items-center gap-x-6">
+      <div className="flex flex-wrap items-center gap-x-6 empty:hidden">
         <FilterPills<Status>
           label="Status"
           selected={statuses}
@@ -349,9 +349,7 @@ function Page() {
               Try a different search term or remove a filter.
             </EmptyState>
           ) : (
-            <EmptyState icon={ShieldCheck} title="No guardrails yet" action={<Btn icon={Plus} onClick={() => open()}>Create guardrail</Btn>}>
-              Guardrails stop prices going below a floor, above a ceiling or past a discount limit.
-            </EmptyState>
+            <EmptyState icon={ShieldCheck} title="No guardrails yet" />
           )
         }
         columns={[
@@ -597,11 +595,11 @@ function Page() {
                 ]}
               />
             </section>
-            <h3 className="font-semibold">Version history</h3>
+            <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold">Version history</h3>
             {versionsOf(preview).map((v) => (
               <section key={`${v.id}-${v.version}`} className="bg-card border border-border rounded-xl p-4" aria-label={`Version ${v.version}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <h4 className="font-semibold">Version {v.version}</h4>
+                  <h4 className="text-base leading-[1.2] font-semibold">Version {v.version}</h4>
                   <StatusPill status={v.status} />
                 </div>
                 <dl className="mt-3 grid grid-cols-[96px_1fr] gap-y-2 text-sm">

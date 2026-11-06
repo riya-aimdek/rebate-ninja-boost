@@ -21,7 +21,6 @@ import {
   PricingLayout,
   RecordLink,
   StatusPill,
-  Tag,
   humanize,
   inputCls,
   missingFields,
@@ -286,18 +285,19 @@ function Page() {
           <RecordLink to="/pricing/customers/$id" params={{ id: e.customerId }}>
             {customerById(e.customerId)?.name ?? e.customerId}
           </RecordLink>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {e.sku} · {productBySku(e.sku)?.name} · qty {e.qty.toLocaleString("en-GB")}
+          <div className="text-sm text-muted-foreground mt-0.5">
+            {productBySku(e.sku)?.name ?? e.sku} <span className="font-mono text-xs whitespace-nowrap">{e.sku}</span>
           </div>
         </div>
       ),
     },
+    { key: "qty", header: "Qty", align: "right", cell: (e) => <span className="tabular-nums">{e.qty.toLocaleString("en-GB")}</span> },
     {
       key: "price",
       header: "Current → requested",
       align: "right",
       cell: (e) => (
-        <span className="tabular-nums">
+        <span className="tabular-nums whitespace-nowrap">
           {money(e.currentPrice)} → <b>{money(e.requestedPrice)}</b>
           <span className="block text-xs text-muted-foreground">−{(((e.currentPrice - e.requestedPrice) / e.currentPrice) * 100).toFixed(1)}%</span>
         </span>
@@ -306,19 +306,15 @@ function Page() {
     ...(sees("marginPct")
       ? [{ key: "m", header: "Margin", align: "right" as const, cell: (e: PricingException) => { const c = productBySku(e.sku)?.cost ?? 0; return <Secure field="marginPct"><span className="tabular-nums">{(((e.requestedPrice - c) / e.requestedPrice) * 100).toFixed(1)}%</span></Secure>; } }]
       : []),
-    { key: "j", header: "Justification", cell: (e) => <Tag tone={e.justification === "COMPETITIVE_PRESSURE" ? "warning" : e.justification === "STRATEGIC_ACCOUNT" ? "brand" : "neutral"}>{humanize(e.justification)}</Tag> },
+    { key: "j", header: "Justification", className: "whitespace-nowrap", cell: (e) => humanize(e.justification) },
     { key: "exp", header: "Expires", cell: (e) => <span className="tabular-nums whitespace-nowrap">{e.expiryDate}</span> },
     {
       key: "st",
       header: "Status",
-      cell: (e) => (
-        <div className="space-y-1">
-          <StatusPill status={effective(e)} />
-          {effective(e) === "EXPIRED" && <div><Flag tone="neutral">Standard pricing applies</Flag></div>}
-        </div>
-      ),
+      className: "whitespace-nowrap",
+      cell: (e) => <StatusPill status={effective(e)} />,
     },
-    ...(tab === "log" ? [{ key: "req", header: "Requester", cell: (e: PricingException) => userName(e.requesterId) }] : []),
+    ...(tab === "log" ? [{ key: "req", header: "Requester", className: "whitespace-nowrap", cell: (e: PricingException) => userName(e.requesterId) }] : []),
     {
       key: "act",
       header: <span className="sr-only">Actions</span>,
@@ -338,9 +334,7 @@ function Page() {
                 Withdraw
               </Btn>
             )}
-            <Btn size="sm" variant="ghost" icon={History} onClick={() => setAudit(e)} aria-label={`View audit for ${e.id}`}>
-              Audit
-            </Btn>
+            <Btn size="sm" variant="ghost" icon={History} onClick={() => setAudit(e)} aria-label={`View audit for ${e.id}`} title="Audit history" />
           </div>
         );
       },
@@ -404,19 +398,19 @@ function Page() {
                   <input id="ex-qty" type="number" inputMode="numeric" min={1} step={1} className={inputCls} value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} placeholder="e.g. 500" />
                 </Field>
                 <Field label="Current price (£)" hint="Calculated by the pricing engine for this customer today.">
-                  <div className="h-10 px-3 rounded-lg bg-muted flex items-center tabular-nums text-sm" aria-live="polite">
+                  <div className="h-10 px-3 rounded-lg bg-muted flex items-center tabular-nums text-base" aria-live="polite">
                     {autoOk ? money(autoOk.current) : "—"}
                   </div>
                 </Field>
                 <Field label="Recommended price (£)" hint={autoOk ? `Source: ${autoOk.recSource}` : "Shown once customer and product are chosen."}>
-                  <div className="h-10 px-3 rounded-lg bg-muted flex items-center tabular-nums text-sm">{autoOk ? money(autoOk.recommended) : "—"}</div>
+                  <div className="h-10 px-3 rounded-lg bg-muted flex items-center tabular-nums text-base">{autoOk ? money(autoOk.recommended) : "—"}</div>
                 </Field>
                 <Field label="Requested price (£)" required error={fe("ex-req")} hint={discount !== undefined && !Number.isNaN(discount) ? `${discount.toFixed(1)}% below the current price` : undefined}>
                   <input id="ex-req" type="number" inputMode="decimal" min={0} step="0.01" className={inputCls} value={form.requestedPrice} onChange={(e) => setForm({ ...form, requestedPrice: e.target.value })} placeholder="e.g. 26.90" />
                 </Field>
                 {sees("marginPct") && (
                   <Field label="Resulting margin" hint="Visible to roles allowed to see margin.">
-                    <div className={`h-10 px-3 rounded-lg bg-muted flex items-center tabular-nums text-sm ${margin !== undefined && margin < 20 ? "text-destructive font-semibold" : ""}`}>
+                    <div className={`min-h-10 py-2 px-3 rounded-lg bg-muted flex items-center tabular-nums text-base ${margin !== undefined && margin < 20 ? "text-destructive font-semibold" : ""}`}>
                       {margin !== undefined && Number.isFinite(margin) ? `${margin.toFixed(1)}%${margin < 20 ? " — below the 20% global floor" : ""}` : "—"}
                     </div>
                   </Field>
@@ -475,7 +469,7 @@ function Page() {
 
           <Card title="Who will approve" subtitle="Live preview from the approval matrix">
             {!routing ? (
-              <p className="text-sm text-muted-foreground">Choose a customer, product, requested price and justification to see the route.</p>
+              <p className="text-base text-muted-foreground">Choose a customer, product, requested price and justification to see the route.</p>
             ) : routing.steps.length === 0 ? (
               <InfoBanner tone="warning" className="">No approval rule matches. Submitting will be blocked — ask a pricing administrator to check the approval matrix.</InfoBanner>
             ) : (
@@ -502,7 +496,7 @@ function Page() {
 
       {tab !== "new" && (
         <div role="tabpanel" id={`exc-panel-${tab}`} aria-labelledby={`exc-tab-${tab}`}>
-          <div className="flex flex-wrap items-center gap-x-6">
+          <div className="flex flex-wrap items-center gap-x-6 empty:hidden">
             <FilterPills<ExceptionStatus> label="Status" selected={statuses} onChange={setStatuses} options={EXCEPTION_STATUSES.filter((s) => scope.some((e) => effective(e) === s)).map((s) => ({ key: s, label: humanize(s), count: scope.filter((e) => effective(e) === s).length }))} />
             <FilterPills<Justification> label="Justification" selected={justs} onChange={setJusts} options={JUSTIFICATIONS.map((j) => ({ key: j, label: humanize(j), count: scope.filter((e) => e.justification === j).length }))} />
           </div>
@@ -522,9 +516,7 @@ function Page() {
                   Try a different search term or remove a filter.
                 </EmptyState>
               ) : (
-                <EmptyState icon={ShieldAlert} title="No exception requests yet" action={canCreate ? <Btn icon={FilePlus2} onClick={() => startNew()}>Request exception</Btn> : undefined}>
-                  When a deal needs a price outside policy, request an exception with a justification and expiry.
-                </EmptyState>
+                <EmptyState icon={ShieldAlert} title="No exception requests yet" />
               )
             }
           />
@@ -584,7 +576,7 @@ function AuditDrawer({ exc, onClose }: { exc: PricingException | null; onClose: 
           ]}
         />
       </section>
-      <h3 className="font-semibold">History</h3>
+      <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold">History</h3>
       <ol className="space-y-3 text-sm">
         <li className="border-l-2 border-border pl-3">
           <span className="font-medium">Created</span> by {userName(exc.requesterId)} <span className="text-xs text-muted-foreground tabular-nums">{exc.createdAt}</span>

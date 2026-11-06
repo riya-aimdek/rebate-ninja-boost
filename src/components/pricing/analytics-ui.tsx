@@ -36,7 +36,7 @@ export function Freshness({ at = ANALYTICS_REFRESHED_AT }: { at?: string }) {
       </span>
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold ${t.soft} ${t.text}`}>
         <Icon className="size-3.5" aria-hidden />
-        {fresh ? `${mins} min ago · within 15-minute target` : `${mins} min ago · refresh overdue`}
+        {fresh ? `${mins} min ago` : `${mins} min ago · refresh overdue`}
       </span>
     </span>
   );
@@ -86,7 +86,7 @@ export function DrillTrail({ steps, onJump }: { steps: Array<{ label: string }>;
                   {s.label}
                 </span>
               ) : (
-                <button type="button" onClick={() => onJump(i)} className="hit text-brand font-medium hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
+                <button type="button" onClick={() => onJump(i)} className="hit text-brand-strong font-medium hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand">
                   {s.label}
                 </button>
               )}

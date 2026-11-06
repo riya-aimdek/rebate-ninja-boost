@@ -16,7 +16,6 @@ import {
   PricingLayout,
   RecordLink,
   StatusPill,
-  Tag,
   humanize,
   money,
 } from "@/components/pricing/kit";
@@ -98,7 +97,7 @@ function Page() {
 
       {c.status === "BLOCKED" && (
         <InfoBanner tone="danger" title="Customer blocked">
-          Quote creation is prevented for this customer (CUSTOMER_BLOCKED).
+          Quote creation is prevented for this customer.
         </InfoBanner>
       )}
 
@@ -159,10 +158,10 @@ function Page() {
       {tab === "hierarchy" && (
         <Card
           title="Customer hierarchy"
-          subtitle={`Synchronised from ${c.sourceSystem}, read-only here. Loops (HIERARCHY_CYCLE) and accounts deeper than level ${MAX_HIERARCHY_DEPTH} (HIERARCHY_TOO_DEEP) are rejected at sync.`}
+          subtitle={`Synchronised from ${c.sourceSystem}, read-only here. Loops and accounts deeper than level ${MAX_HIERARCHY_DEPTH} are rejected at sync.`}
         >
           {chain.length === 0 && childrenOf(c.id).length === 0 ? (
-            <p className="text-sm text-muted-foreground">This customer has no parent or child accounts.</p>
+            <p className="text-base text-muted-foreground">This customer has no parent or child accounts.</p>
           ) : (
             <CustomerTree
               nodes={family(root)}
@@ -181,7 +180,7 @@ function Page() {
           rowKey={(h) => `${h.segment}-${h.from}`}
           empty={`No segment changes recorded. Current segment: ${c.segment}.`}
           columns={[
-            { key: "seg", header: "Segment", cell: (h) => <Tag tone="brand">{h.segment}</Tag> },
+            { key: "seg", header: "Segment", className: "whitespace-nowrap", cell: (h) => h.segment },
             { key: "from", header: "From", cell: (h) => <span className="whitespace-nowrap tabular-nums">{h.from}</span> },
             { key: "to", header: "To", cell: (h) => (h.to ? <span className="whitespace-nowrap tabular-nums">{h.to}</span> : <StatusPill status="ACTIVE" label="Current" />) },
             { key: "m", header: "Method", cell: (h) => humanize(h.method) },

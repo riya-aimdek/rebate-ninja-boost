@@ -91,7 +91,7 @@ function QuoteList() {
       cell: (q) => (
         <div>
           <div className="font-medium">{q.name}</div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-sm text-muted-foreground">
             {customerById(q.customerId)?.name ?? q.customerId}
             {q.partnerId && <> · <Tag tone="info">Partner portal</Tag></>}
           </div>
@@ -158,7 +158,7 @@ function QuoteList() {
         </InfoBanner>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-6">
+      <div className="flex flex-wrap items-center gap-x-6 empty:hidden">
         <FilterPills<QuoteStatus>
           label="Status"
           selected={statuses}
@@ -186,8 +186,8 @@ function QuoteList() {
               Try a different search term or remove a filter.
             </EmptyState>
           ) : (
-            <EmptyState icon={FileText} title={scope === "mine" ? "You don't own any quotes yet" : "No quotes yet"} action={canCreate ? <LinkBtn to="/pricing/quotes/new" icon={Plus}>Create quote</LinkBtn> : undefined}>
-              Quotes are priced in real time and route to approval when a discount or margin is outside policy.
+            <EmptyState icon={FileText} title={scope === "mine" ? "You don't own any quotes yet" : "No quotes yet"}>
+              Quotes route to approval when a discount or margin is outside policy.
             </EmptyState>
           )
         }

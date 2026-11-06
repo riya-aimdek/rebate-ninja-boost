@@ -1,6 +1,16 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   ArrowLeftRight,
+  BookOpen,
+  Boxes,
+  Briefcase,
+  ChevronRight,
+  Gauge,
+  LineChart,
+  Rocket,
+  Settings,
+  ShoppingCart,
+  Target,
   BadgeCheck,
   BarChart3,
   Bell,
@@ -47,7 +57,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -73,7 +83,7 @@ export type NavLink = {
   /** Roles that never see the item even if the module allows it. */
   exclude?: Role[];
 };
-export type NavSection = { title: string; items: NavLink[] };
+export type NavSection = { title: string; /** Shown on the section header row. */ icon?: LucideIcon; items: NavLink[] };
 
 const PARTNER: Role[] = ["CHANNEL_PARTNER"];
 
@@ -86,6 +96,7 @@ export const APP_NAV: NavSection[] = [
   // (FR-F-01, SRS 3.2.13) leave rebate management to the existing Rebate Ninja product.
   {
     title: "Master data",
+    icon: Boxes,
     items: [
       { icon: Package, label: "Products", to: "/pricing/products", keywords: "sku catalogue", module: "MASTER_DATA" },
       { icon: Users, label: "Customers", to: "/pricing/customers", keywords: "accounts", module: "MASTER_DATA" },
@@ -94,6 +105,7 @@ export const APP_NAV: NavSection[] = [
   },
   {
     title: "Price lists & catalog",
+    icon: BookOpen,
     items: [
       { icon: Tags, label: "Price lists", to: "/pricing/price-lists", module: "MASTER_DATA" },
       { icon: Layers, label: "Bulk update", to: "/pricing/bulk-update", module: "MASTER_DATA", exclude: ["SALES_REP", "SALES_MANAGER", "IT_ADMIN"] },
@@ -101,7 +113,8 @@ export const APP_NAV: NavSection[] = [
     ],
   },
   {
-    title: "Strategy & segmentation",
+    title: "Strategy & segments",
+    icon: Target,
     items: [
       { icon: PieChart, label: "Segments", to: "/pricing/segments", module: "STRATEGY" },
       { icon: ListChecks, label: "Pricing rules", to: "/pricing/rules", module: "STRATEGY" },
@@ -113,6 +126,7 @@ export const APP_NAV: NavSection[] = [
   },
   {
     title: "Price optimization",
+    icon: Gauge,
     items: [
       { icon: Sparkles, label: "Recommendations", to: "/pricing/recommendations", module: "OPTIMIZATION", exclude: ["EXECUTIVE", "SALES_REP"] },
       { icon: BrainCircuit, label: "Optimization runs", to: "/pricing/optimization", module: "OPTIMIZATION" },
@@ -122,6 +136,7 @@ export const APP_NAV: NavSection[] = [
   },
   {
     title: "CPQ & quoting",
+    icon: ShoppingCart,
     items: [
       { icon: FileText, label: "Quotes", to: "/pricing/quotes", keywords: "cpq quote proposal renewal", module: "CPQ", exclude: PARTNER },
       { icon: Compass, label: "Guided selling", to: "/pricing/guided-selling", keywords: "decision tree questions wizard", roles: ["PRICING_ADMIN", "DEAL_DESK", "SALES_MANAGER"] },
@@ -130,6 +145,7 @@ export const APP_NAV: NavSection[] = [
   },
   {
     title: "Deal desk",
+    icon: Briefcase,
     items: [
       { icon: Gavel, label: "Approval queue", to: "/pricing/approvals", keywords: "approve reject deal desk sla", module: "DEAL_DESK" },
       { icon: ShieldAlert, label: "Pricing exceptions", to: "/pricing/exceptions", keywords: "exception request justification", roles: ["SALES_REP", "SALES_MANAGER", "DEAL_DESK", "PRICING_ADMIN", "FINANCE_CONTROLLER"] },
@@ -138,10 +154,12 @@ export const APP_NAV: NavSection[] = [
   },
   {
     title: "Price execution",
+    icon: Rocket,
     items: [{ icon: Send, label: "Publications", to: "/pricing/publications", keywords: "publish erp retry rollback idempotency", roles: ["PRICING_ADMIN", "IT_ADMIN", "FINANCE_CONTROLLER"] }],
   },
   {
     title: "Analytics & reporting",
+    icon: LineChart,
     items: [
       { icon: BarChart3, label: "Margin dashboard", to: "/pricing/analytics/margin", keywords: "profitability drill", module: "ANALYTICS" },
       { icon: Waves, label: "Price waterfall", to: "/pricing/analytics/waterfall", keywords: "bridge pocket leakage", module: "ANALYTICS" },
@@ -152,6 +170,7 @@ export const APP_NAV: NavSection[] = [
   },
   {
     title: "Administration",
+    icon: Settings,
     items: [
       { icon: KeyRound, label: "Users & roles", to: "/pricing/admin/users", keywords: "rbac permissions sessions", module: "SYSTEM_ADMIN" },
       { icon: EyeOff, label: "Field security", to: "/pricing/admin/field-security", keywords: "mask hide cost margin", roles: ["PRICING_ADMIN", "IT_ADMIN"] },
@@ -219,6 +238,7 @@ function Logo({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <span className="leading-none">
           <span className="block font-black tracking-tight text-2xl text-white">REBATE</span>
+          {/* a11y-ok: brand on navy is 5.8:1 (and logotypes are exempt) */}
           <span className="block text-base font-bold text-brand -mt-0.5">ninja</span>
         </span>
       )}
@@ -226,20 +246,26 @@ function Logo({ compact = false }: { compact?: boolean }) {
   );
 }
 
-const SECTIONS_KEY = "rn.sidebar.closedSections";
+const SECTIONS_KEY = "rn.sidebar.openSections";
 
-/** Closed nav sections, persisted per browser. The section holding the current page is always reopened. */
-function useClosedSections(activeTitle: string | undefined) {
-  const [closed, setClosed] = useState<string[]>([]);
-  useEffect(() => {
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? "[]");
-      if (Array.isArray(saved)) setClosed(saved.filter((s): s is string => typeof s === "string"));
-    } catch {
-      /* storage unavailable */
-    }
-  }, []);
+/**
+ * Open nav sections, persisted per browser. Only the section holding the current page starts open, so the
+ * menu fits without scrolling; moving to a page in another section opens that one too.
+ */
+/**
+ * Every page renders its own layout, so the sidebar remounts on each navigation. Keeping the open sections
+ * in memory lets the new sidebar start in its final state; storage is only read on the first page load.
+ */
+let openSectionsCache: string[] | null = null;
+let navScrollCache = 0;
+
+function useOpenSections(activeTitle: string | undefined) {
+  const withActive = (titles: string[]) => (activeTitle && !titles.includes(activeTitle) ? [...titles, activeTitle] : titles);
+  const [open, setOpen] = useState<string[]>(() => withActive(openSectionsCache ?? []));
+  // Sections slide open/closed only when the user clicks a header, never on mount or navigation.
+  const [animate, setAnimate] = useState(false);
   const save = (next: string[]) => {
+    openSectionsCache = next;
     try {
       localStorage.setItem(SECTIONS_KEY, JSON.stringify(next));
     } catch {
@@ -248,10 +274,26 @@ function useClosedSections(activeTitle: string | undefined) {
     return next;
   };
   useEffect(() => {
-    if (activeTitle) setClosed((c) => (c.includes(activeTitle) ? save(c.filter((t) => t !== activeTitle)) : c));
+    if (openSectionsCache) return;
+    let titles: string[] = [];
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? "null");
+      if (Array.isArray(saved)) titles = saved.filter((s): s is string => typeof s === "string");
+    } catch {
+      /* storage unavailable */
+    }
+    setOpen(save(withActive(titles)));
+    // First page load only; route changes are handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (activeTitle) setOpen((o) => (o.includes(activeTitle) ? o : save([...o, activeTitle])));
   }, [activeTitle]);
-  const toggle = (title: string) => setClosed((c) => save(c.includes(title) ? c.filter((t) => t !== title) : [...c, title]));
-  return { closed, toggle };
+  const toggle = (title: string) => {
+    setAnimate(true);
+    setOpen((o) => save(o.includes(title) ? o.filter((t) => t !== title) : [...o, title]));
+  };
+  return { open, toggle, animate };
 }
 
 function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
@@ -259,80 +301,123 @@ function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean; onNav
   const [soonOpen, setSoonOpen] = useState(false);
   const nav = useVisibleNav();
   const activeTitle = nav.find((s) => s.items.some((i) => isActive(pathname, i.to)))?.title || undefined;
-  const { closed, toggle } = useClosedSections(activeTitle);
+  const { open: openSections, toggle, animate } = useOpenSections(activeTitle);
   const navRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    navRef.current?.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+  // Restore the previous page's menu scroll before paint, then nudge only if the current page is out of view.
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    nav.scrollTop = navScrollCache;
+    nav.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
   }, [pathname, collapsed]);
+
+  // One row style for top-level entries (section headers and the dashboard link) so they line up.
+  const rowCls =
+    "flex items-center gap-3 w-full h-10 px-3 rounded-lg text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+
+  const itemLink = (item: NavLink, nested: boolean) => {
+    const active = isActive(pathname, item.to);
+    const Icon = item.icon;
+    const link = (
+      <Link
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        to={item.to as any}
+        aria-label={collapsed ? item.label : undefined}
+        aria-current={active ? "page" : undefined}
+        onClick={onNavigate}
+        className={
+          collapsed
+            ? `relative flex items-center justify-center h-10 mx-3 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                // a11y-ok: brand on navy + brand/15 tint is 4.9:1
+                active ? "bg-brand/15 text-brand" : "text-white/80 hover:bg-white/5 hover:text-white"
+              }`
+            : nested
+              ? // Child page: text only, hung off the section's guide line; the active one marks the line.
+                `relative flex items-center h-9 px-3 rounded-md text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
+                  active
+                    ? // a11y-ok: brand on navy + brand/15 tint is 4.9:1
+                      "bg-brand/15 text-brand font-semibold before:absolute before:-left-[9px] before:inset-y-1.5 before:w-0.5 before:rounded-full before:bg-brand"
+                    : "text-white/70 hover:bg-white/5 hover:text-white"
+                }`
+              : // a11y-ok: brand on navy + brand/15 tint is 4.9:1
+                `${rowCls} ${active ? "bg-brand/15 text-brand font-semibold" : "text-white/85 hover:bg-white/5 hover:text-white"}`
+        }
+      >
+        {(collapsed || !nested) && <Icon className="size-[18px] shrink-0" aria-hidden />}
+        {!collapsed && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
+    return (
+      <li key={item.to}>
+        {collapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{link}</TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+              {item.label}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          link
+        )}
+      </li>
+    );
+  };
+
   return (
     <TooltipProvider delayDuration={0} disableHoverableContent>
-      <nav ref={navRef} aria-label="Main" className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-3 text-sm">
+      <nav
+        ref={navRef}
+        aria-label="Main"
+        onScroll={(e) => (navScrollCache = e.currentTarget.scrollTop)}
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-3 text-base"
+      >
         {nav.map((section, i) => {
-          const open = collapsed || !section.title || !closed.includes(section.title);
+          // Untitled sections (the dashboard) are plain top-level links.
+          if (!section.title) {
+            return (
+              <ul key={i} className={collapsed ? "" : "px-3"}>
+                {section.items.map((item) => itemLink(item, false))}
+              </ul>
+            );
+          }
+          if (collapsed) {
+            return (
+              <div key={i} className="mt-2">
+                <div className="mx-4 mb-2 border-t border-white/10" aria-hidden />
+                <ul>{section.items.map((item) => itemLink(item, false))}</ul>
+              </div>
+            );
+          }
+          const open = openSections.includes(section.title);
+          const holdsActive = section.title === activeTitle;
+          const SectionIcon = section.icon ?? section.items[0].icon;
           const listId = `nav-section-${i}`;
           return (
-            <div key={i} className={i > 0 ? (collapsed ? "mt-2" : "mt-1") : ""}>
-              {section.title && !collapsed && (
-                <button
-                  type="button"
-                  onClick={() => toggle(section.title)}
-                  aria-expanded={open}
-                  aria-controls={listId}
-                  className="w-full flex items-center justify-between gap-2 h-8 px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
-                >
-                  <span className="truncate">{section.title}</span>
-                  <span className="flex items-center gap-2">
-                    {!open && (
-                      <span className="text-[10px] font-medium tracking-normal tabular-nums text-white/60">
-                        {section.items.length}
-                        <span className="sr-only"> pages</span>
-                      </span>
-                    )}
-                    <ChevronDown className={`size-3.5 motion-safe:transition-transform ${open ? "" : "-rotate-90"}`} aria-hidden />
-                  </span>
-                </button>
-              )}
-              {section.title && collapsed && <div className="mx-4 mb-2 border-t border-white/10" aria-hidden />}
-              <div className={`grid motion-safe:transition-[grid-template-rows] motion-safe:duration-200 ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
-                <ul id={listId} inert={!open} className="overflow-hidden">
-                  {section.items.map((item) => {
-                    const active = isActive(pathname, item.to);
-                    const Icon = item.icon;
-                    const link = (
-                      <Link
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        to={item.to as any}
-                        aria-label={collapsed ? item.label : undefined}
-                        aria-current={active ? "page" : undefined}
-                        onClick={onNavigate}
-                        className={`relative flex items-center gap-3 h-10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand ${
-                          collapsed ? "justify-center" : "px-6"
-                        } ${
-                          active
-                            ? "bg-brand/15 text-brand font-semibold before:absolute before:left-0 before:inset-y-1 before:w-1 before:rounded-r before:bg-brand"
-                            : "text-white/80 hover:bg-white/5 hover:text-white"
-                        }`}
-                      >
-                        <Icon className="size-[18px] shrink-0" aria-hidden />
-                        {!collapsed && <span className="truncate">{item.label}</span>}
-                      </Link>
-                    );
-                    return (
-                      <li key={item.to}>
-                        {collapsed ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>{link}</TooltipTrigger>
-                            <TooltipContent side="right" sideOffset={8}>
-                              {item.label}
-                            </TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          link
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+            <div key={i} className="mt-1 px-3">
+              <button
+                type="button"
+                onClick={() => toggle(section.title)}
+                aria-expanded={open}
+                aria-controls={listId}
+                className={`${rowCls} ${holdsActive && !open ? "text-white bg-white/5" : "text-white/85 hover:bg-white/5 hover:text-white"}`}
+              >
+                <SectionIcon className="size-[18px] shrink-0" aria-hidden />
+                <span className="truncate font-medium">{section.title}</span>
+                {/* A closed section still shows that the current page lives inside it. */}
+                {holdsActive && !open && <span className="size-1.5 rounded-full bg-brand shrink-0" aria-hidden />}
+                <ChevronRight
+                  className={`ml-auto size-4 shrink-0 text-white/50 motion-safe:transition-transform ${open ? "rotate-90" : ""}`}
+                  aria-hidden
+                />
+              </button>
+              <div
+                className={`grid ${animate ? "motion-safe:transition-[grid-template-rows] motion-safe:duration-200" : ""} ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+              >
+                <div inert={!open} className="overflow-hidden">
+                  <ul id={listId} className="ml-[21px] mt-0.5 mb-1 pl-2 border-l border-white/10 space-y-0.5">
+                    {section.items.map((item) => itemLink(item, true))}
+                  </ul>
+                </div>
               </div>
             </div>
           );
@@ -345,7 +430,7 @@ function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean; onNav
               onClick={() => setSoonOpen((o) => !o)}
               aria-expanded={soonOpen}
               aria-controls="nav-coming-soon"
-              className="w-full flex items-center justify-between h-10 px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+              className="w-full flex items-center justify-between h-10 px-6 text-sm font-semibold uppercase tracking-[0.12em] text-white/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
             >
               Coming soon
               <ChevronDown className={`size-4 transition-transform ${soonOpen ? "rotate-180" : ""}`} aria-hidden />
@@ -353,9 +438,9 @@ function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean; onNav
             {soonOpen && (
               <ul id="nav-coming-soon" className="pb-2">
                 {COMING_SOON.map((label) => (
-                  <li key={label} aria-disabled="true" className="flex items-center justify-between h-9 px-6 text-white/45 cursor-not-allowed">
+                  <li key={label} aria-disabled="true" className="flex items-center justify-between h-9 px-6 text-white/60 cursor-not-allowed">
                     <span className="truncate">{label}</span>
-                    <span className="text-[10px] rounded-full border border-white/20 px-1.5 py-0.5">Soon</span>
+                    <span className="text-xs rounded-full border border-white/20 px-1.5 py-0.5">Soon</span>
                   </li>
                 ))}
               </ul>
@@ -368,25 +453,33 @@ function NavList({ collapsed = false, onNavigate }: { collapsed?: boolean; onNav
 }
 
 const COLLAPSE_KEY = "rn.sidebar.collapsed";
+let collapsedCache: boolean | null = null;
 
 /** Desktop sidebar (≥ lg). Collapses to an icon rail via the edge handle or Ctrl/⌘+B.
  *  `activeLabel` is accepted for backwards compatibility; the active item comes from the URL. */
 export function Sidebar(_props: { activeLabel?: string } = {}) {
-  const [collapsed, setCollapsed] = useState(false);
-  // Width animates only once the saved state is applied, so a collapsed rail doesn't slide shut on every page load.
-  const [ready, setReady] = useState(false);
+  // Same remount problem as the sections: start from the in-memory value so a collapsed rail doesn't
+  // flash full width on every navigation. Storage is read on the first page load only.
+  const [collapsed, setCollapsed] = useState(() => collapsedCache ?? false);
+  // Width animates only once the saved state is applied, so a collapsed rail doesn't slide shut on page load.
+  const [ready, setReady] = useState(() => collapsedCache !== null);
   useEffect(() => {
+    if (collapsedCache !== null) return;
+    let saved = false;
     try {
-      setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+      saved = localStorage.getItem(COLLAPSE_KEY) === "1";
     } catch {
       /* storage unavailable */
     }
+    collapsedCache = saved;
+    setCollapsed(saved);
     const id = requestAnimationFrame(() => setReady(true));
     return () => cancelAnimationFrame(id);
   }, []);
   const toggle = useCallback(
     () =>
       setCollapsed((c) => {
+        collapsedCache = !c;
         try {
           localStorage.setItem(COLLAPSE_KEY, c ? "0" : "1");
         } catch {
@@ -427,13 +520,13 @@ export function Sidebar(_props: { activeLabel?: string } = {}) {
               aria-label={toggleLabel}
               aria-expanded={!collapsed}
               aria-keyshortcuts="Control+B Meta+B"
-              className="absolute -right-3 top-6 size-6 rounded-full bg-card text-foreground border border-border shadow-sm grid place-items-center hover:bg-muted hover:text-brand transition-colors before:absolute before:-inset-2 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
+              className="absolute -right-3 top-6 size-6 rounded-full bg-card text-foreground border border-border shadow-sm grid place-items-center hover:bg-muted hover:text-brand-strong transition-colors before:absolute before:-inset-2 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-navy"
             >
               <ChevronLeft className={`size-3.5 motion-safe:transition-transform ${collapsed ? "rotate-180" : ""}`} aria-hidden />
             </button>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8}>
-            {toggleLabel} <kbd className="ml-1 rounded border border-current/30 px-1 font-sans text-[10px]">Ctrl B</kbd>
+            {toggleLabel} <kbd className="ml-1 rounded border border-current/30 px-1 text-xs">Ctrl B</kbd>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -506,7 +599,7 @@ function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+        <DialogTitle className="flex items-center gap-2 text-xl lg:text-2xl leading-[1.2] font-semibold">
           <Keyboard className="size-5 text-brand" aria-hidden /> Keyboard shortcuts
         </DialogTitle>
         <DialogDescription>Work faster without the mouse. On macOS use ⌘ instead of Ctrl.</DialogDescription>
@@ -601,7 +694,7 @@ export function TopBar({
             onChange={(e) => onSearch(e.target.value)}
             aria-label={placeholder.replace(/…$/, "")}
             placeholder={placeholder}
-            className="w-full h-10 pl-10 pr-3 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+            className="w-full h-10 pl-10 pr-3 rounded-lg border border-input bg-card text-base focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
           />
         </div>
       ) : null}
@@ -610,7 +703,7 @@ export function TopBar({
         type="button"
         onClick={openPalette}
         aria-keyshortcuts="Control+K Meta+K"
-        className={`h-10 rounded-lg border border-input bg-card text-sm text-muted-foreground hover:bg-muted flex items-center gap-2 px-3 ${
+        className={`h-10 rounded-lg border border-input bg-card text-base text-muted-foreground hover:bg-muted flex items-center gap-2 px-3 ${
           onSearch ? "shrink-0" : "flex-[3] min-w-0 max-w-xl"
         }`}
       >
@@ -623,7 +716,7 @@ export function TopBar({
             <span className="hidden sm:inline">Jump to a page or action…</span>
           </span>
         )}
-        <kbd className="hidden sm:inline-flex h-6 items-center rounded border border-border bg-muted px-1.5 text-[11px] font-semibold">Ctrl K</kbd>
+        <kbd className="hidden sm:inline-flex h-6 items-center rounded border border-border bg-muted px-1.5 text-xs font-semibold">Ctrl K</kbd>
       </button>
 
       {/* Spacer; on phones the "Jump to" button takes the free width instead. */}
@@ -680,7 +773,7 @@ function NotificationBell() {
         >
           <Bell className="size-5" aria-hidden />
           {unread > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-brand text-brand-foreground text-[11px] font-bold grid place-items-center tabular-nums" aria-hidden>
+            <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-brand-strong text-brand-foreground text-xs font-bold grid place-items-center tabular-nums" aria-hidden>
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -688,9 +781,9 @@ function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[22rem] max-w-[calc(100vw-2rem)] p-0">
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
-          <span className="font-semibold text-sm">Notifications</span>
+          <span className="font-semibold text-base">Notifications</span>
           {unread > 0 && (
-            <button type="button" className="hit text-xs font-semibold text-brand hover:underline" onClick={() => markRead(items.map((n) => n.id))}>
+            <button type="button" className="hit text-sm font-semibold text-brand-strong hover:underline" onClick={() => markRead(items.map((n) => n.id))}>
               Mark all as read
             </button>
           )}
@@ -698,8 +791,8 @@ function NotificationBell() {
         {latest.length === 0 ? (
           <div className="px-4 py-8 text-center">
             <BellOff className="mx-auto size-6 text-muted-foreground" aria-hidden />
-            <p className="mt-2 text-sm font-medium">You’re all caught up</p>
-            <p className="mt-1 text-xs text-muted-foreground">Approvals, expiries and failures will appear here.</p>
+            <p className="mt-2 text-base font-semibold">You’re all caught up</p>
+            <p className="mt-1 text-base text-muted-foreground">Approvals, expiries and failures will appear here.</p>
           </div>
         ) : (
           <ul className="max-h-96 overflow-y-auto divide-y divide-border">
@@ -721,8 +814,8 @@ function NotificationBell() {
                       {n.title}
                       {!n.read && <span className="sr-only"> (unread)</span>}
                     </span>
-                    <span className="block text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</span>
-                    <span className="block text-[11px] text-muted-foreground mt-1 tabular-nums">{n.at}</span>
+                    <span className="block text-sm text-muted-foreground mt-0.5 line-clamp-2">{n.body}</span>
+                    <span className="block text-xs text-muted-foreground mt-1 tabular-nums">{n.at}</span>
                   </span>
                 </button>
               </li>
@@ -730,7 +823,7 @@ function NotificationBell() {
           </ul>
         )}
         <div className="border-t border-border px-4 py-2.5">
-          <Link to="/pricing/notifications" onClick={() => setOpen(false)} className="text-sm font-semibold text-brand hover:underline">
+          <Link to="/pricing/notifications" onClick={() => setOpen(false)} className="text-sm font-semibold text-brand-strong hover:underline">
             View all notifications
           </Link>
         </div>
@@ -756,7 +849,7 @@ function AccountMenu() {
         <button
           type="button"
           aria-label={`Account — ${user.name}, ${ROLE_LABEL[user.role]}`}
-          className="size-10 shrink-0 rounded-full bg-brand text-brand-foreground grid place-items-center font-semibold text-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+          className="size-10 shrink-0 rounded-full bg-brand-strong text-brand-foreground grid place-items-center font-semibold text-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
         >
           {initials}
         </button>
@@ -767,11 +860,11 @@ function AccountMenu() {
           <p className="text-xs text-muted-foreground">
             {user.title} · {ROLE_LABEL[user.role]}
           </p>
-          <Link to="/profile" onClick={() => setOpen(false)} className="mt-2 inline-block text-sm font-semibold text-brand hover:underline">
+          <Link to="/profile" onClick={() => setOpen(false)} className="mt-2 inline-block text-sm font-semibold text-brand-strong hover:underline">
             My profile
           </Link>
         </div>
-        <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground" id="view-as-label">
+        <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground" id="view-as-label">
           View as (prototype)
         </p>
         <ul className="max-h-72 overflow-y-auto pb-2" aria-labelledby="view-as-label">

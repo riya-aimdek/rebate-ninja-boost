@@ -6,6 +6,20 @@
 
 @theme inline {
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* Type scale line heights (ui-ux-standards › Typography): body/UI sizes 1.5x, heading sizes 1.2x.
+     Sizes themselves are Tailwind defaults (rem, so they scale to 200 % zoom). */
+  --text-xs--line-height: 1.5;
+  --text-sm--line-height: 1.5;
+  --text-base--line-height: 1.5;
+  --text-lg--line-height: 1.5;
+  --text-xl--line-height: 1.2;
+  --text-2xl--line-height: 1.2;
+  --text-3xl--line-height: 1.2;
+  --text-4xl--line-height: 1.2;
+  --text-6xl--line-height: 1.2;
+  --text-7xl--line-height: 1.2;
+  --color-brand-strong: var(--brand-strong);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -63,10 +77,14 @@
 
   /* Rebate Ninja orange */
   --brand: oklch(0.68 0.19 41);
+  /* WCAG AA: vivid --brand is 3.1:1 on white, so it is only for non-text marks (bars, rings, icons,
+     progress). Brand-coloured TEXT and brand FILLS behind white text use --brand-strong
+     (≥ 4.7:1 on card/background/brand-soft, 5.5:1 under white text). */
+  --brand-strong: oklch(0.54 0.19 41);
   --brand-foreground: oklch(0.99 0 0);
   --brand-soft: oklch(0.96 0.04 60);
 
-  --primary: oklch(0.68 0.19 41);
+  --primary: oklch(0.54 0.19 41);
   --primary-foreground: oklch(0.99 0 0);
 
   --secondary: oklch(0.95 0.01 60);
@@ -75,15 +93,16 @@
   --muted-foreground: oklch(0.5 0.02 60);
   --accent: oklch(0.96 0.04 60);
   --accent-foreground: oklch(0.4 0.16 41);
+  /* Status hues darkened so text passes 4.5:1 on card, background and their -soft fills. */
 
-  --success: oklch(0.55 0.14 155);
+  --success: oklch(0.51 0.14 155);
   --success-soft: oklch(0.95 0.05 155);
 
   --warning: oklch(0.7 0.16 70);
   --warning-soft: oklch(0.96 0.06 85);
   /* AA-contrast text colour for warnings on light/soft backgrounds */
   --warning-foreground: oklch(0.47 0.12 60);
-  --info: oklch(0.55 0.15 250);
+  --info: oklch(0.52 0.15 250);
   --info-soft: oklch(0.95 0.03 250);
   --danger-soft: oklch(0.95 0.04 27);
 
@@ -91,7 +110,7 @@
   --navy: oklch(0.2 0.03 265);
   --navy-foreground: oklch(0.99 0 0);
 
-  --destructive: oklch(0.6 0.22 27);
+  --destructive: oklch(0.54 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
 
   --border: oklch(0.9 0.012 70);
@@ -113,7 +132,24 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-display);
+    font-size: 1rem; /* 16px body */
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+  }
+  /* Form controls are 16px by default (no inherited 14px from a dense parent, no mobile auto-zoom). */
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+  /* Headings are tight (1.2x); size classes come from the type scale in the ui-ux-standards skill. */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.2;
   }
 
   /* One slim, rounded scrollbar everywhere: no arrow buttons, transparent track, and the thumb
@@ -220,4 +256,34 @@ thead button::after {
     width: 1.25rem;
     height: 1.25rem;
   }
+}
+
+/* Native dropdowns: one slim chevron instead of the platform arrow. Unlayered so the right padding
+   wins over px-* utilities and the text never runs under the icon. */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  text-overflow: ellipsis;
+}
+select:not([multiple]):not([size]):disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Toasts (sonner) default to 13px — bring them onto the type scale: 14px message, 14px description. */
+[data-sonner-toast] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+[data-sonner-toast] [data-description] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+[data-sonner-toast] [data-button] {
+  font-size: 0.875rem;
 }

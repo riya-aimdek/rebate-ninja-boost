@@ -99,7 +99,7 @@ export function CustomerTree({
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-8 [&>p]:min-w-0 [&>p]:flex-1 [&>:not(p)]:shrink-0 mb-3">
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground tabular-nums">{ids.size - (contextIds?.size ?? 0)}</span> {ids.size - (contextIds?.size ?? 0) === 1 ? "account" : "accounts"}
           <span aria-hidden> · </span>
@@ -174,7 +174,7 @@ export function CustomerTree({
                     ) : (
                       <span className="size-6 shrink-0" aria-hidden />
                     )}
-                    <span className={`hidden sm:grid place-items-center size-9 shrink-0 rounded-lg ${isCurrent ? "bg-brand text-white" : "bg-muted text-muted-foreground"}`} aria-hidden>
+                    <span className={`hidden sm:grid place-items-center size-9 shrink-0 rounded-lg ${isCurrent ? "bg-brand-strong text-white" : "bg-muted text-muted-foreground"}`} aria-hidden>
                       <Building2 className="size-4" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -184,22 +184,22 @@ export function CustomerTree({
                           params={{ id: r.c.id }}
                           tabIndex={-1}
                           onClick={(e) => e.stopPropagation()}
-                          className="hit font-semibold text-foreground hover:text-brand hover:underline truncate"
+                          className="hit font-semibold text-foreground hover:text-brand-strong hover:underline truncate"
                         >
                           {name(r.c.name)}
                         </Link>
-                        {r.c.strategic && <Star className="size-3.5 shrink-0 text-brand fill-brand" role="img" aria-label="Strategic customer" />}
+                        {r.c.strategic && <Star className="size-3.5 shrink-0 text-brand-strong fill-brand-strong" role="img" aria-label="Strategic customer" />}
                         {isCurrent && <Tag tone="brand">This customer</Tag>}
                         {/* Ancestors shown only to keep the path visible: said in text, not by fading (contrast). */}
                         {dim && <span className="text-xs text-muted-foreground">Parent of a match</span>}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5 truncate">
+                      <div className="text-sm text-muted-foreground mt-0.5 truncate">
                         <span className="font-mono">{r.c.id}</span> · L{r.c.level} · {r.c.segment} · {r.c.geography} · {r.c.tier}
                       </div>
                     </div>
                     {r.c.status !== "ACTIVE" && <StatusPill status={r.c.status} />}
                     {r.kids.length > 0 && (
-                      <span className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+                      <span className="hidden sm:inline text-sm text-muted-foreground whitespace-nowrap tabular-nums">
                         {r.kids.length} {r.kids.length === 1 ? "child" : "children"}
                       </span>
                     )}

@@ -4,7 +4,7 @@
 - **Text alternatives (1.1.1):** decorative icons `aria-hidden`; icon-only buttons need `aria-label` ("Close", "Remove filter: Region North", "Export CSV"). Charts get a text summary or accessible table nearby.
 - **Info & relationships (1.3.1):** real semantics — `h1`→`h2`→`h3` without skipping; `<table>` with `<th scope="col">`; `<label htmlFor>` bound to inputs (kit `Field` does this automatically); lists as `ul/ol`; landmarks `header`, `nav aria-label`, `main id="main-content"`, `aside`.
 - **Use of colour (1.4.1):** never colour-only status — text/icon too.
-- **Contrast (1.4.3 / 1.4.11):** body text ≥ 4.5:1; large text (≥ 18.66 px bold / 24 px) and UI borders/focus rings ≥ 3:1. `text-muted-foreground` is the lightest allowed text colour; never `text-muted-foreground/60` for meaningful text. White text on `brand` orange: use `font-semibold` ≥ 14 px.
+- **Contrast (1.4.3 / 1.4.11):** body text ≥ 4.5:1; large text (≥ 18.66 px bold / 24 px) and UI borders/focus rings ≥ 3:1. `text-muted-foreground` is the lightest allowed text colour; never `text-muted-foreground/60` for meaningful text. Brand text/links use `text-brand-strong` and white-on-orange fills use `bg-brand-strong`/`bg-primary` (vivid `brand` is 3.1:1 and only for non-text marks); warning text uses `text-warning-foreground`. Exact token rules: SKILL.md › Typography rule 5.
 - **Reflow & resize (1.4.4 / 1.4.10):** works at 320 px CSS width and 200 % zoom; no horizontal page scroll (tables scroll inside their container with `overflow-x-auto` and a `tabIndex={0}` + `aria-label` region).
 - **Non-text content / motion:** honour `prefers-reduced-motion`.
 

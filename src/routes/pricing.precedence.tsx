@@ -289,13 +289,13 @@ function Page() {
   const reasonLabel = (r: string) => (r.startsWith("OTHER: ") ? `Other: ${r.slice(7)}` : humanize(r));
 
   return (
-    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Rule precedence" }]}>
+    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segments" }, { label: "Rule precedence" }]}>
       <ListHeader
         title="Rule precedence"
         subtitle={
           <>
             When several prices apply, the highest tier wins. Every calculated price returns a{" "}
-            <Link to="/pricing/price-trace" className="text-brand font-medium hover:underline">
+            <Link to="/pricing/price-trace" className="text-brand-strong font-medium hover:underline">
               price trace
             </Link>{" "}
             showing the winning rule.
@@ -315,7 +315,7 @@ function Page() {
         <label htmlFor="prec-acting-as" className="font-medium text-foreground">
           Acting as (demo)
         </label>
-        <select id="prec-acting-as" className={`${inputCls} sm:!w-72`} value={actor} onChange={(e) => setActor(e.target.value)}>
+        <select id="prec-acting-as" className={`${inputCls} sm:w-72`} value={actor} onChange={(e) => setActor(e.target.value)}>
           {ACTORS.map((a) => (
             <option key={a.id} value={a.id}>
               {a.label}
@@ -593,10 +593,10 @@ function Page() {
 
       <section className="mt-8" aria-labelledby="prec-history-h">
         <div className="mb-3">
-          <h2 id="prec-history-h" className="text-lg font-semibold tracking-tight">
+          <h2 id="prec-history-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
             Version history
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Every change is versioned and audited, including approval decisions.</p>
+          <p className="text-base text-muted-foreground mt-0.5">Every change is versioned and audited, including approval decisions.</p>
         </div>
         <DataTable
           caption="Precedence version history"
@@ -609,7 +609,7 @@ function Page() {
             { key: "order", header: "Order", cell: (v) => <span className="block min-w-72">{orderText(v.order)}</span> },
             { key: "tb", header: "Tie-breaker", className: "whitespace-nowrap", cell: (v) => humanize(v.tieBreaker) },
             { key: "eff", header: "Effective from", cell: (v) => <span className="tabular-nums whitespace-nowrap">{v.effectiveFrom}</span> },
-            { key: "reason", header: "Reason", className: "whitespace-nowrap", cell: (v) => <Tag>{reasonLabel(v.reasonCode)}</Tag> },
+            { key: "reason", header: "Reason", className: "whitespace-nowrap", cell: (v) => reasonLabel(v.reasonCode) },
             {
               key: "by",
               header: "Changed by",

@@ -582,7 +582,7 @@ export const SOD_POLICY = {
 };
 export const SOD_LOG = [
   { id: "SOD-12", at: "2026-10-28 11:31", entity: "QUOTE", ref: "Q-10198", requesterId: "U-05", assignedId: "U-05", action: "REASSIGNED", toId: "U-06", channel: "UI", note: "Maya Iyer raised the quote and was its first approver — reassigned to the Sales VP." },
-  { id: "SOD-11", at: "2026-10-24 09:02", entity: "PRICE_LIST", ref: "PR-011", requesterId: "U-01", assignedId: "U-01", action: "DENIED", toId: undefined, channel: "API", note: "POST /approvals/PR-011/approve by the submitter — AUTHORIZATION · SELF_APPROVAL_DENIED." },
+  { id: "SOD-11", at: "2026-10-24 09:02", entity: "PRICE_LIST", ref: "PR-011", requesterId: "U-01", assignedId: "U-01", action: "DENIED", toId: undefined, channel: "API", note: "The submitter tried to approve their own price list through the API — denied." },
   { id: "SOD-10", at: "2026-10-19 16:40", entity: "EXCEPTION", ref: "EXC-698", requesterId: "U-09", assignedId: "U-09", action: "ESCALATED_FALLBACK", toId: "U-11", channel: "UI", note: "Only eligible approver was the requester — escalated to the configured fallback approver." },
 ];
 

@@ -117,7 +117,7 @@ function Page() {
   };
 
   const columns: Column<Customer>[] = [
-    { key: "id", header: "ID", cell: (c) => <span className="font-mono text-xs whitespace-nowrap">{c.id}</span> },
+    { key: "id", header: "ID", cell: (c) => <span className="font-mono text-sm whitespace-nowrap">{c.id}</span> },
     {
       key: "name",
       header: "Name",
@@ -140,7 +140,7 @@ function Page() {
             hierarchy && c.level > 1 && <CornerDownRight className="size-3.5 text-muted-foreground" aria-hidden />
           )}
           <RecordLink to="/pricing/customers/$id" params={{ id: c.id }}>{c.name}</RecordLink>
-          {c.strategic && <Star className="size-3.5 text-brand fill-brand" role="img" aria-label="Strategic customer" />}
+          {c.strategic && <Star className="size-3.5 text-brand-strong fill-brand-strong" role="img" aria-label="Strategic customer" />}
         </span>
       ),
     },
@@ -213,7 +213,7 @@ function Page() {
               </Btn>
             }
           >
-            Customers arrive from the CRM/ERP. Try a different search term or segment.
+            Try a different search term or segment.
           </EmptyState>
         }
       />
@@ -284,7 +284,7 @@ function CustomerQuickView({
         <>
           {c.status === "BLOCKED" && (
             <InfoBanner tone="danger" title="Quotes can’t be created">
-              This customer is blocked in the source system (CUSTOMER_BLOCKED).
+              This customer is blocked in the source system.
             </InfoBanner>
           )}
           <section className="bg-card border border-border rounded-xl px-5">
@@ -301,14 +301,14 @@ function CustomerQuickView({
           </section>
 
           <section aria-labelledby="qv-hier" className="bg-card border border-border rounded-xl p-5">
-            <h3 id="qv-hier" className="text-base font-semibold mb-3">
+            <h3 id="qv-hier" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-3">
               Hierarchy <span className="text-sm font-normal text-muted-foreground">· level {c.level} of {MAX_HIERARCHY_DEPTH}</span>
             </h3>
             <ul className="space-y-2 text-sm">
               {parent && (
                 <li>
                   <span className="text-muted-foreground">Parent: </span>
-                  <button type="button" className="hit text-brand font-medium hover:underline" onClick={() => onSelect(parent)}>
+                  <button type="button" className="hit text-brand-strong font-medium hover:underline" onClick={() => onSelect(parent)}>
                     {parent.name}
                   </button>
                 </li>
@@ -320,7 +320,7 @@ function CustomerQuickView({
                   : kids.map((k, i) => (
                       <span key={k.id}>
                         {i > 0 && ", "}
-                        <button type="button" className="hit text-brand font-medium hover:underline" onClick={() => onSelect(k)}>
+                        <button type="button" className="hit text-brand-strong font-medium hover:underline" onClick={() => onSelect(k)}>
                           {k.name}
                         </button>
                       </span>
@@ -328,7 +328,7 @@ function CustomerQuickView({
               </li>
             </ul>
           </section>
-          <p className="text-xs text-muted-foreground">Name, parent and geography are owned by the source system and are read-only here.</p>
+          <p className="text-base text-muted-foreground">Name, parent and geography are owned by the source system and are read-only here.</p>
         </>
       )}
     </Drawer>

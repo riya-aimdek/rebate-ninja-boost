@@ -23,6 +23,7 @@ import {
   money,
   pct,
   type ApiError,
+  KpiTile,
 } from "@/components/pricing/kit";
 import { RequireAccess, Secure, pctBand } from "@/components/pricing/access";
 import { QuoteLinesTable, useLivePricing } from "@/components/pricing/quote-lines";
@@ -260,7 +261,7 @@ function Wizard() {
           The CRM passed “{search.opportunity}”, which doesn't exist. Pick the opportunity below.
         </InfoBanner>
       )}
-      <Stepper steps={STEPS} current={step} />
+      <Stepper steps={STEPS} current={step} onStepClick={setStep} />
       <ErrorBanner error={error} onClose={() => setError(null)} note={error?.code === "PARTIAL_SUCCESS" ? "The priced lines are kept." : undefined} />
 
       {step === 0 && (
@@ -358,10 +359,10 @@ function Wizard() {
                 <Compass className="size-5 text-brand" aria-hidden /> Guided selling
               </span>
             }
-            subtitle={flow ? `${flow.name} · v${flow.version}. Answers are stored on the quote for audit.` : "No active guided-selling flow."}
+            subtitle={flow ? `${flow.name} · v${flow.version}. Answers are stored on the quote for audit.` : undefined}
           >
             {!flow ? (
-              <p className="text-sm text-muted-foreground">No flow is active on {pricingDate}. Skip to add lines yourself.</p>
+              <p className="text-base text-muted-foreground">No flow is active on {pricingDate}. Skip to add lines yourself.</p>
             ) : (
               <div className="grid lg:grid-cols-2 gap-8">
                 <div className="space-y-5">
@@ -369,9 +370,7 @@ function Wizard() {
                     <fieldset key={q.id}>
                       <legend className="text-sm font-medium mb-2">
                         {q.text}
-                        {q.required && <span className="text-destructive ml-0.5" aria-hidden>*</span>}
-                        {q.showIf && <span className="ml-2 text-xs text-muted-foreground font-normal">(shown because of {q.showIf.questionId})</span>}
-                      </legend>
+                        {q.required && <span className="text-destructive ml-0.5" aria-hidden>*</span>}                      </legend>
                       {q.kind === "NUMBER" ? (
                         <div className="flex items-center gap-2 max-w-xs">
                           <input type="number" min={1} inputMode="numeric" className={inputCls} aria-label={q.text} value={answers[q.id] ?? ""} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })} placeholder="e.g. 150" />
@@ -396,16 +395,16 @@ function Wizard() {
                   ))}
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">Recommendation</h3>
+                  <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2">Recommendation</h3>
                   {outcome ? (
                     <div className="rounded-xl border border-border p-4 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold">{outcome.label}</span>
                         <Tag tone="brand">Price tier: {outcome.tier}</Tag>
                       </div>
-                      <p className="text-sm text-muted-foreground">{outcome.note}</p>
+                      <p className="text-base text-muted-foreground">{outcome.note}</p>
                       {!customer ? (
-                        <p className="text-sm">Pick a customer to see price ranges.</p>
+                        <p className="text-base">Pick a customer to see price ranges.</p>
                       ) : (
                         <DataTable
                           caption="Recommended products and price range"
@@ -423,7 +422,7 @@ function Wizard() {
                       <p className="text-xs text-muted-foreground">Ranges come from guardrails and segment guidance for this customer at {qty.toLocaleString("en-GB")} units, not from the flow author.</p>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Answer the questions to get a recommendation.</p>
+                    <p className="text-base text-muted-foreground">Answer the questions to get a recommendation.</p>
                   )}
                 </div>
               </div>
@@ -467,7 +466,7 @@ function Wizard() {
 
       {step === 3 && need && (
         <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
             <Summary label="Net value" value={money(need.priced.totals.net)} />
             <Summary label="Discount off list" value={pct(-need.priced.totals.discountPct)} />
             <Summary label="Margin" value={<Secure field="marginPct" band={pctBand(need.priced.totals.marginPct)}>{need.priced.totals.marginPct.toFixed(1)}%</Secure>} />
@@ -546,10 +545,5 @@ function WizardFooter({ onBack, nextLabel, missing = [] }: { onBack?: () => void
 }
 
 function Summary({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="bg-card border border-border rounded-xl shadow-sm p-4">
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="text-2xl font-bold tabular-nums mt-1">{value}</div>
-    </div>
-  );
+  return <KpiTile label={label} value={value} />;
 }

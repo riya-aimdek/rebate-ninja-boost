@@ -68,7 +68,7 @@ function Page() {
   const custMaster = CUSTOMERS.find((c) => c.id === result.cust.id);
 
   return (
-    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Price trace" }]}>
+    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segments" }, { label: "Price trace" }]}>
       <ListHeader title="Price trace" subtitle="Calculate a price and see which rule won, the tier it came from, and every rule evaluated but not applied." />
 
       <Card title="Pricing request">
@@ -137,11 +137,11 @@ function Page() {
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
           {blocker ? (
-            <p id="trace-blocker" className="text-sm text-muted-foreground">
+            <p id="trace-blocker" className="sr-only">
               {blocker}
             </p>
           ) : (
-            stale && <p className="text-sm text-warning-foreground">Inputs changed — calculate to update the result.</p>
+            stale && <p className="text-base text-warning-foreground">Inputs changed — calculate to update the result.</p>
           )}
           <Btn type="submit" icon={stale ? RefreshCw : Calculator} disabled={!!blocker} aria-describedby={blocker ? "trace-blocker" : undefined}>
             {stale ? "Recalculate price" : "Calculate price"}
@@ -179,7 +179,7 @@ function Page() {
               <div className="text-xs opacity-80 mt-1">GBP / {result.prod.uom}</div>
             </div>
             <div className="sm:text-right">
-              <div className="inline-flex items-center gap-2 rounded-full bg-brand text-brand-foreground px-3 py-1 text-sm font-semibold">
+              <div className="inline-flex items-center gap-2 rounded-full bg-brand-strong text-brand-foreground px-3 py-1 text-sm font-semibold">
                 <Trophy className="size-4" aria-hidden /> Winning rule: {TIER_LABEL[winner.tier]}
               </div>
               <div className="text-sm mt-2">
@@ -207,7 +207,7 @@ function Page() {
             )}
             <li className="flex justify-between py-2.5 font-bold">
               <span>Final price</span>
-              <span className="tabular-nums text-brand">{money(finalPrice)}</span>
+              <span className="tabular-nums text-brand-strong">{money(finalPrice)}</span>
             </li>
             <li className="flex justify-between py-2.5 text-muted-foreground">
               <span>Cost ({result.prod.sku}) · margin</span>
@@ -239,10 +239,10 @@ function Page() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground mt-3">The final price meets every limit on this guardrail.</p>
+              <p className="text-base text-muted-foreground mt-3">The final price meets every limit on this guardrail.</p>
             )
           ) : (
-            <p className="text-sm text-muted-foreground mt-3">No global, segment or customer guardrail covers this customer and product on {resultCtx.date}.</p>
+            <p className="text-base text-muted-foreground mt-3">No global, segment or customer guardrail covers this customer and product on {resultCtx.date}.</p>
           )}
         </Card>
         </div>
@@ -255,7 +255,7 @@ function Page() {
               const any = result.ordered.some((c) => c.tier === t && c.matched);
               return (
                 <li key={t} className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${won ? "border-brand bg-brand-soft" : "border-border"}`}>
-                  <span className={`size-6 rounded-full grid place-items-center text-xs font-bold ${won ? "bg-brand text-brand-foreground" : "bg-muted"}`} aria-hidden>
+                  <span className={`size-6 rounded-full grid place-items-center text-xs font-bold ${won ? "bg-brand-strong text-brand-foreground" : "bg-muted"}`} aria-hidden>
                     {i + 1}
                   </span>
                   <span className="flex-1 text-sm font-medium">{TIER_LABEL[t]}</span>
@@ -269,7 +269,7 @@ function Page() {
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             Precedence v{result.precedence.version} ·{" "}
-            <Link to="/pricing/precedence" className="text-brand hover:underline">
+            <Link to="/pricing/precedence" className="text-brand-strong hover:underline">
               Change order
             </Link>
           </div>
@@ -279,10 +279,10 @@ function Page() {
 
       <section className="mt-8" aria-labelledby="trace-rules-h">
         <div className="mb-3">
-          <h2 id="trace-rules-h" className="text-lg font-semibold tracking-tight">
+          <h2 id="trace-rules-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
             Rules evaluated
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Rule types without a native tier (cost-plus, formula, discount, volume tier, promotion) are placed by their most specific condition.</p>
+          <p className="text-base text-muted-foreground mt-0.5">Rule types without a native tier (cost-plus, formula, discount, volume tier, promotion) are placed by their most specific condition.</p>
         </div>
         <DataTable<Candidate>
           caption="Rules and price lists evaluated, in precedence order"

@@ -92,8 +92,8 @@ function Page() {
   };
 
   const columns: Column<Product>[] = [
-    { key: "id", header: head("Product ID", "productId"), className: "whitespace-nowrap", cell: (p) => <span className="font-mono text-xs">{p.productId}</span> },
-    { key: "sku", header: head("SKU", "sku"), className: "whitespace-nowrap", cell: (p) => <span className="font-mono text-xs">{p.sku}</span> },
+    { key: "id", header: head("Product ID", "productId"), className: "whitespace-nowrap", cell: (p) => <span className="font-mono text-sm">{p.productId}</span> },
+    { key: "sku", header: head("SKU", "sku"), className: "whitespace-nowrap", cell: (p) => <span className="font-mono text-sm">{p.sku}</span> },
     { key: "name", header: head("Name", "name"), cell: (p) => <RecordLink to="/pricing/products/$id" params={{ id: p.productId }}>{p.name}</RecordLink> },
     { key: "category", header: head("Category", "category"), cell: (p) => p.category },
     { key: "brand", header: head("Brand", "brand"), className: "whitespace-nowrap", cell: (p) => p.brand },
@@ -162,7 +162,7 @@ function Page() {
               </Btn>
             }
           >
-            Products arrive from the ERP. Try a different search term or remove a filter.
+            Try a different search term or remove a filter.
           </EmptyState>
         }
       />
@@ -206,7 +206,7 @@ function ProductQuickView({ product: p, onClose, onOpen }: { product: Product | 
         <>
           {p.lifecycleStatus === "BLOCKED" && (
             <InfoBanner tone="danger" title="Can’t be added to price lists">
-              Blocked in the ERP. Price list lines for this product are rejected with PRODUCT_BLOCKED.
+              Blocked in the ERP. Price list lines for this product are rejected.
             </InfoBanner>
           )}
           {p.lifecycleStatus === "END_OF_LIFE" && (
@@ -227,7 +227,7 @@ function ProductQuickView({ product: p, onClose, onOpen }: { product: Product | 
               ]}
             />
           </section>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Fields with a lock are owned by the ERP. Change them in the ERP; they update on the next sync. Costs, price lists and lineage are on the full
             product page.
           </p>

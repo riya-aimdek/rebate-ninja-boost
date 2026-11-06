@@ -148,7 +148,7 @@ function Flows() {
         }
       />
       <InfoBanner title="Where the price range comes from">
-        Flows choose products and a price tier. The minimum, recommended and maximum price a rep sees comes from guardrails and segment guidance for that customer — never from the flow author. Flows are versioned and activated like pricing rules.
+        The minimum, recommended and maximum price a rep sees comes from guardrails and segment guidance for that customer — never from the flow author. Flows are versioned and activated like pricing rules.
       </InfoBanner>
       {!canEdit && <InfoBanner tone="neutral">You can view and test flows. Pricing administrators and the deal desk can change them.</InfoBanner>}
       <FilterPills<Status> label="Status" selected={statuses} onChange={setStatuses} options={STATUSES.map((s) => ({ key: s, label: humanize(s), count: rows.filter((f) => f.status === s).length }))} />
@@ -164,9 +164,7 @@ function Flows() {
               Try a different search or status.
             </EmptyState>
           ) : (
-            <EmptyState icon={Compass} title="No guided-selling flows yet" action={canEdit ? <Btn icon={Plus} onClick={() => openEdit()}>Create flow</Btn> : undefined}>
-              A flow asks a few questions and recommends products and a price tier.
-            </EmptyState>
+            <EmptyState icon={Compass} title="No guided-selling flows yet" />
           )
         }
         columns={[
@@ -219,7 +217,7 @@ function Flows() {
         open={!!editing}
         onClose={() => setEditing(null)}
         dismissible={!dirty && !saving}
-        size="xl"
+        size="lg"
         title={editing?.version && editing.version > 1 ? `${editing.name} — version ${editing.version} (draft)` : "Create flow"}
         subtitle={dirty ? "Unsaved changes" : "Questions, branching and outcomes. Saving keeps it in draft."}
         footer={
@@ -240,7 +238,7 @@ function Flows() {
         {editing && (
           <div className="space-y-6">
             <ErrorBanner error={error} onClose={() => setError(null)} />
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid sm:grid-cols-2 gap-4">
               <Field label="Flow name" required>
                 <input className={inputCls} value={editing.name} onChange={(e) => set({ name: e.target.value })} />
               </Field>
@@ -262,18 +260,21 @@ function Flows() {
             </div>
 
             <fieldset>
-              <legend className="text-sm font-semibold mb-3">Questions</legend>
+              <legend className="text-base font-semibold mb-3">Questions</legend>
               <ol className="space-y-3">
                 {editing.questions.map((q, i) => (
                   <li key={i} className="rounded-lg border border-border p-4">
-                    <div className="flex items-center justify-between gap-2 mb-3">
-                      <span className="font-mono text-xs font-semibold">{q.id}</span>
-                      <button type="button" aria-label={`Remove question ${q.id}`} onClick={() => set({ questions: editing.questions.filter((_, j) => j !== i) })} className="size-10 grid place-items-center rounded-md text-muted-foreground hover:text-destructive hover:bg-danger-soft">
-                        <Trash2 className="size-4" aria-hidden />
-                      </button>
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <span className="text-sm font-semibold">Question {i + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <Toggle checked={q.required} onChange={(v) => setQ(i, { required: v })} label="Mandatory" />
+                        <button type="button" aria-label={`Remove question ${i + 1}`} onClick={() => set({ questions: editing.questions.filter((_, j) => j !== i) })} className="size-10 grid place-items-center rounded-md text-muted-foreground hover:text-destructive hover:bg-danger-soft">
+                          <Trash2 className="size-4" aria-hidden />
+                        </button>
+                      </div>
                     </div>
-                    <div className="grid md:grid-cols-4 gap-3">
-                      <Field label="Question" required className="md:col-span-2">
+                    <div className="grid sm:grid-cols-2 gap-x-4 gap-y-3">
+                      <Field label="Question" required>
                         <input className={inputCls} value={q.text} onChange={(e) => setQ(i, { text: e.target.value })} placeholder="e.g. What is the main use case?" />
                       </Field>
                       <Field label="Answer type">
@@ -285,11 +286,8 @@ function Flows() {
                           ))}
                         </select>
                       </Field>
-                      <div className="flex items-end pb-2">
-                        <Toggle checked={q.required} onChange={(v) => setQ(i, { required: v })} label="Mandatory" />
-                      </div>
                       {q.kind !== "NUMBER" && (
-                        <Field label="Options" hint="Comma-separated" className="md:col-span-2">
+                        <Field label="Options" hint="Separate with commas">
                           <input
                             className={inputCls}
                             value={q.options.map((o) => o.label).join(", ")}
@@ -306,23 +304,39 @@ function Flows() {
                           />
                         </Field>
                       )}
-                      <Field label="Show only if" hint="Branching — leave blank to always show">
-                        <select className={inputCls} value={q.showIf?.questionId ?? ""} onChange={(e) => setQ(i, { showIf: e.target.value ? { questionId: e.target.value, equals: q.showIf?.equals ?? "" } : undefined })}>
+                      <Field label="Show only if">
+                        <select className={inputCls} value={q.showIf?.questionId ?? ""} onChange={(e) => setQ(i, { showIf: e.target.value ? { questionId: e.target.value, equals: "" } : undefined })}>
                           <option value="">Always show</option>
-                          {editing.questions
-                            .filter((x) => x.id !== q.id)
-                            .map((x) => (
+                          {editing.questions.map((x, j) =>
+                            x.id === q.id ? null : (
                               <option key={x.id} value={x.id}>
-                                {x.id} is answered…
+                                Question {j + 1}{x.text ? `: ${x.text}` : ""}
                               </option>
-                            ))}
+                            ),
+                          )}
                         </select>
                       </Field>
-                      {q.showIf && (
-                        <Field label="…with answer">
-                          <input className={inputCls} value={q.showIf.equals} onChange={(e) => setQ(i, { showIf: { questionId: q.showIf!.questionId, equals: e.target.value.toUpperCase().replace(/\s+/g, "_") } })} placeholder="e.g. NEW_BUILD" />
-                        </Field>
-                      )}
+                      {q.showIf &&
+                        (() => {
+                          const src = editing.questions.find((x) => x.id === q.showIf!.questionId);
+                          const set2 = (v: string) => setQ(i, { showIf: { questionId: q.showIf!.questionId, equals: v } });
+                          return (
+                            <Field label="…is answered">
+                              {src && src.options.length > 0 ? (
+                                <select className={inputCls} value={q.showIf.equals} onChange={(e) => set2(e.target.value)}>
+                                  <option value="">Choose an answer…</option>
+                                  {src.options.map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                      {o.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input className={inputCls} value={q.showIf.equals} onChange={(e) => set2(e.target.value.toUpperCase().replace(/\s+/g, "_"))} placeholder="e.g. NEW_BUILD" />
+                              )}
+                            </Field>
+                          );
+                        })()}
                     </div>
                   </li>
                 ))}
@@ -333,15 +347,15 @@ function Flows() {
             </fieldset>
 
             <fieldset>
-              <legend className="text-sm font-semibold mb-1">Outcomes</legend>
-              <p className="text-xs text-muted-foreground mb-3">The first outcome whose conditions all match wins. An outcome with no conditions is the default.</p>
+              <legend className="text-base font-semibold mb-1">Outcomes</legend>
+              <p className="text-base text-muted-foreground mb-3">The first outcome whose conditions all match wins. An outcome with no conditions is the default.</p>
               <ol className="space-y-3">
                 {editing.outcomes.map((o, i) => (
-                  <li key={i} className="rounded-lg border border-border p-4 grid md:grid-cols-4 gap-3">
+                  <li key={i} className="rounded-lg border border-border p-4 grid sm:grid-cols-2 gap-x-4 gap-y-3">
                     <Field label="Outcome name" required>
                       <input className={inputCls} value={o.label} onChange={(e) => setO(i, { label: e.target.value })} />
                     </Field>
-                    <Field label="Conditions" hint="e.g. Q1 = NEW_BUILD; Q3 >= 100" className="md:col-span-2">
+                    <Field label="Conditions" hint="e.g. Q1 = NEW_BUILD; Q3 >= 100">
                       <input className={inputCls} defaultValue={whenToText(o.when)} onBlur={(e) => setO(i, { when: textToWhen(e.target.value) })} />
                     </Field>
                     <Field label="Price tier">
@@ -351,7 +365,7 @@ function Flows() {
                         ))}
                       </select>
                     </Field>
-                    <fieldset className="md:col-span-4">
+                    <fieldset className="sm:col-span-2">
                       <legend className="text-sm font-medium mb-2">Recommended products</legend>
                       <div className="flex flex-wrap gap-2">
                         {PRODUCTS.filter((p) => p.lifecycleStatus !== "BLOCKED").map((p) => {
@@ -385,13 +399,37 @@ function TestDrawer({ flow, onClose }: { flow: GuidedFlow | null; onClose: () =>
   const outcome = useMemo(() => (flow ? outcomeFor(flow, answers) : undefined), [flow, answers]);
   if (!flow) return null;
   const invalid = validateFlow(flow);
+  const shown = visibleQuestions(flow, answers);
+  const hidden = flow.questions.length - shown.length;
+  const answered = Object.values(answers).some((v) => v !== "");
+  const fallback = outcome?.when.length === 0;
   return (
-    <Drawer open onClose={() => (setAnswers({}), onClose())} title={`${flow.name} v${flow.version}`} subtitle={<span className="flex items-center gap-2"><StatusPill status={flow.status} /> Test the flow as a rep would see it.</span>} size="md">
+    <Drawer
+      open
+      onClose={() => (setAnswers({}), onClose())}
+      title={`Preview: ${flow.name}`}
+      subtitle={
+        <span className="flex flex-wrap items-center gap-2">
+          <StatusPill status={flow.status} /> Version {flow.version} · Nothing is saved and no quote is created.
+        </span>
+      }
+      size="md"
+    >
       {invalid && <ErrorBanner error={invalid as ApiError} note="Fix this before activating." />}
-      <Card title="Questions">
+      <section aria-labelledby="pv-q">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h3 id="pv-q" className="text-lg lg:text-xl leading-[1.2] font-semibold">
+            Questions
+          </h3>
+          {answered && (
+            <Btn variant="ghost" size="sm" onClick={() => setAnswers({})}>
+              Reset answers
+            </Btn>
+          )}
+        </div>
         <div className="space-y-4">
-          {visibleQuestions(flow, answers).map((q) => (
-            <Field key={q.id} label={`${q.id}. ${q.text}`} required={q.required}>
+          {shown.map((q) => (
+            <Field key={q.id} label={q.text} required={q.required}>
               {q.kind === "NUMBER" ? (
                 <input type="number" min={0} className={inputCls} value={answers[q.id] ?? ""} onChange={(e) => setAnswers({ ...answers, [q.id]: e.target.value })} />
               ) : (
@@ -407,20 +445,39 @@ function TestDrawer({ flow, onClose }: { flow: GuidedFlow | null; onClose: () =>
             </Field>
           ))}
         </div>
-      </Card>
-      <Card title="Outcome">
-        {outcome ? (
-          <div className="space-y-2 text-sm">
-            <p className="font-semibold">
-              {outcome.label} <Tag tone="brand">{outcome.tier}</Tag>
-            </p>
-            <p>{outcome.products.join(", ")}</p>
-            <p className="text-muted-foreground">{outcome.note}</p>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No outcome matches yet.</p>
+        {hidden > 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            {hidden} more {hidden === 1 ? "question appears" : "questions appear"} depending on the answers.
+          </p>
         )}
-      </Card>
+      </section>
+
+      <section aria-labelledby="pv-r" aria-live="polite" className="rounded-xl border border-border bg-card p-4">
+        <h3 id="pv-r" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2">
+          Recommendation
+        </h3>
+        {!answered ? (
+          <p className="text-base text-muted-foreground">Answer the questions to see what the rep is offered.</p>
+        ) : !outcome ? (
+          <p className="text-base text-muted-foreground">Nothing matches these answers, and the flow has no fallback outcome.</p>
+        ) : (
+          <div className="space-y-3">
+            <p className="flex flex-wrap items-center gap-2 text-base font-semibold">
+              {outcome.label} <Tag tone="brand">{outcome.tier} tier</Tag>
+              {fallback && <Tag tone="neutral">Fallback — no specific match</Tag>}
+            </p>
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {outcome.products.map((sku) => (
+                <li key={sku} className="flex items-baseline justify-between gap-3 px-3 py-2 text-sm">
+                  <span>{PRODUCTS.find((p) => p.sku === sku)?.name ?? sku}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{sku}</span>
+                </li>
+              ))}
+            </ul>
+            {outcome.note && !/^default\.?$/i.test(outcome.note.trim()) && <p className="text-sm text-muted-foreground">{outcome.note}</p>}
+          </div>
+        )}
+      </section>
     </Drawer>
   );
 }

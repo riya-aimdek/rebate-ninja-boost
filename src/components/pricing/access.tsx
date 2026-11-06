@@ -1,6 +1,6 @@
 import { useSyncExternalStore, type ReactNode } from "react";
-import { Lock, ShieldOff } from "lucide-react";
-import { EmptyState, LinkBtn } from "@/components/pricing/kit";
+import { Lock } from "lucide-react";
+import { ForbiddenPage } from "@/components/ErrorPage";
 import { NOTIFICATIONS, subscribeNotifications } from "@/lib/pricing/deals";
 import { ACCESS_LABEL, MODULE_LABEL, ROLE_LABEL, useSession, type AccessLevel, type Module, type Role, type SecureField } from "@/lib/pricing/session";
 
@@ -38,14 +38,11 @@ export function RequireAccess({ module, level = "V", roles, children }: { module
   const ok = roles ? roles.includes(role) : module ? can(module, level) : true;
   if (ok) return <>{children}</>;
   return (
-    <div className="bg-card border border-border rounded-xl shadow-sm" role="alert">
-      {/* The page's own h1 isn't rendered, so the denial message names the page for screen readers. */}
-      <h1 className="sr-only">Access denied</h1>
-      <EmptyState icon={ShieldOff} title="You don't have access to this page" action={<LinkBtn to="/pricing/notifications" variant="subtle">Go to my notifications</LinkBtn>}>
-        {user.name} is signed in as {ROLE_LABEL[role]}
-        {module ? `, which has ${ACCESS_LABEL[can(module) ? "V" : "N"].toLowerCase()} on ${MODULE_LABEL[module]}` : ""}. Error code PERMISSION_DENIED (class AUTHORIZATION). Ask an IT administrator if you need access.
-      </EmptyState>
-    </div>
+    <ForbiddenPage>
+      {user.name} is signed in as {ROLE_LABEL[role]}
+      {module ? `, which has ${ACCESS_LABEL[can(module) ? "V" : "N"].toLowerCase()} on ${MODULE_LABEL[module]}` : ""}. Ask an IT administrator if
+      you need access.
+    </ForbiddenPage>
   );
 }
 

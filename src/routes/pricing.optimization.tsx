@@ -20,6 +20,7 @@ import {
   PillTabs,
   PricingLayout,
   ProgressBar,
+  RadioPills,
   RecordLink,
   StatusPill,
   Tag,
@@ -143,7 +144,7 @@ function OptimizationPage() {
       cell: (r) => (
         <div>
           {OBJECTIVE_LABELS[r.objective]}
-          {r.targetMarginPct !== undefined && <span className="text-muted-foreground text-xs"> · {r.targetMarginPct}%</span>}
+          {r.targetMarginPct !== undefined && <span className="text-muted-foreground"> · {r.targetMarginPct}%</span>}
         </div>
       ),
     },
@@ -182,10 +183,10 @@ function OptimizationPage() {
       header: "Created",
       className: "whitespace-nowrap",
       cell: (r) => (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-muted-foreground">
           {r.createdBy}
           <br />
-          {fmtStamp(r.createdAt)}
+          <span className="text-xs">{fmtStamp(r.createdAt)}</span>
         </span>
       ),
     },
@@ -310,10 +311,10 @@ function OptimizationPage() {
 
       {tab === "models" && (
         <section aria-labelledby="models-h">
-          <h2 id="models-h" className="text-lg font-semibold tracking-tight">
+          <h2 id="models-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
             Elasticity models
           </h2>
-          <p className="text-sm text-muted-foreground mb-4">Model governance — version, training window and error metrics.</p>
+          <p className="text-base text-muted-foreground mb-4">Model governance — version, training window and error metrics.</p>
           <DataTable
             caption="Elasticity models"
             numbered={false}
@@ -371,7 +372,7 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
   const targetNum = Number(target);
   const targetError =
     objective === "TARGET_MARGIN" && target !== "" && !(targetNum > 0 && targetNum < 100) ? "Enter a target margin between 0 and 100%, e.g. 28." : undefined;
-  /** Why "Save and run" is unavailable — shown next to the button (error prevention). */
+  /** Why "Save and run" is unavailable — announced to screen readers via aria-describedby. */
   const todo = [
     !objective && "choose an objective",
     !name.trim() && "enter a run name",
@@ -432,18 +433,6 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
     }
   };
 
-  // Arrow-key model for the objective radiogroup (WAI-ARIA radio pattern).
-  const onObjectiveKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const keys = ["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"];
-    if (!keys.includes(e.key)) return;
-    e.preventDefault();
-    const idx = objective ? OBJECTIVES.indexOf(objective) : -1;
-    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
-    const next = OBJECTIVES[(idx + step + OBJECTIVES.length) % OBJECTIVES.length];
-    setObjective(next);
-    e.currentTarget.querySelector<HTMLButtonElement>(`[data-objective="${next}"]`)?.focus();
-  };
-
   return (
     <div className="grid grid-cols-1 xl:grid-cols-3 gap-6" onKeyDown={onFormKeyDown}>
       <div className="xl:col-span-2 space-y-6">
@@ -457,41 +446,27 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
           }
           subtitle="Choose deliberately — the objective drives every recommendation in this run."
         >
-          <div
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
-            role="radiogroup"
-            aria-label="Optimization objective"
-            aria-required="true"
-            aria-invalid={err?.field === "objective" || undefined}
-            aria-describedby={err?.field === "objective" ? "objective-error" : undefined}
-            onKeyDown={onObjectiveKey}
-          >
-            {OBJECTIVES.map((o, i) => {
-              const on = objective === o;
-              return (
-                <button
-                  key={o}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  data-objective={o}
-                  tabIndex={on || (!objective && i === 0) ? 0 : -1}
-                  onClick={() => setObjective(o)}
-                  className={`text-left rounded-xl border p-4 transition ${on ? "border-brand bg-brand-soft ring-2 ring-brand/30" : "border-border bg-card hover:border-brand/50"}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`size-4 rounded-full border-2 ${on ? "border-brand bg-brand" : "border-muted-foreground"}`} aria-hidden />
-                    <span className="font-semibold">{OBJECTIVE_LABELS[o]}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1.5 pl-6">{OBJECTIVE_HINT[o]}</div>
-                </button>
-              );
-            })}
-          </div>
-          {err?.field === "objective" && (
-            <p id="objective-error" className="text-xs text-destructive mt-3" role="alert">
+          {/* Compact radio pills (same pattern as bulk update); the chosen objective's purpose shows below. */}
+          <RadioPills<Objective>
+            label="Optimization objective"
+            required
+            invalid={err?.field === "objective"}
+            describedBy={err?.field === "objective" ? "objective-error" : objective ? "objective-hint" : undefined}
+            value={objective || null}
+            onChange={setObjective}
+            options={OBJECTIVES.map((o) => ({ key: o, label: OBJECTIVE_LABELS[o] }))}
+          />
+          {err?.field === "objective" ? (
+            <p id="objective-error" className="text-xs text-destructive mt-2" role="alert">
               {err.message}
             </p>
+          ) : (
+            // Only once chosen: before that the card subtitle already says what to do.
+            objective && (
+              <p id="objective-hint" className="text-xs text-muted-foreground mt-2" role="status">
+                {OBJECTIVE_HINT[objective]}
+              </p>
+            )
           )}
           {objective === "TARGET_MARGIN" && (
             <div className="mt-5 max-w-xs">
@@ -551,14 +526,22 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
         </Card>
 
         <Card title="Demand inputs" subtitle="Each input can be toggled. Missing inputs reduce confidence rather than failing the run.">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Plain toggles in a tight grid — no box per option; one warning line below covers every input that is off. */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-4 gap-y-1">
             {DEMAND_INPUTS.map((d) => (
-              <div key={d} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-4 py-3">
+              <div key={d} className="flex items-center min-h-10 min-w-0">
                 <Toggle checked={!!inputs[d]} onChange={(v) => setInputs((s) => ({ ...s, [d]: v }))} label={d} />
-                {!inputs[d] && <Flag tone="warning">Confidence reduced</Flag>}
               </div>
             ))}
           </div>
+          {DEMAND_INPUTS.some((d) => !inputs[d]) && (
+            <p role="status" className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <Flag tone="warning">Confidence reduced</Flag>
+              <span>
+                {DEMAND_INPUTS.filter((d) => !inputs[d]).join(", ")} {DEMAND_INPUTS.filter((d) => !inputs[d]).length === 1 ? "is" : "are"} off
+              </span>
+            </p>
+          )}
         </Card>
       </div>
 
@@ -625,7 +608,7 @@ function NewRunForm({ nextId, onSaved, onCancel }: { nextId: string; onSaved: (r
             </Btn>
           </div>
           {blocker && (
-            <p id="run-blocker" className="text-xs text-muted-foreground mt-2">
+            <p id="run-blocker" className="sr-only">
               {blocker}
             </p>
           )}

@@ -95,7 +95,7 @@ function AccountActivityPage() {
       className: "font-semibold whitespace-nowrap",
       cell: (r) => (
         <div className="flex items-center gap-3">
-          <div className="size-8 shrink-0 rounded-full bg-brand/10 text-brand grid place-items-center text-xs font-bold" aria-hidden>
+          <div className="size-8 shrink-0 rounded-full bg-brand/10 text-brand-strong grid place-items-center text-xs font-bold" aria-hidden>
             {r.account.split(" ").map((w) => w[0]).slice(0, 2).join("")}
           </div>
           {r.account}
@@ -131,6 +131,7 @@ function AccountActivityPage() {
       title="Account activity"
       subtitle="Rebate earnings, claims and program participation summarised per customer account."
       onExport={exportCsv}
+      exportCount={filtered.length}
       kpis={[
         { label: "Active accounts", value: `${filtered.length}` },
         { label: "Total revenue", value: fmt(totals.revenue) },

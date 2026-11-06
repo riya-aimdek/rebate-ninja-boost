@@ -329,7 +329,7 @@ function Page() {
             e.stopPropagation();
             openEntry(d);
           }}
-          className="hit text-brand font-medium hover:underline whitespace-nowrap"
+          className="hit text-brand-strong font-medium hover:underline whitespace-nowrap"
           aria-label={`Review data quality entry ${d.id}: ${d.code}`}
         >
           {d.id}
@@ -347,7 +347,7 @@ function Page() {
       header: "Source ID",
       cell: (d) => (
         <div className="whitespace-nowrap">
-          <div className="font-mono text-xs">{d.sourceId}</div>
+          <div className="font-mono text-sm">{d.sourceId}</div>
           <div className="text-xs text-muted-foreground">{d.sourceSystem}</div>
         </div>
       ),
@@ -358,7 +358,7 @@ function Page() {
       className: "min-w-[180px] max-w-[280px]",
       cell: (d) => (
         <div>
-          <div className="font-mono text-xs font-semibold">{d.code}</div>
+          <div className="font-mono text-sm font-semibold break-words">{d.code}</div>
           <div className="line-clamp-2 mt-0.5 text-muted-foreground">{d.message}</div>
         </div>
       ),
@@ -426,7 +426,7 @@ function Page() {
       {/* Latest job results — created, updated and failed counts; partial success stated (US-MD-01 AC#2). */}
       <section aria-labelledby="dq-jobs-h" className="mb-6">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
-          <h2 id="dq-jobs-h" className="text-lg font-semibold tracking-tight">
+          <h2 id="dq-jobs-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
             Latest sync jobs
           </h2>
           <DataAsOf at={refreshedAt} />
@@ -450,10 +450,10 @@ function Page() {
                       <Icon className="size-5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h3 id={`job-${j.id}`} className="font-semibold leading-tight">
+                      <h3 id={`job-${j.id}`} className="text-lg lg:text-xl leading-[1.2] font-semibold">
                         {j.entity} sync
                       </h3>
-                      <p className="text-xs text-muted-foreground truncate">{j.source}</p>
+                      <p className="text-sm text-muted-foreground truncate" title={j.source}>{j.source}</p>
                     </div>
                     <StatusPill status={j.status} />
                   </div>
@@ -469,12 +469,12 @@ function Page() {
                         className={`rounded-lg px-3 py-2 ${s.danger ? "bg-danger-soft" : "bg-muted/60"}`}
                       >
                         <dt
-                          className={`text-xs font-medium ${s.danger ? "text-destructive" : "text-muted-foreground"}`}
+                          className={`text-sm font-medium ${s.danger ? "text-destructive" : "text-muted-foreground"}`}
                         >
                           {s.label}
                         </dt>
                         <dd
-                          className={`text-xl font-bold tabular-nums ${s.danger ? "text-destructive" : ""}`}
+                          className={`text-xl font-bold leading-[1.2] tabular-nums ${s.danger ? "text-destructive" : ""}`}
                         >
                           {s.value.toLocaleString("en-GB")}
                         </dd>
@@ -496,7 +496,7 @@ function Page() {
         </div>
       </section>
 
-      <h2 id="dq-records-h" className="text-lg font-semibold tracking-tight mb-3 scroll-mt-24">
+      <h2 id="dq-records-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight mb-3 scroll-mt-24">
         Rejected records
       </h2>
       <FilterPills<DqStatus>
@@ -737,16 +737,11 @@ function Page() {
             <Card title="Record">
               <DetailGrid
                 items={[
-                  { label: "Entity type", value: selected.entity },
                   {
                     label: "Source ID",
                     value: <span className="font-mono">{selected.sourceId}</span>,
                   },
                   { label: "Record in app", value: <SourceRecordLink d={selected} /> },
-                  {
-                    label: "Error code",
-                    value: <span className="font-mono text-destructive">{selected.code}</span>,
-                  },
                   { label: "Occurrence count", value: selected.occurrenceCount },
                   { label: "Error message", value: selected.message, full: true },
                   {
@@ -766,11 +761,11 @@ function Page() {
               title="Stored payload"
               subtitle="Encrypted at rest; visible only to roles with access"
             >
-              <div className="flex items-center gap-3 rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-3 rounded-lg bg-muted/60 p-4 text-base text-muted-foreground">
                 <Lock className="size-5 shrink-0" aria-hidden />
                 <span>
                   Payload masked. Your role does not have{" "}
-                  <code className="text-xs">integration.payload.read</code>. Reprocess re-submits
+                  <code className="break-all">integration.payload.read</code>. Reprocess re-submits
                   the stored payload without exposing it.
                 </span>
               </div>

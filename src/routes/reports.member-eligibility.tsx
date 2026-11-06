@@ -94,7 +94,7 @@ function MemberEligibilityPage() {
         <button
           type="button"
           onClick={() => setProgram(r.program)}
-          className="hit text-brand font-medium hover:underline text-left"
+          className="hit text-brand-strong font-medium hover:underline text-left"
           aria-label={`Filter by program ${r.program}`}
           title="Filter by this program"
         >
@@ -116,7 +116,7 @@ function MemberEligibilityPage() {
             <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden" aria-hidden>
               <div className={`h-full bg-gradient-to-r ${barTone} rounded-full`} style={{ width: `${Math.min(pct, 100)}%` }} />
             </div>
-            <span className="tabular-nums text-xs text-muted-foreground w-12 text-right">
+            <span className="tabular-nums text-sm text-muted-foreground w-12 text-right">
               {pct.toFixed(0)}%<span className="sr-only"> of target</span>
             </span>
           </div>
@@ -131,6 +131,7 @@ function MemberEligibilityPage() {
       title="Member eligibility"
       subtitle="Which program members qualify, are near the threshold, or have fallen below their qualifying target."
       onExport={exportCsv}
+      exportCount={filtered.length}
       kpis={[
         { label: "Members", value: `${inProgram.length}` },
         { label: "Qualified", value: `${counts.Qualified ?? 0}`, tone: "success" },

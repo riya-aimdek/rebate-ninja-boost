@@ -111,9 +111,7 @@ function Page() {
               Try a different search term or remove a filter.
             </EmptyState>
           ) : (
-            <EmptyState icon={Cable} title="No service accounts yet" action={<Btn icon={Plus} onClick={() => setCreating(true)}>Create service account</Btn>}>
-              Each integration needs its own account.
-            </EmptyState>
+            <EmptyState icon={Cable} title="No service accounts yet" />
           )
         }
         columns={[
@@ -123,12 +121,12 @@ function Page() {
             className: "min-w-64",
             cell: (r) => (
               <div>
-                <div className="font-mono text-sm text-brand font-medium">{r.name}</div>
+                <div className="font-mono text-sm text-brand-strong font-medium">{r.name}</div>
                 <div className="text-xs text-muted-foreground">{r.purpose}</div>
               </div>
             ),
           },
-          { key: "type", header: "Type", cell: (r) => <Tag>{humanize(r.type)}</Tag> },
+          { key: "type", header: "Type", className: "whitespace-nowrap", cell: (r) => humanize(r.type) },
           { key: "owner", header: "Owner", className: "whitespace-nowrap", cell: (r) => ownerName(r.ownerId) },
           { key: "creds", header: "Active credentials", align: "right", cell: (r) => <span className="tabular-nums">{r.credentials.filter((c) => c.status === "ACTIVE").length}</span> },
           { key: "exp", header: "Account expires", cell: (r) => <span className="tabular-nums whitespace-nowrap">{r.expiresAt}</span> },
@@ -172,7 +170,7 @@ function Page() {
               Credential
             </label>
             <div className="mt-1.5 flex gap-2">
-              <textarea id="new-secret" readOnly rows={secret.value.includes("\n") ? 4 : 2} className={`${inputCls} h-auto py-2 font-mono text-xs break-all`} value={secret.value} onFocus={(e) => e.currentTarget.select()} />
+              <textarea id="new-secret" readOnly rows={secret.value.includes("\n") ? 4 : 2} className={`${inputCls} h-auto py-2 font-mono break-all`} value={secret.value} onFocus={(e) => e.currentTarget.select()} />
               <Btn
                 variant="outline"
                 icon={Copy}
@@ -297,7 +295,7 @@ function AccountDrawer({ sa, onClose, onUpdate, onIssue }: { sa: ServiceAccount;
         </section>
 
         <section className="bg-card border border-border rounded-xl p-5">
-          <h3 className="font-semibold mb-3">Credentials</h3>
+          <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-3">Credentials</h3>
           <ul className="divide-y divide-border">
             {sa.credentials.map((c) => (
               <li key={c.id} className="py-3 flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -323,8 +321,8 @@ function AccountDrawer({ sa, onClose, onUpdate, onIssue }: { sa: ServiceAccount;
         </section>
 
         <section className="bg-card border border-border rounded-xl p-5">
-          <h3 className="font-semibold">Call tester</h3>
-          <p className="text-xs text-muted-foreground mb-3">Send a request as this account to check the allowlist and credential.</p>
+          <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold">Call tester</h3>
+          <p className="text-base text-muted-foreground mt-1 mb-3">Send a request as this account to check the allowlist and credential.</p>
           <form onSubmit={test} className="grid gap-3">
             <Field label="Credential" required>
               <select className={inputCls} value={credId} onChange={(e) => setCredId(e.target.value)}>

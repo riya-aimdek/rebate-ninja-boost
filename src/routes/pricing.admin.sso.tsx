@@ -21,6 +21,7 @@ import {
   missingFields,
   notifyUndo,
   type ApiError,
+  TableSection,
 } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
 import { ROLES, ROLE_LABEL, type Role } from "@/lib/pricing/session";
@@ -53,7 +54,7 @@ function Page() {
       <ListHeader
         title="SSO & identity"
         eyebrow="Administration"
-        subtitle="Connect the corporate identity provider per environment. Users sign in once, MFA is enforced at the IdP and roles come from group mapping."
+        subtitle="Connect the corporate identity provider per environment. Users sign in once and roles come from group mapping."
       />
       <PillTabs<Env>
         idPrefix="sso"
@@ -67,10 +68,10 @@ function Page() {
         <IdpForm key={env} config={current} onSave={(c) => setConfigs((cs) => cs.map((x) => (x.env === c.env ? c : x)))} />
         <div className="grid gap-6">
           <Card title="Token validation" subtitle="Checked on every sign-in; any failure denies access.">
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-2 text-base">
               {TOKEN_CHECKS.map((t) => (
                 <li key={t} className="flex items-start gap-2">
-                  <CheckCircle2 className="size-4 text-success mt-0.5 shrink-0" aria-hidden />
+                  <CheckCircle2 className="size-4 text-success mt-1 shrink-0" aria-hidden />
                   {t}
                 </li>
               ))}
@@ -84,7 +85,7 @@ function Page() {
 
       <GroupMapping mappings={mappings} setMappings={setMappings} onSimulate={(entry) => setLog((l) => [entry, ...l])} />
 
-      <Card title="Recent sign-ins" subtitle="Just-in-time provisioning creates the user on first sign-in; no mapped group means no access." className="mt-6" padded={false}>
+      <TableSection title="Recent sign-ins" subtitle="Just-in-time provisioning creates the user on first sign-in." className="mt-6">
         <DataTable
           caption="Recent sign-ins"
           rows={log}
@@ -98,7 +99,7 @@ function Page() {
             { key: "d", header: "Detail", className: "min-w-64", cell: (r) => r.detail },
           ]}
         />
-      </Card>
+      </TableSection>
     </>
   );
 }
@@ -169,7 +170,7 @@ function IdpForm({ config, onSave }: { config: IdpConfig; onSave: (c: IdpConfig)
   return (
     <Card
       title={`${ENV_LABEL[f.env]} identity provider`}
-      subtitle={dirty ? "Unsaved changes" : f.enabled ? "Sign-in enabled" : "Sign-in disabled for this environment"}
+      subtitle={dirty ? "Unsaved changes" : undefined}
       actions={
         <Btn variant="outline" icon={Plug} loading={testing} onClick={test} disabled={dirty}>
           Test connection
@@ -185,7 +186,7 @@ function IdpForm({ config, onSave }: { config: IdpConfig; onSave: (c: IdpConfig)
             </InfoBanner>
           </div>
         )}
-        {dirty && <p className="text-xs text-muted-foreground mb-4">Save your changes before testing the connection.</p>}
+        {dirty && <p className="text-base text-muted-foreground mb-4">Save your changes before testing the connection.</p>}
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="Identity provider" required>
             <select className={inputCls} value={f.provider} onChange={(e) => setF({ ...f, provider: e.target.value as IdpConfig["provider"] })}>
@@ -289,7 +290,7 @@ function GroupMapping({
   return (
     <div className="grid gap-6 xl:grid-cols-[3fr_2fr] items-start mt-6">
       <Card title="Group to role mapping" subtitle="A user's role comes from their IdP groups. A user in no mapped group can't sign in." padded={false}>
-        <form onSubmit={add} className="flex flex-wrap items-end gap-3 px-6 py-4 border-b border-border">
+        <form onSubmit={add} className="flex flex-wrap items-end gap-3 px-5 py-4 border-b border-border">
           <Field label="IdP group" required error={groupErr} className="flex-1 min-w-44">
             <input className={`${inputCls} font-mono`} value={group} onChange={(e) => setGroup(e.target.value)} placeholder="e.g. rn-pricing-analyst" />
           </Field>
@@ -316,7 +317,7 @@ function GroupMapping({
         </form>
         <ul className="divide-y divide-border">
           {mappings.map((m) => (
-            <li key={m.group} className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 text-sm">
+            <li key={m.group} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
               <span className="font-mono">{m.group}</span>
               <span className="flex items-center gap-2">
                 <Tag tone="info">{ROLE_LABEL[m.role]}</Tag>

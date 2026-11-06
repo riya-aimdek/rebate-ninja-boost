@@ -132,7 +132,7 @@ function Page() {
         }
       />
       <InfoBanner title="Applied on the server, on every channel">
-        A rep who sees cost can negotiate against the company. Restricted values are removed before they leave the server — in screens, API responses, exports, notifications, reports and audit views. Derived fields (margin from cost) inherit the strictest source rule unless explicitly opened. RESTRICTED fields are encrypted at rest.
+        A rep who sees cost can negotiate against the company. Restricted values are removed before they leave the server — in screens, API responses, exports, notifications, reports and audit views. Derived fields (margin from cost) inherit the strictest source rule unless explicitly opened. Restricted fields are encrypted at rest.
       </InfoBanner>
 
       <DataTable<Policy>
@@ -147,7 +147,7 @@ function Page() {
             className: "min-w-40",
             cell: (p) => (
               <div>
-                <div className="font-medium text-brand">{p.label}</div>
+                <div className="font-medium text-brand-strong">{p.label}</div>
                 <div className="font-mono text-xs text-muted-foreground">{p.field}</div>
               </div>
             ),
@@ -167,7 +167,7 @@ function Page() {
           },
           { key: "allowed", header: "Sees the value", className: "min-w-56", cell: (p) => <span className="text-sm">{[...p.allowed, ...(p.openedFor ?? [])].map((r) => ROLE_LABEL[r].split(" (")[0].split(" /")[0]).join(", ")}</span> },
           { key: "mask", header: "Everyone else", cell: (p) => <span className="whitespace-nowrap">{humanize(p.mask)}{p.rounded?.length ? ` · round for ${p.rounded.map((r) => humanize(r)).join(", ")}` : ""}</span> },
-          { key: "derived", header: "Derived from", cell: (p) => (p.derivedFrom ? <span className="font-mono text-xs">{p.derivedFrom}{p.openedFor?.length ? <span className="block font-sans text-muted-foreground">opened for {p.openedFor.map((r) => humanize(r)).join(", ")}</span> : null}</span> : <span className="text-muted-foreground">—</span>) },
+          { key: "derived", header: "Derived from", cell: (p) => (p.derivedFrom ? <span className="text-xs"><span className="font-mono">{p.derivedFrom}</span>{p.openedFor?.length ? <span className="block text-muted-foreground">opened for {p.openedFor.map((r) => humanize(r)).join(", ")}</span> : null}</span> : <span className="text-muted-foreground">—</span>) },
           { key: "ch", header: "Channels", align: "right", cell: (p) => <span className="tabular-nums">{p.channels.length === FLS_CHANNELS.length ? "All 6" : `${p.channels.length} of 6`}</span> },
           { key: "enc", header: "At rest", cell: (p) => (p.encrypted ? <Flag tone="success">Encrypted</Flag> : <span className="text-muted-foreground">Standard</span>) },
           { key: "edit", header: <span className="sr-only">Actions</span>, cell: (p) => <Btn variant="ghost" size="sm" icon={Pencil} aria-label={`Edit policy for ${p.label}`} onClick={(e) => (e.stopPropagation(), open(p))}>Edit</Btn> },
@@ -302,7 +302,7 @@ function Preview({ role, setRole, policies }: { role: Role; setRole: (r: Role) =
   return (
     <Card
       title="Preview as role"
-      subtitle="Exactly what this role receives — fields are removed on the server, not hidden in the browser."
+      subtitle="Exactly what this role receives."
       className="mt-6"
       actions={
         <Field label={<span className="sr-only">Role to preview</span>} className="w-72">
@@ -318,8 +318,8 @@ function Preview({ role, setRole, policies }: { role: Role; setRole: (r: Role) =
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <section aria-labelledby="pv-api">
-          <h3 id="pv-api" className="font-semibold mb-2 flex items-center gap-2">
-            <Eye className="size-4 text-muted-foreground" aria-hidden /> API · GET /api/v1/quotes/Q-10231/lines/L1
+          <h3 id="pv-api" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2 flex items-center gap-2">
+            <Eye className="size-4 shrink-0 text-muted-foreground" aria-hidden /> <span className="min-w-0 wrap-anywhere">API · GET /api/v1/quotes/Q-10231/lines/L1</span>
           </h3>
           <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(shown, null, 2)}</pre>
           {omitted.length > 0 && (
@@ -331,8 +331,8 @@ function Preview({ role, setRole, policies }: { role: Role; setRole: (r: Role) =
           )}
         </section>
         <section aria-labelledby="pv-mail">
-          <h3 id="pv-mail" className="font-semibold mb-2">Approval email · Export row</h3>
-          <div className="border border-border rounded-lg p-4 text-sm whitespace-pre-line bg-card">
+          <h3 id="pv-mail" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2">Approval email · Export row</h3>
+          <div className="border border-border rounded-lg p-4 text-base whitespace-pre-line bg-card">
             <p className="font-semibold">Approve Q-10231 · Edmundson Electrical</p>
             <p className="mt-2">{`Sam Carter needs your approval.\nDiscount 18%${marginLine} · deal value £24,346${costLine}\nDue 31 Oct 2026, 14:30.`}</p>
           </div>

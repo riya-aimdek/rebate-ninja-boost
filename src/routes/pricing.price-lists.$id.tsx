@@ -516,7 +516,7 @@ function Detail({ source }: { source: PriceList }) {
         </label>
         <select
           id="acting-as"
-          className={`${inputCls} sm:!w-72`}
+          className={`${inputCls} sm:w-72`}
           value={actor}
           onChange={(e) => setActor(e.target.value)}
         >
@@ -625,17 +625,17 @@ function Detail({ source }: { source: PriceList }) {
         >
           {actionModal && (
             <p
-              className={`text-sm ${DESTRUCTIVE.includes(actionModal) ? "font-semibold text-destructive" : ""}`}
+              className={`text-base ${DESTRUCTIVE.includes(actionModal) ? "font-semibold text-destructive" : ""}`}
             >
               {CONSEQUENCE[actionModal](list.name, list.timeZone, scheduleAt)}
             </p>
           )}
           {actionModal === "SUBMIT" && (
             <>
-              <p className="text-sm">
+              <p className="text-base">
                 Pre-submit check passed: every line has a price (or allows a zero price).
               </p>
-              <Field label="Expected version" hint="Optimistic concurrency check">
+              <Field label="Expected version" hint="Submitting fails if someone saved a newer version">
                 <input className={`${inputCls} bg-muted`} value={`v${list.version}`} readOnly />
               </Field>
               <Toggle
@@ -666,12 +666,12 @@ function Detail({ source }: { source: PriceList }) {
             </Field>
           )}
           {actionModal === "APPROVE" && (
-            <p className="text-sm">
+            <p className="text-base">
               Approving as {userLabel}. Submitted by {list.submittedBy ?? list.owner}.
             </p>
           )}
           {actionModal === "ACTIVATE" && (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               Simulates the scheduled activation job; an audit event is written.
             </p>
           )}
@@ -792,9 +792,9 @@ function LinesTab({
       for (const l of list.lines) {
         const k = `${l.sku}|${l.uom}|${l.minQty}`;
         if (productBySku(l.sku)?.lifecycleStatus === "BLOCKED")
-          errs[l.id] = "PRODUCT_BLOCKED — product is blocked; remove this line";
+          errs[l.id] = "Product is blocked — remove this line";
         else if (seen.has(k))
-          errs[l.id] = "DUPLICATE_LINE — same product, UoM and min qty as another line";
+          errs[l.id] = "Duplicate line — same product, UoM and min qty as another line";
         else if (l.price === null && !l.allowZeroPrice)
           errs[l.id] = "Missing price — select Edit price to add one";
         seen.add(k);
@@ -894,7 +894,7 @@ function LinesTab({
         l.overridePrice !== undefined ? (
           <span
             className={
-              overrideExpired(l) ? "line-through text-muted-foreground" : "font-semibold text-brand"
+              overrideExpired(l) ? "line-through text-muted-foreground" : "font-semibold text-brand-strong"
             }
           >
             {money(l.overridePrice, list.currency)}
@@ -1570,7 +1570,7 @@ function DerivationTab({
           ))}
         </div>
         {list.parentId && list.status !== "DRAFT" && (
-          <p className="mt-5 text-sm text-muted-foreground">
+          <p className="mt-5 text-base text-muted-foreground">
             Inheritance mode: <span className="font-medium text-foreground">{list.inheritanceMode === "LIVE_LINK" ? "Live link (recalculates on parent change)" : "Snapshot (copied once, then independent)"}</span>
             {" "}— change it in a new draft version.
           </p>
@@ -1737,7 +1737,7 @@ function DerivationTab({
       </Card>
 
       <section aria-labelledby="overrides-heading">
-        <h2 id="overrides-heading" className="text-lg font-semibold tracking-tight mb-3">
+        <h2 id="overrides-heading" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight mb-3">
           Overrides
         </h2>
         <DataTable
@@ -1837,11 +1837,11 @@ function ApprovalTab({
               ]}
             />
           ) : (
-            <p className="text-sm text-muted-foreground">No approval task for this list.</p>
+            <p className="text-base text-muted-foreground">No approval task for this list.</p>
           )}
         </Card>
         <Card title="Rules">
-          <ul className="text-sm space-y-2 list-disc pl-5 text-muted-foreground">
+          <ul className="text-base space-y-2 list-disc pl-5 text-muted-foreground">
             <li>Approver must be different from the submitter.</li>
             <li>A comment is required to reject, send back or cancel.</li>
             <li>Submitted or later lists are locked; changes need a new draft version.</li>
@@ -1918,7 +1918,7 @@ function VersionsTab({ list }: { list: PriceList }) {
             header: "Created at",
             cell: (v) => <span className="whitespace-nowrap">{v.createdAt}</span>,
           },
-          { key: "r", header: "Reason code", cell: (v) => <Tag>{humanize(v.reason)}</Tag> },
+          { key: "r", header: "Reason", className: "whitespace-nowrap", cell: (v) => humanize(v.reason) },
           { key: "l", header: "Lines", align: "right", cell: (v) => v.lines },
         ]}
         rows={versions}
@@ -1980,7 +1980,7 @@ function VersionsTab({ list }: { list: PriceList }) {
           </Btn>
         </div>
         {sameVersion && (
-          <p className="text-sm text-muted-foreground mt-3" role="status">
+          <p className="text-base text-muted-foreground mt-3" role="status">
             {versions.length === 1
               ? "Only one version exists, so there is nothing to compare yet."
               : "Choose two different versions to compare."}
@@ -2138,14 +2138,14 @@ function AddLineModal({ open, list, onClose, onAdd }: { open: boolean; list: Pri
   const max = f.maxQty === "" ? undefined : Number(f.maxQty);
   const e: Record<string, string> = {};
   if (!f.sku) e["al-product"] = "Choose a product.";
-  else if (product?.lifecycleStatus === "BLOCKED") e["al-product"] = "PRODUCT_BLOCKED — this product is blocked in the ERP and can't be priced.";
+  else if (product?.lifecycleStatus === "BLOCKED") e["al-product"] = "This product is blocked in the ERP and can't be priced.";
   else if (list.lines.some((l) => l.sku === f.sku && l.uom === f.uom && l.minQty === min))
-    e["al-minqty"] = "DUPLICATE_LINE — this product already has a line with the same UoM and min qty. Change the min qty for a new tier.";
+    e["al-minqty"] = "This product already has a line with the same UoM and min qty. Change the min qty for a new tier.";
   if (!f.allowZero && (f.price === "" || Number(f.price) <= 0)) e["al-price"] = "Enter a price above 0, or allow a zero price.";
   else if (f.price !== "" && Number(f.price) < 0) e["al-price"] = "The price can't be negative.";
   if (!Number.isInteger(min) || min < 1) e["al-minqty"] = e["al-minqty"] ?? "Enter a whole number of 1 or more.";
   if (max !== undefined && (!Number.isInteger(max) || max < min)) e["al-maxqty"] = "Max qty must be a whole number at least the min qty.";
-  const fe = (k: string) => (submitted || (k === "al-product" && e[k]?.startsWith("PRODUCT_BLOCKED")) ? e[k] : undefined);
+  const fe = (k: string) => (submitted || (k === "al-product" && product?.lifecycleStatus === "BLOCKED") ? e[k] : undefined);
 
   const save = (ev: React.FormEvent) => {
     ev.preventDefault();

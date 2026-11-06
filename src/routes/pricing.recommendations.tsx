@@ -151,6 +151,7 @@ function RecommendationsPage() {
     <button
       type="button"
       onClick={() => toggleSort(k)}
+      // a11y-ok: brand on navy
       className="inline-flex items-center gap-1 hover:text-brand"
       aria-label={`Sort by ${label}${sort.key === k ? (sort.dir === 1 ? ", currently ascending" : ", currently descending") : ""}`}
     >
@@ -209,7 +210,7 @@ function RecommendationsPage() {
 
   const startDecision = (rec: Recommendation, kind: Decision) => {
     if (rec.expired && kind !== "REJECT") {
-      toast.error("RECOMMENDATION_EXPIRED", {
+      toast.error("Recommendation expired", {
         description: `${rec.id} passed its expiry and cannot be ${kind === "ACCEPT" ? "accepted" : "modified"}. Regenerate it from the latest optimization run.`,
         action: { label: "Regenerate", onClick: () => regenerate(rec) },
       });
@@ -549,7 +550,7 @@ function RecommendationsPage() {
         onCancel={() => setBulk(null)}
       >
         {selectedRecs.length > bulkAcceptable.length && (
-          <p className="text-sm text-muted-foreground mt-2">
+          <p className="text-base text-muted-foreground mt-2">
             {selectedRecs.length - bulkAcceptable.length} selected item(s) will be skipped: bulk accept is limited to high-confidence ML items inside guardrails.
           </p>
         )}
@@ -659,20 +660,20 @@ function RecDrawer({
       <Card>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
           <div>
-            <div className="text-xs font-medium text-muted-foreground">Current</div>
-            <div className="text-lg font-semibold mt-1">
+            <div className="text-sm font-medium text-muted-foreground">Current</div>
+            <div className="text-xl font-semibold mt-1">
               <Price value={rec.currentPrice} currency={rec.currency} uom={rec.uom} />
             </div>
           </div>
           <div>
-            <div className="text-xs font-medium text-muted-foreground">Suggested</div>
-            <div className="text-lg font-bold text-brand mt-1">
+            <div className="text-sm font-medium text-muted-foreground">Suggested</div>
+            <div className="text-xl font-bold text-brand-strong mt-1">
               <Price value={rec.suggestedPrice} currency={rec.currency} uom={rec.uom} />
             </div>
           </div>
           <div>
-            <div className="text-xs font-medium text-muted-foreground">Margin impact</div>
-            <div className={`text-lg font-bold mt-1 tabular-nums ${rec.marginImpact >= 0 ? "text-success" : "text-destructive"}`}>
+            <div className="text-sm font-medium text-muted-foreground">Margin impact</div>
+            <div className={`text-xl font-bold mt-1 tabular-nums ${rec.marginImpact >= 0 ? "text-success" : "text-destructive"}`}>
               {rec.marginImpact >= 0 ? "+" : "−"}
               {money(Math.abs(rec.marginImpact), rec.currency, 0)}
             </div>
@@ -691,7 +692,7 @@ function RecDrawer({
           Confidence band {band[0].toFixed(2)} – {band[1].toFixed(2)}
         </p>
         {rec.missingInputs && rec.missingInputs.length > 0 && (
-          <p className="text-sm mt-3">
+          <p className="text-base mt-3">
             <Flag tone="warning">Missing input</Flag> <span className="ml-1">{rec.missingInputs.join(", ")} unavailable — confidence reduced.</span>
           </p>
         )}
@@ -823,14 +824,14 @@ function DecisionModal({
     >
       <ErrorBanner error={err} onClose={() => setErr(null)} />
       {kind === "ACCEPT" && (
-        <p className="text-sm">
+        <p className="text-base">
           Accepting creates a <b>Price Change Proposal</b> at <Price value={rec.suggestedPrice} currency={rec.currency} uom={rec.uom} /> that
           enters the approval workflow. It is not applied directly.
         </p>
       )}
       {kind === "MODIFY" && (
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Original suggestion <Price value={rec.suggestedPrice} currency={rec.currency} uom={rec.uom} />. Both values are stored.
           </p>
           <Field label="Modified price" required error={err?.field === "decision.modifiedPrice" ? err.message : undefined}>
@@ -848,7 +849,7 @@ function DecisionModal({
             />
           </Field>
           {modMargin !== undefined && (
-            <div className="text-sm flex flex-wrap items-center gap-2">
+            <div className="text-base flex flex-wrap items-center gap-2">
               Resulting margin <b className="tabular-nums">{modMargin.toFixed(1)}%</b> (floor {MARGIN_FLOOR_PCT}%)
               {breach && <Flag tone="danger">Guardrail breach — routes to approval matrix</Flag>}
             </div>

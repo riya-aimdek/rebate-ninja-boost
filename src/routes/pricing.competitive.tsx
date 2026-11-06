@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
-import { ArrowRight, Download, Lock, Plus, Radar, Rss, Upload } from "lucide-react";
+import { ArrowRight, CheckCircle2, Download, Lock, Plus, Radar, RefreshCw, Rss, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   Btn,
@@ -10,6 +10,7 @@ import {
   DetailGrid,
   Drawer,
   EmptyState,
+  FileDrop,
   Field,
   FilterPills,
   Flag,
@@ -22,7 +23,6 @@ import {
   PricingLayout,
   Price,
   RecordLink,
-  StatusPill,
   Tag,
   inputCls,
   missingFields,
@@ -87,7 +87,33 @@ function gapPct(o: CompetitorObs) {
 /** Time of the last scheduled competitor feed (PriceSpider, daily 06:00). */
 const LAST_FEED_SYNC = new Date(`${TODAY}T06:00:00`);
 
-const SAMPLE_FEED = [
+type FeedRow = { competitor: string; competitorSku: string; price: number };
+type Rejected = { label: string; reason: string; link?: { competitor: string; competitorSku: string } };
+type FeedResult = { from: { kind: "SYNC" } | { kind: "FILE"; name: string }; at: Date; added: number; rejected: Rejected[] };
+
+/** Reads a price file with columns competitor, competitor_sku, price (header row required, any order). */
+function parseFeedCsv(text: string): { rows: FeedRow[]; invalid: Rejected[] } {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  const head = (lines[0] ?? "").split(",").map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
+  const col = (name: string) => head.indexOf(name);
+  const [ci, si, pi] = [col("competitor"), col("competitor_sku"), col("price")];
+  if (ci < 0 || si < 0 || pi < 0)
+    return { rows: [], invalid: [{ label: "File", reason: "needs the columns competitor, competitor_sku and price. Download the template to see the layout." }] };
+  const rows: FeedRow[] = [];
+  const invalid: Rejected[] = [];
+  lines.slice(1).forEach((line, i) => {
+    const cells = line.split(",").map((c) => c.trim());
+    const price = Number(cells[pi]);
+    if (!cells[ci] || !cells[si] || !(price > 0)) invalid.push({ label: `Row ${i + 2}`, reason: "needs a competitor, a competitor SKU and a price above 0." });
+    else rows.push({ competitor: cells[ci], competitorSku: cells[si], price });
+  });
+  return { rows, invalid };
+}
+
+const fmtSync = (d: Date) =>
+  `${d.toDateString() === new Date(`${TODAY}T12:00:00`).toDateString() || d > new Date(`${TODAY}T00:00:00`) ? "Today" : d.toLocaleDateString("en-GB")}, ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+
+const SAMPLE_FEED: FeedRow[] = [
   { competitor: "VoltDirect", competitorSku: "VD-W100", price: 103.49 },
   { competitor: "LightHub", competitorSku: "LH-6060-40", price: 27.5 },
   { competitor: "LightHub", competitorSku: "LH-DL10-W", price: 74.0 },
@@ -103,8 +129,12 @@ function CompetitivePage() {
   const [preview, setPreview] = useState<CompetitorObs | null>(null);
   const navigate = useNavigate();
   const [showManual, setShowManual] = useState(false);
-  const [feedResult, setFeedResult] = useState<null | { loaded: number; unmapped: string[] }>(null);
-  const [loadingFeed, setLoadingFeed] = useState(false);
+  const [feedResult, setFeedResult] = useState<FeedResult | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  // "Link it" on a rejected row opens SKU mapping with that competitor and SKU filled in.
+  const [mapPrefill, setMapPrefill] = useState<{ competitor: string; competitorSku: string } | null>(null);
   const [syncedAt, setSyncedAt] = useState<Date>(LAST_FEED_SYNC);
 
   const rows = useMemo(
@@ -185,7 +215,7 @@ function CompetitivePage() {
         </div>
       ),
     },
-    { key: "src", header: "Source", cell: (o) => <Tag>{SOURCE_LABEL[o.source]}</Tag> },
+    { key: "src", header: "Source", className: "whitespace-nowrap", cell: (o) => SOURCE_LABEL[o.source] },
   ];
 
   const exportCsv = () => {
@@ -208,21 +238,18 @@ function CompetitivePage() {
     toast.success(`${rows.length} ${rows.length === 1 ? "observation" : "observations"} exported`);
   };
 
-  const loadFeed = () => {
-    setLoadingFeed(true);
-    setTimeout(() => {
-      setLoadingFeed(false);
-      ingestFeed();
-    }, 700);
-  };
-
-  const ingestFeed = () => {
-    const unmapped: string[] = [];
+  /** Runs feed rows through the SKU mapping: mapped rows become observations, the rest are rejected with a reason. */
+  const ingest = (rows: FeedRow[], invalid: Rejected[], from: FeedResult["from"]) => {
+    const rejected: Rejected[] = [...invalid];
     const added: CompetitorObs[] = [];
-    SAMPLE_FEED.forEach((row, i) => {
-      const m = maps.find((x) => x.competitorSku === row.competitorSku);
+    rows.forEach((row, i) => {
+      const m = maps.find((x) => x.competitor === row.competitor && x.competitorSku === row.competitorSku);
       if (!m) {
-        unmapped.push(row.competitorSku);
+        rejected.push({
+          label: row.competitorSku,
+          reason: `from ${row.competitor} isn't linked to one of our products.`,
+          link: { competitor: row.competitor, competitorSku: row.competitorSku },
+        });
         return;
       }
       added.push({
@@ -234,19 +261,87 @@ function CompetitivePage() {
         currency: "GBP",
         observedAt: "2026-10-29 14:30",
         ageDays: 0,
-        source: "FILE",
+        source: from.kind === "SYNC" ? "FEED" : "FILE",
       });
     });
     setObs((o) => [...added, ...o]);
-    setFeedResult({ loaded: added.length, unmapped });
-    setSyncedAt(new Date());
-    if (unmapped.length) {
-      toast.warning(`${unmapped.length} unmapped ${unmapped.length === 1 ? "row" : "rows"} sent to the data quality log`, {
-        description: `${unmapped.join(", ")} ${unmapped.length === 1 ? "is" : "are"} not mapped to a product. Map ${unmapped.length === 1 ? "it" : "them"} in SKU mapping, then load the feed again.`,
-        action: { label: "Map SKU", onClick: () => setTab("map") },
-      });
-    } else toast.success(`${added.length} observations loaded`);
+    const at = new Date();
+    setFeedResult({ from, at, added: added.length, rejected });
+    if (from.kind === "SYNC") setSyncedAt(at);
   };
+
+  const syncNow = () => {
+    setSyncing(true);
+    // The daily PriceSpider pull, run on demand (demo payload).
+    window.setTimeout(() => {
+      setSyncing(false);
+      ingest(SAMPLE_FEED, [], { kind: "SYNC" });
+    }, 700);
+  };
+
+  const importFile = async () => {
+    if (!file) return;
+    setImporting(true);
+    const { rows, invalid } = parseFeedCsv(await file.text());
+    setImporting(false);
+    ingest(rows, invalid, { kind: "FILE", name: file.name });
+    setFile(null);
+  };
+
+  const linkSku = (link: { competitor: string; competitorSku: string }) => {
+    setMapPrefill(link);
+    setTab("map");
+  };
+
+  // Shown under whichever card started it, so the outcome sits next to the button you pressed.
+  const resultCard = feedResult && (
+          <Card
+            title="Result"
+            subtitle={`${feedResult.from.kind === "SYNC" ? "PriceSpider sync" : feedResult.from.name} · ${fmtSync(feedResult.at)}`}
+          >
+            <div className="space-y-3 text-base" role="status">
+              <div className="flex flex-wrap items-center gap-3">
+                <CheckCircle2 className="size-5 shrink-0 text-success" aria-hidden />
+                <span className="font-medium">
+                  {feedResult.added} {feedResult.added === 1 ? "price" : "prices"} added
+                </span>
+                {feedResult.added > 0 && (
+                  <Btn variant="ghost" size="sm" icon={ArrowRight} onClick={() => setTab("obs")}>
+                    View in Observations
+                  </Btn>
+                )}
+              </div>
+              {feedResult.rejected.length > 0 && (
+                <div className="rounded-lg border border-warning/40 bg-warning-soft px-4 py-3">
+                  <p className="font-medium">
+                    {feedResult.rejected.length} {feedResult.rejected.length === 1 ? "row" : "rows"} not added
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {feedResult.rejected.map((r) => (
+                      <li key={r.label} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>
+                          <span className="font-mono text-sm">{r.label}</span> {r.reason}
+                        </span>
+                        {r.link && (
+                          <Btn variant="ghost" size="sm" onClick={() => linkSku(r.link!)} aria-label={`Link ${r.label} to one of our products`}>
+                            Link it
+                          </Btn>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Also recorded in the{" "}
+                    <Link to="/pricing/data-quality" className="hit text-brand-strong font-semibold hover:underline">
+                      data quality log
+                    </Link>
+                    . After linking, sync or import again to add them.
+                  </p>
+                </div>
+              )}
+            </div>
+          </Card>
+  );
 
   return (
     <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Price optimization" }, { label: "Competitive intelligence" }]}>
@@ -270,22 +365,23 @@ function CompetitivePage() {
           </>
         }
       />
-      <InfoBanner
-        tone="info"
-        title="PriceSpider feed · daily at 06:00"
-        action={
-          tab !== "feed" ? (
+      {/* The Feed tab shows the same schedule, last sync and visibility in its own cards. */}
+      {tab !== "feed" && (
+        <InfoBanner
+          tone="info"
+          title="PriceSpider feed · daily at 06:00"
+          action={
             <Btn variant="outline" size="sm" icon={Rss} onClick={() => setTab("feed")}>
               Open feed
             </Btn>
-          ) : undefined
-        }
-      >
-        <DataAsOf at={syncedAt} />
-        <span className="inline-flex items-center gap-1.5 mt-1">
-          <Lock className="size-3.5 shrink-0" aria-hidden /> Internal data — hidden from Sales and Partner roles unless explicitly granted.
-        </span>
-      </InfoBanner>
+          }
+        >
+          <DataAsOf at={syncedAt} />
+          <span className="inline-flex items-center gap-1.5 mt-1">
+            <Lock className="size-3.5 shrink-0" aria-hidden /> Internal data — hidden from Sales and Partner roles unless explicitly granted.
+          </span>
+        </InfoBanner>
+      )}
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 mb-6">
         <KpiTile label="Observations" value={obs.length} />
@@ -365,65 +461,87 @@ function CompetitivePage() {
         </>
       )}
 
-      {tab === "map" && <MappingTab maps={maps} setMaps={setMaps} />}
+      {tab === "map" && (
+        <MappingTab
+          key={mapPrefill ? `${mapPrefill.competitor}|${mapPrefill.competitorSku}` : "new"}
+          maps={maps}
+          setMaps={setMaps}
+          prefill={mapPrefill}
+        />
+      )}
 
       {tab === "feed" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card title="Feed ingestion" subtitle="API feed or file upload. Each competitor SKU must be mapped to our SKU.">
-            <div className="rounded-xl border-2 border-dashed border-border p-6 sm:p-8 text-center">
-              <Upload className="size-8 text-brand mx-auto" aria-hidden />
-              <div className="font-semibold mt-2 break-all">competitor_prices_2026-10-29.csv</div>
-              <div className="text-xs text-muted-foreground">Sample feed · {SAMPLE_FEED.length} rows</div>
-              <Btn className="mt-4" icon={Upload} onClick={loadFeed} loading={loadingFeed}>
-                {loadingFeed ? "Loading feed…" : "Load feed"}
-              </Btn>
-            </div>
-            <div role="status">
-            {feedResult && (
-              <div className="mt-5 space-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <StatusPill status={feedResult.unmapped.length ? "PARTIAL_SUCCESS" : "SUCCEEDED"} />
-                  {feedResult.loaded} loaded · {feedResult.unmapped.length} rejected
-                </div>
-                {feedResult.unmapped.map((s) => (
-                  <div key={s} className="rounded-lg border border-destructive/30 bg-danger-soft px-3 py-2">
-                    <b className="text-destructive">UNMAPPED_COMPETITOR_SKU</b> — {s} is not mapped to any product. Row written to the{" "}
-                    <Link to="/pricing/data-quality" className="hit text-brand font-semibold hover:underline">
-                      data quality log
-                    </Link>
-                    .{" "}
-                    <button type="button" className="hit text-brand font-semibold hover:underline" onClick={() => setTab("map")} aria-label={`Map SKU ${s}`}>
-                      Map SKU
-                    </button>
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_23rem] gap-6 items-start">
+          <div className="space-y-6 min-w-0">
+            <Card
+              title="Daily feed from PriceSpider"
+              subtitle="Competitor prices arrive automatically every day at 06:00. Sync now if you need them sooner."
+              actions={
+                <Btn variant="outline" size="sm" icon={RefreshCw} loading={syncing} onClick={syncNow}>
+                  {syncing ? "Syncing…" : "Sync now"}
+                </Btn>
+              }
+            >
+              <DetailGrid
+                columns={2}
+                items={[
+                  { label: "Last sync", value: fmtSync(syncedAt) },
+                  { label: "Next sync", value: "Tomorrow, 06:00" },
+                ]}
+              />
+            </Card>
+            {feedResult?.from.kind === "SYNC" && resultCard}
+
+            <Card title="Import a price file" subtitle="For prices outside the daily feed, such as a competitor price list you received.">
+              <div className="space-y-4">
+                <FileDrop
+                  id="feed-file"
+                  label="Price file"
+                  accept=".csv"
+                  file={file}
+                  onChange={setFile}
+                  onTemplate={() =>
+                    downloadCsv("competitor-prices-template.csv", [
+                      { competitor: "LightHub", competitor_sku: "LH-DL10-W", price: "74.00" },
+                    ])
+                  }
+                />
+                {file && (
+                  <div className="flex justify-end">
+                    <Btn icon={Upload} loading={importing} onClick={importFile}>
+                      Import prices
+                    </Btn>
                   </div>
-                ))}
+                )}
               </div>
-            )}
-            </div>
-          </Card>
-          <Card title="Feed settings" subtitle="Managed by a pricing administrator in integration settings — shown read-only here.">
-            <div className="space-y-4">
-              <Field label="Feed source">
-                <input className={`${inputCls} bg-muted border-transparent`} value="PriceSpider (API, daily 06:00)" readOnly />
-              </Field>
-              <Field label="Stale after (days)" hint="Stale observations are shown muted, flagged and excluded from repricing">
-                <input className={`${inputCls} bg-muted border-transparent`} value={STALE_DAYS} readOnly />
-              </Field>
-              <div className="flex flex-col gap-1.5" role="group" aria-labelledby="comp-roles-label">
-                <span id="comp-roles-label" className="text-sm font-medium text-foreground">
-                  Roles allowed to view competitor data
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {["Pricing Administrator", "Pricing Analyst", "Pricing Manager", "Deal Desk"].map((r) => (
-                    <Tag key={r} tone="info">
-                      {r}
-                    </Tag>
-                  ))}
-                  <Tag tone="danger">Sales Rep — hidden</Tag>
-                  <Tag tone="danger">Channel Partner — hidden</Tag>
-                </div>
-              </div>
-            </div>
+            </Card>
+
+            {feedResult?.from.kind === "FILE" && resultCard}
+          </div>
+
+          <Card title="Feed settings" subtitle="Managed in integration settings.">
+            <DetailGrid
+              columns={1}
+              items={[
+                { label: "Source", value: "PriceSpider API" },
+                { label: "Schedule", value: "Daily at 06:00" },
+                { label: "Stale after", value: `${STALE_DAYS} days — older prices are flagged and left out of repricing` },
+                {
+                  label: "Who can see competitor data",
+                  value: (
+                    <span className="flex flex-wrap gap-2 mt-1">
+                      {["Pricing Administrator", "Pricing Analyst", "Pricing Manager", "Deal Desk"].map((r) => (
+                        <Tag key={r} tone="info">
+                          {r}
+                        </Tag>
+                      ))}
+                      <Tag tone="danger">Sales Rep — hidden</Tag>
+                      <Tag tone="danger">Channel Partner — hidden</Tag>
+                    </span>
+                  ),
+                },
+              ]}
+            />
           </Card>
         </div>
       )}
@@ -444,9 +562,17 @@ function CompetitivePage() {
   );
 }
 
-function MappingTab({ maps, setMaps }: { maps: Mapping[]; setMaps: (fn: (m: Mapping[]) => Mapping[]) => void }) {
-  const [competitor, setCompetitor] = useState("");
-  const [cSku, setCSku] = useState("LH-DL10-W");
+function MappingTab({
+  maps,
+  setMaps,
+  prefill,
+}: {
+  maps: Mapping[];
+  setMaps: (fn: (m: Mapping[]) => Mapping[]) => void;
+  prefill: { competitor: string; competitorSku: string } | null;
+}) {
+  const [competitor, setCompetitor] = useState(prefill?.competitor ?? "");
+  const [cSku, setCSku] = useState(prefill?.competitorSku ?? "");
   const [sku, setSku] = useState("");
   const [err, setErr] = useState<ApiError | null>(null);
   const duplicate = maps.some((m) => m.competitor === competitor && m.competitorSku.toLowerCase() === cSku.trim().toLowerCase());
@@ -474,8 +600,9 @@ function MappingTab({ maps, setMaps }: { maps: Mapping[]; setMaps: (fn: (m: Mapp
     setCSku("");
   };
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      <div className="xl:col-span-2">
+    // The form column is exactly one field wide (20rem fields + card padding); the table takes the rest.
+    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_23rem] gap-6 items-start">
+      <div className="min-w-0">
         <DataTable
           caption="Competitor SKU mappings"
           columns={[
@@ -671,7 +798,6 @@ function ObservationQuickView({ obs: o, onClose, onOpenProduct }: { obs: Competi
                   full: true,
                 },
                 { label: "Observed", value: `${fmtStamp(o.observedAt)} · ${o.ageDays === 0 ? "today" : `${o.ageDays} day${o.ageDays > 1 ? "s" : ""} ago`}` },
-                { label: "Source", value: SOURCE_LABEL[o.source] },
               ]}
             />
           </section>

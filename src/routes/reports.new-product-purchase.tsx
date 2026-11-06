@@ -3,7 +3,7 @@ import { useId, useState } from "react";
 import { Play, SearchX, X } from "lucide-react";
 import { toast } from "sonner";
 import { ReportShell, FilterBar, FilterBarEnd, Field, fmtDate, inputCls, usd } from "@/components/ReportShell";
-import { Btn, Card, DataTable, EmptyState, MissingHint, SearchInput, Tag, missingFields, notifySuccess, type Column } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, EmptyState, MissingHint, SearchInput, missingFields, notifySuccess, type Column } from "@/components/pricing/kit";
 import { TODAY, downloadCsv } from "@/lib/pricing/csv";
 
 export const Route = createFileRoute("/reports/new-product-purchase")({
@@ -89,7 +89,6 @@ function NewProductPurchasePage() {
   };
 
   const isDefault = (c: Criteria) => c.from === DEFAULT_CRITERIA.from && c.to === DEFAULT_CRITERIA.to && c.region === DEFAULT_CRITERIA.region;
-  const activeCount = [applied.region !== "all", q.trim() !== ""].filter(Boolean).length;
   const clearFilters = () => {
     setDraft(DEFAULT_CRITERIA);
     setApplied(DEFAULT_CRITERIA);
@@ -123,12 +122,12 @@ function NewProductPurchasePage() {
 
   const columns: Column<Row>[] = [
     { key: "account", header: "Account", className: "font-medium whitespace-nowrap", cell: (r) => r.account },
-    { key: "region", header: "Region", cell: (r) => <Tag tone="info">{r.region}</Tag> },
+    { key: "region", header: "Region", className: "whitespace-nowrap", cell: (r) => r.region },
     { key: "product", header: "Product", className: "min-w-[13rem]", cell: (r) => r.product },
     {
       key: "invoice",
       header: "Invoice",
-      className: "font-mono text-xs text-muted-foreground",
+      className: "font-mono text-sm text-muted-foreground",
       cell: (r) => (
         <span className="block truncate max-w-[10rem]" title={r.invoice}>
           {r.invoice}
@@ -152,6 +151,7 @@ function NewProductPurchasePage() {
       title="New product purchases"
       subtitle="Products bought in the selected range that the account had not bought before — use it to track new-product incentives."
       onExport={exportCsv}
+      exportCount={filtered.length}
       asOf={ranAt}
       kpis={[
         { label: "Purchase lines", value: `${filtered.length}` },
@@ -203,7 +203,7 @@ function NewProductPurchasePage() {
       <div className="grid gap-6 lg:grid-cols-2 mb-6 [&>*]:min-w-0">
         <Card title="Top accounts by purchase value">
           {byAccount.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No purchases in the selected range.</p>
+            <p className="text-base text-muted-foreground">No purchases in the selected range.</p>
           ) : (
             <ul className="space-y-4">
               {byAccount.map(([name, val]) => (
@@ -224,7 +224,7 @@ function NewProductPurchasePage() {
         </Card>
         <Card title="Product mix" subtitle={topAccount ? `Top account: ${topAccount}` : undefined}>
           {topRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No purchases in the selected range.</p>
+            <p className="text-base text-muted-foreground">No purchases in the selected range.</p>
           ) : (
             <ul className="space-y-3">
               {topRows.map((r) => (
@@ -241,9 +241,8 @@ function NewProductPurchasePage() {
 
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
         <SearchInput value={q} onChange={setQ} placeholder="Search product, account or invoice" className="w-full sm:w-96" />
-        <p role="status" className="text-sm text-muted-foreground">
+        <p role="status" className={filtered.length === inRange.length ? "sr-only" : "text-sm text-muted-foreground"}>
           Showing {filtered.length} of {inRange.length} purchases
-          {activeCount > 0 && ` · ${activeCount} ${activeCount === 1 ? "filter" : "filters"} active`}
         </p>
       </div>
 

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -56,7 +57,7 @@ export function PricingLayout({ crumbs, children }: { crumbs?: Crumb[]; children
 export function BackLink({ to, label }: { to: string; label: string }) {
   return (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    <Link to={to as any} className="hit mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded">
+    <Link to={to as any} className="hit mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded">
       <ChevronLeft className="size-4" aria-hidden />
       {label}
     </Link>
@@ -72,15 +73,16 @@ type BtnVariant = "primary" | "outline" | "ghost" | "dark" | "danger" | "subtle"
 const btnBase =
   "inline-flex items-center justify-center gap-2 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40";
 const btnVariants: Record<BtnVariant, string> = {
-  primary: "bg-brand text-brand-foreground hover:opacity-90",
-  outline: "border border-brand text-brand bg-card hover:bg-brand-soft",
+  primary: "bg-brand-strong text-brand-foreground hover:opacity-90",
+  outline: "border border-brand-strong text-brand-strong bg-card hover:bg-brand-soft",
   ghost: "text-foreground hover:bg-muted",
   dark: "bg-navy text-navy-foreground hover:opacity-90",
   danger: "bg-destructive text-destructive-foreground hover:opacity-90",
   subtle: "border border-border bg-card text-foreground hover:bg-muted",
 };
 // `sm` grows to 40px below lg so it stays a comfortable touch target on phones and tablets.
-const btnSizes = { sm: "h-10 lg:h-8 px-3 text-xs", md: "h-10 px-4", lg: "h-12 px-6 text-base" };
+// Type scale: compact buttons 14px; default buttons 14px on phones, 16px from sm; large 16px.
+const btnSizes = { sm: "h-10 lg:h-8 px-3 text-sm", md: "h-10 px-4 sm:text-base", lg: "h-12 px-6 text-base" };
 
 export function Btn({
   variant = "primary",
@@ -151,9 +153,12 @@ export function LinkBtn({
   );
 }
 
-// Selects stop at 24rem from sm up: their options are short, so a full-width dropdown reads as a text box.
+// One field width rule app-wide: every text input, dropdown and textarea fills its layout column, so stacked
+// fields always line up edge to edge. Control width comes from the form grid (Field columns / col-span), never
+// from a per-control cap. The default w-full sits in :where() (zero specificity) so an explicit width
+// (w-32, w-64…) on an inline control always wins.
 export const inputCls =
-  "w-full sm:[&:is(select)]:max-w-sm h-10 px-3 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
+  "[:where(&)]:w-full h-10 px-3 rounded-lg border border-input bg-card text-base focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
 
 export function Field({
   label,
@@ -162,6 +167,7 @@ export function Field({
   error,
   children,
   className = "",
+  labelClassName = "",
 }: {
   label: ReactNode;
   required?: boolean;
@@ -169,6 +175,8 @@ export function Field({
   error?: string;
   children: ReactNode;
   className?: string;
+  /** e.g. "sm:sr-only" when a table-style header row already labels the column. */
+  labelClassName?: string;
 }) {
   // Bind label, hint and error to the single child control (WCAG 1.3.1 / 3.3.1).
   const autoId = useId();
@@ -190,7 +198,7 @@ export function Field({
     <div className={`flex flex-col gap-1.5 ${className}`}>
       <label
         htmlFor={only ? controlId : undefined}
-        className="text-sm font-medium text-foreground"
+        className={`text-sm font-medium text-foreground ${labelClassName}`}
       >
         {label}
         {required && (
@@ -244,7 +252,7 @@ export function SearchInput({
         placeholder={placeholder}
         aria-label={label ?? placeholder}
         aria-keyshortcuts="/"
-        className="w-full h-10 pl-10 pr-10 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand [&::-webkit-search-cancel-button]:hidden"
+        className="w-full h-10 pl-10 pr-10 rounded-lg border border-input bg-card text-base focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand [&::-webkit-search-cancel-button]:hidden"
       />
       {value && (
         <button
@@ -272,7 +280,7 @@ export function FilterButton({ count = 0, onClick, expanded }: { count?: number;
     >
       <Filter className="size-4" aria-hidden />
       {count > 0 && (
-        <span className="absolute -top-2 -right-2 size-5 rounded-full bg-brand text-brand-foreground text-[10px] font-bold grid place-items-center">
+        <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-brand-strong text-brand-foreground text-xs font-bold grid place-items-center">
           {count}
         </span>
       )}
@@ -313,6 +321,11 @@ export function FilterPills<T extends string>({
     if (multiple) onChange(on ? selected.filter((x) => x !== k) : [...selected, k]);
     else onChange(on && clearable ? [] : [k]);
   };
+  // A pill that matches nothing can't narrow anything, and a multi-select filter needs two choices to be useful
+  // (a single-choice toggle like "Unread only" needs one). Hide them until the data gives them meaning; an
+  // active pick always stays so it can be cleared.
+  options = options.filter((o) => o.count !== 0 || selected.includes(o.key));
+  if (options.length < (multiple ? 2 : 1) && selected.length === 0) return null;
   return (
     <div
       className={`flex flex-wrap items-center gap-2 ${className}`}
@@ -356,7 +369,7 @@ export function FilterPills<T extends string>({
 
 export function FilterChip({ label, onRemove }: { label: string; onRemove?: () => void }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft text-brand text-sm px-3 py-1.5">
+    <span className="inline-flex items-center gap-2 rounded-full bg-brand-soft text-brand-strong text-sm px-3 py-1.5">
       {label}
       {onRemove && (
         <button
@@ -407,13 +420,17 @@ export function ListHeader({
   filtersOpen?: boolean;
   actions?: ReactNode;
 }) {
+  // Nothing to search: an empty list with no search or filter applied gets no search box or filter button.
+  const searchable = onSearch && !(count === 0 && !search && !filterCount);
   return (
-    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 mb-6">
-      <div className="min-w-0 flex-1 basis-72">
+    // Header rule: text on the left, buttons on the right of the same row with a gap between; long text wraps
+    // inside its own column and never runs under the buttons. On phones the buttons drop below the text.
+    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-end gap-x-8 gap-y-3 mb-6">
+      <div className="min-w-0">
         {eyebrow && <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">{eyebrow}</p>}
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl leading-[1.2] font-bold tracking-tight">{title}</h1>
         {(count !== undefined || subtitle) && (
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-base lg:text-lg text-muted-foreground">
             {count !== undefined && (
               <span role="status" className="font-medium text-foreground tabular-nums">
                 {count.toLocaleString("en-GB")}{" "}
@@ -428,9 +445,9 @@ export function ListHeader({
           </p>
         )}
       </div>
-      {(onSearch || actions) && (
-        <div className="flex flex-wrap items-center justify-end gap-3 w-full sm:w-auto">
-          {onSearch && (
+      {(searchable || actions) && (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {searchable && (
             <div className="flex items-center gap-3 basis-full sm:basis-auto sm:flex-none sm:w-80">
               <SearchInput
                 value={search ?? ""}
@@ -496,15 +513,16 @@ export function DetailTitle({
   const hasAttrs = !!(attributes?.length || chips);
   // Two rows only: identity (title, status, versions) and details (meta facts + attribute chips).
   return (
-    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-5">
-      <div className="min-w-0 flex-1 basis-80">
+    // Text on the left, buttons on the right of the same row with a gap; long text wraps inside its own column.
+    <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 gap-y-3 mb-5">
+      <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl leading-[1.2] font-bold tracking-tight">{title}</h1>
           {status && <StatusPill status={status} />}
           {unsaved && <StatusPill status="PENDING" label="Unsaved changes" />}
           {versions && versions.length > 1 && <VersionSwitcher versions={versions} />}
         </div>
-        {subtitle && <div className="text-sm text-muted-foreground mt-1">{subtitle}</div>}
+        {subtitle && <div className="text-base lg:text-lg text-muted-foreground mt-1">{subtitle}</div>}
         {(facts.length > 0 || hasAttrs) && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2 text-sm text-muted-foreground">
             {facts.length > 0 && (
@@ -527,7 +545,7 @@ export function DetailTitle({
           </div>
         )}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
     </div>
   );
 }
@@ -674,27 +692,24 @@ export function Segmented<T extends string>({
   onChange: (k: T) => void;
 }) {
   return (
+    // Same look as FilterPills so every pill row in the app reads alike; `tone` is accepted but no longer coloured.
     <div className="flex flex-wrap gap-2">
       {options.map((o) => {
         const on = o.key === value;
-        const tone = toneCls[o.tone ?? "neutral"];
         return (
           <button
             key={o.key}
             type="button"
             onClick={() => onChange(o.key)}
             aria-pressed={on}
-            className={`inline-flex items-center gap-2 h-10 px-4 rounded-full border text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${
-              on ? `${tone.border} ${tone.text} ${tone.soft}` : `border-border bg-card ${tone.text}`
+            className={`h-10 px-4 rounded-full border text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${
+              on ? "bg-navy text-navy-foreground border-navy" : "bg-card border-border text-muted-foreground hover:text-foreground"
             }`}
           >
             {o.label}
             {o.count !== undefined && (
-              <span
-                className={`min-w-5 h-5 px-1.5 rounded-full grid place-items-center text-[11px] tabular-nums text-white ${tone.dot}`}
-              >
-                {/* Pill grows with the number; large counts are abbreviated (100,000 → 100k). */}
-                {o.count >= 10_000 ? `${Math.round(o.count / 1000)}k` : o.count.toLocaleString("en-GB")}
+              <span className={`ml-1.5 tabular-nums ${on ? "opacity-80" : ""}`}>
+                ({o.count >= 10_000 ? `${Math.round(o.count / 1000)}k` : o.count.toLocaleString("en-GB")})
               </span>
             )}
           </button>
@@ -804,7 +819,7 @@ export function FileDrop({
         >
           <Upload className="size-5 text-brand shrink-0" aria-hidden />
           <div className="min-w-0 flex-1">
-            <div className="text-sm">Drag a file here or browse</div>
+            <div className="text-base">Drag a file here or browse</div>
             <div className="text-xs text-muted-foreground whitespace-nowrap">
               {types} · up to {maxMb} MB
             </div>
@@ -825,7 +840,7 @@ export function FileDrop({
             <span />
           )}
           {onTemplate && (
-            <button type="button" className="hit text-xs text-brand font-semibold hover:underline" onClick={onTemplate}>
+            <button type="button" className="hit text-sm text-brand-strong font-semibold hover:underline" onClick={onTemplate}>
               Download template
             </button>
           )}
@@ -859,24 +874,41 @@ export function RadioPills<T extends string>({
   options,
   value,
   onChange,
+  required,
+  invalid,
+  describedBy,
 }: {
   /** Accessible name of the group (the visible legend usually says the same). */
   label: string;
   options: Array<{ key: T; label: string; /** Right-hand extra, e.g. "4,210 SKUs". */ meta?: ReactNode }>;
-  value: T;
+  /** null = nothing chosen yet (a deliberate choice); the first pill then takes the tab stop. */
+  value: T | null;
   onChange: (k: T) => void;
+  required?: boolean;
+  invalid?: boolean;
+  /** Id of the hint or error text under the group. */
+  describedBy?: string;
 }) {
   const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
     const step = radioKeyStep(e.key);
     if (!step) return;
     e.preventDefault();
-    const next = (options.findIndex((o) => o.key === value) + step + options.length) % options.length;
+    const idx = options.findIndex((o) => o.key === value);
+    const next = idx < 0 ? (step > 0 ? 0 : options.length - 1) : (idx + step + options.length) % options.length;
     onChange(options[next].key);
     e.currentTarget.querySelectorAll<HTMLButtonElement>("[role=radio]")[next]?.focus();
   };
   return (
-    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-2" onKeyDown={onKeyDown}>
-      {options.map((o) => {
+    <div
+      role="radiogroup"
+      aria-label={label}
+      aria-required={required || undefined}
+      aria-invalid={invalid || undefined}
+      aria-describedby={describedBy}
+      className="flex flex-wrap gap-2"
+      onKeyDown={onKeyDown}
+    >
+      {options.map((o, i) => {
         const on = o.key === value;
         return (
           <button
@@ -884,7 +916,7 @@ export function RadioPills<T extends string>({
             type="button"
             role="radio"
             aria-checked={on}
-            tabIndex={on ? 0 : -1}
+            tabIndex={on || (value === null && i === 0) ? 0 : -1}
             onClick={() => onChange(o.key)}
             className={`inline-flex items-center gap-2 h-10 pl-3 pr-4 rounded-full border text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${
               on ? "border-brand bg-brand-soft font-semibold text-foreground" : "border-border bg-card text-foreground hover:border-brand/50"
@@ -1046,16 +1078,50 @@ export function Card({
   return (
     <section className={`bg-card border border-border rounded-xl shadow-sm ${className}`}>
       {(title || actions) && (
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-5 pb-4 border-b border-border">
-          <div>
-            {title && <h2 className="text-lg font-semibold tracking-tight">{title}</h2>}
-            {subtitle && <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>}
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-2 px-5 pt-4 pb-3 border-b border-border">
+          <div className="min-w-0">
+            {title && <h2 className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">{title}</h2>}
+            {subtitle && <p className="text-base text-muted-foreground mt-0.5">{subtitle}</p>}
           </div>
-          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+          {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
         </div>
       )}
       {/* flex-1 lets the body fill a stretched card (className="h-full flex flex-col"). */}
-      <div className={`flex-1 ${padded ? "p-6" : ""}`}>{children}</div>
+      <div className={`flex-1 ${padded ? "p-5" : ""}`}>{children}</div>
+    </section>
+  );
+}
+
+/**
+ * Titled table: heading, optional one-line subtitle and actions, then the table. A DataTable is already its
+ * own card, so use this instead of wrapping it in a Card (which gives a card inside a card).
+ */
+export function TableSection({
+  title,
+  subtitle,
+  actions,
+  children,
+  className = "",
+}: {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  const id = useId();
+  return (
+    <section aria-labelledby={id} className={className}>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-6 gap-y-2 mb-3">
+        <div className="min-w-0">
+          <h2 id={id} className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
+            {title}
+          </h2>
+          {subtitle && <p className="text-base text-muted-foreground mt-0.5">{subtitle}</p>}
+        </div>
+        {actions && <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div>}
+      </div>
+      {children}
     </section>
   );
 }
@@ -1098,7 +1164,7 @@ export function DetailGrid({ items, columns }: { items: DetailItem[]; columns?: 
                 {it.label}
               </dt>
               <dd
-                className={`mt-1.5 text-[15px] leading-snug break-words ${empty ? "text-muted-foreground" : "font-semibold text-foreground"}`}
+                className={`mt-1.5 text-base break-words ${empty ? "text-muted-foreground" : "font-semibold text-foreground"}`}
               >
                 {empty ? "—" : it.value}
               </dd>
@@ -1116,7 +1182,7 @@ export function Locked({ children, owner = "ERP" }: { children: ReactNode; owner
     <span className="inline-flex items-center gap-1.5">
       {children}
       <Lock
-        className="size-3 shrink-0 text-muted-foreground/70"
+        className="size-3 shrink-0 text-muted-foreground"
         role="img"
         aria-label={`Read-only, owned by ${owner}`}
       />
@@ -1159,7 +1225,7 @@ export function SyncStatus({
   return (
     <div
       role="status"
-      className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border ${tone.border} ${tone.soft} px-4 py-3 mb-4 text-sm`}
+      className={`flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border ${tone.border} ${tone.soft} px-4 py-3 mb-4 text-base`}
     >
       <Icon className={`size-5 shrink-0 ${tone.text}`} aria-hidden />
       <div className="flex-1 min-w-[240px]">
@@ -1215,9 +1281,13 @@ export function KpiTile({
   linkLabel = "View list",
   tone = "brand",
   hint,
+  name,
 }: {
-  label: string;
+  /** Usually text; can be a node, e.g. a label with a definition tooltip (then pass `name`). */
+  label: ReactNode;
   value: ReactNode;
+  /** Plain-text name for the link's accessible label when `label` is not a string. */
+  name?: string;
   to?: string;
   /** Search params for `to`, so a tile can open the list filtered to what it counts. */
   search?: Record<string, unknown>;
@@ -1226,22 +1296,30 @@ export function KpiTile({
   hint?: ReactNode;
 }) {
   return (
-    <div className="bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col gap-2 h-full">
-      <div className="text-[15px] font-medium">{label}</div>
-      <div className={`text-3xl font-bold tabular-nums ${toneCls[tone].text}`}>{value}</div>
-      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
-      {to && (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        <Link
-          to={to as any}
+    <div className="bg-card border border-border rounded-xl shadow-sm px-4 py-3 flex flex-col gap-1.5 h-full min-w-0">
+      {/* Label and "View list" share one row, so the tile stays short. */}
+      <div className="flex items-center justify-between gap-3 min-w-0">
+        <div className="text-sm font-medium text-muted-foreground truncate">{label}</div>
+        {to && (
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          search={search as any}
-          aria-label={`${linkLabel}: ${label}`}
-          className="mt-auto inline-flex items-center gap-0.5 self-start text-brand font-semibold text-sm hover:underline whitespace-nowrap"
-        >
-          {linkLabel}
-          <ChevronRight className="size-4" aria-hidden />
-        </Link>
+          <Link
+            to={to as any}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            search={search as any}
+            aria-label={`${linkLabel}: ${name ?? (typeof label === "string" ? label : "")}`}
+            className="hit shrink-0 inline-flex items-center gap-0.5 text-brand-strong font-semibold text-sm hover:underline whitespace-nowrap"
+          >
+            {linkLabel}
+            <ChevronRight className="size-3.5" aria-hidden />
+          </Link>
+        )}
+      </div>
+      {/* The navy tone's text colour is for navy fills; on the white tile the value uses navy itself. */}
+      <div className={`text-2xl font-bold leading-none tabular-nums truncate ${tone === "navy" ? "text-navy" : toneCls[tone].text}`}>{value}</div>
+      {hint && (
+        <div className="text-xs text-muted-foreground truncate" title={typeof hint === "string" ? hint : undefined}>
+          {hint}
+        </div>
       )}
     </div>
   );
@@ -1273,7 +1351,7 @@ export function DataAsOf({ onExport, at }: { onExport?: () => void; at?: Date })
           onClick={onExport}
           title="Export CSV"
           aria-label="Export CSV"
-          className="size-10 rounded-lg border border-border grid place-items-center text-brand hover:bg-brand-soft"
+          className="size-10 rounded-lg border border-border grid place-items-center text-brand-strong hover:bg-brand-soft"
         >
           <svg
             viewBox="0 0 24 24"
@@ -1301,35 +1379,49 @@ export function DataAsOf({ onExport, at }: { onExport?: () => void; at?: Date })
 
 export type Tone = "brand" | "success" | "warning" | "danger" | "info" | "neutral" | "navy" | "default";
 
-export const toneCls: Record<Tone, { text: string; soft: string; border: string; dot: string }> = {
-  brand: { text: "text-brand", soft: "bg-brand-soft", border: "border-brand/40", dot: "bg-brand" },
+/**
+ * Tone classes. `dot` is a non-text mark (3:1 is enough); `solid` is a filled badge WITH text and
+ * always passes 4.5:1 (vivid brand/warning fills can't carry white text, so they use darker shades).
+ */
+export const toneCls: Record<Tone, { text: string; soft: string; border: string; dot: string; solid: string }> = {
+  brand: {
+    text: "text-brand-strong",
+    soft: "bg-brand-soft",
+    border: "border-brand/40",
+    dot: "bg-brand",
+    solid: "bg-brand-strong text-white",
+  },
   success: {
     text: "text-success",
     soft: "bg-success-soft",
     border: "border-success/40",
     dot: "bg-success",
+    solid: "bg-success text-white",
   },
   warning: {
     text: "text-warning-foreground",
     soft: "bg-warning-soft",
     border: "border-warning/50",
     dot: "bg-warning",
+    solid: "bg-warning-foreground text-white",
   },
   danger: {
     text: "text-destructive",
     soft: "bg-danger-soft",
     border: "border-destructive/40",
     dot: "bg-destructive",
+    solid: "bg-destructive text-white",
   },
-  info: { text: "text-info", soft: "bg-info-soft", border: "border-info/40", dot: "bg-info" },
+  info: { text: "text-info", soft: "bg-info-soft", border: "border-info/40", dot: "bg-info", solid: "bg-info text-white" },
   neutral: {
     text: "text-muted-foreground",
     soft: "bg-muted",
     border: "border-border",
     dot: "bg-muted-foreground",
+    solid: "bg-muted-foreground text-white",
   },
-  navy: { text: "text-navy-foreground", soft: "bg-navy", border: "border-navy", dot: "bg-navy" },
-  default: { text: "text-foreground", soft: "bg-muted", border: "border-border", dot: "bg-foreground" },
+  navy: { text: "text-navy-foreground", soft: "bg-navy", border: "border-navy", dot: "bg-navy", solid: "bg-navy text-white" },
+  default: { text: "text-foreground", soft: "bg-muted", border: "border-border", dot: "bg-foreground", solid: "bg-foreground text-white" },
 };
 
 const STATUS_TONE: Record<string, Tone> = {
@@ -1386,6 +1478,9 @@ const ACRONYMS = new Set([
   "kpi",
   "dq",
   "ai",
+  "sftp",
+  "hmac",
+  "mtls",
 ]);
 
 /** "END_OF_LIFE" -> "End of life" (sentence case, en-GB style guide). */
@@ -1509,6 +1604,13 @@ export function DataTable<T>({
   }, [page, pages]);
   const start = pageSize ? page * pageSize : 0;
   const shown = pageSize ? rows.slice(start, start + pageSize) : rows;
+  // One empty pattern app-wide: no column headers over a blank body, just the EmptyState in the table's frame.
+  if (!loading && rows.length === 0)
+    return (
+      <div role="region" aria-label={caption ?? "Data table"} className="bg-card border border-border rounded-xl shadow-sm">
+        {typeof empty === "string" ? <EmptyState title={empty} /> : empty}
+      </div>
+    );
   return (
     <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
       <div
@@ -1549,16 +1651,6 @@ export function DataTable<T>({
                   </td>
                 </tr>
               ))}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td
-                  colSpan={columns.length + (numbered ? 1 : 0)}
-                  className="px-4 py-12 text-center text-muted-foreground"
-                >
-                  {empty}
-                </td>
-              </tr>
-            )}
             {!loading &&
               shown.map((r, i) => {
                 const sel = selectedKey != null && rowKey(r) === selectedKey;
@@ -1652,7 +1744,7 @@ export function RecordLink({
     <Link
       to={to as any}
       params={params as any}
-      className="hit text-brand font-medium hover:underline"
+      className="hit text-brand-strong font-medium hover:underline"
       onClick={(e) => e.stopPropagation()}
     >
       {children}
@@ -1778,11 +1870,11 @@ export function Modal({
       >
         <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-border">
           <div>
-            <h2 id={titleId} className="text-lg font-semibold">
+            <h2 id={titleId} className="text-xl lg:text-2xl leading-[1.2] font-semibold">
               {title}
             </h2>
             {subtitle && (
-              <p id={descId} className="text-sm text-muted-foreground mt-0.5">
+              <p id={descId} className="text-base text-muted-foreground mt-0.5">
                 {subtitle}
               </p>
             )}
@@ -1850,10 +1942,10 @@ export function Drawer({
       >
         <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-border bg-card">
           <div>
-            <h2 id={titleId} className="text-xl font-semibold">
+            <h2 id={titleId} className="text-xl lg:text-2xl leading-[1.2] font-semibold">
               {title}
             </h2>
-            {subtitle && <div className="text-sm text-muted-foreground mt-0.5">{subtitle}</div>}
+            {subtitle && <div className="text-base text-muted-foreground mt-0.5">{subtitle}</div>}
           </div>
           <button
             type="button"
@@ -1945,7 +2037,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      {description && <p className="text-sm text-foreground">{description}</p>}
+      {description && <p className="text-base text-foreground">{description}</p>}
       <DetailColumns.Provider value={1}>{children}</DetailColumns.Provider>
     </Modal>
   );
@@ -1974,13 +2066,16 @@ export function missingFields(fields: Array<[label: string, value: unknown, requ
  * Says why the submit button is disabled. Put it first in a footer/action row (it pushes the
  * buttons right) and point the button's aria-describedby at its id.
  */
-export function MissingHint({ id, missing, className = "" }: { id?: string; missing: string[]; className?: string }) {
+/**
+ * Why a submit button is disabled. Screen-reader only: sighted users already see the asterisks on the
+ * empty required fields, so a visible "Required: …" line under the form just repeats them.
+ */
+export function MissingHint({ id, missing }: { id?: string; missing: string[]; className?: string }) {
   if (missing.length === 0) return null;
-  const list = missing.length > 3 ? `${missing.slice(0, 3).join(", ")} +${missing.length - 3} more` : missing.join(", ");
   return (
-    <p id={id} className={`mr-auto self-center text-xs text-muted-foreground ${className}`} role="status">
-      Required: <span className="font-medium text-foreground">{list}</span>
-    </p>
+    <span id={id} className="sr-only" role="status">
+      Required: {missing.join(", ")}
+    </span>
   );
 }
 
@@ -2016,6 +2111,16 @@ export type ApiError = {
   correlationId?: string;
 };
 
+const ERROR_TITLE: Record<ApiError["errorClass"], string> = {
+  VALIDATION: "Check the highlighted fields",
+  BUSINESS_RULE: "This can't be done",
+  AUTHORIZATION: "You don't have permission",
+  CONFLICT: "Someone else changed this",
+  TRANSIENT_TECHNICAL: "Temporary problem — try again",
+  PERMANENT_TECHNICAL: "Something went wrong",
+  DOWNSTREAM_REJECTION: "The connected system rejected this",
+};
+
 export function ErrorBanner({
   error,
   onClose,
@@ -2033,26 +2138,14 @@ export function ErrorBanner({
       className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-danger-soft px-4 py-3 mb-4"
     >
       <XCircle className="size-5 text-destructive shrink-0 mt-0.5" aria-hidden />
-      <div className="flex-1 text-sm">
-        <div className="font-semibold text-destructive">
-          {error.code}
-          <span className="ml-2 text-xs font-medium text-destructive/70">
-            class: {error.errorClass}
-          </span>
-        </div>
-        <div className="text-foreground mt-0.5">
-          {error.message}
-          {error.field && (
-            <>
-              {" "}
-              Field: <code className="px-1 rounded bg-card text-xs">{error.field}</code>
-            </>
-          )}
-        </div>
+      <div className="flex-1 text-base">
+        {/* Plain-language title; the machine code is only shown next to a support reference, where IT needs it. */}
+        <div className="font-semibold text-destructive">{ERROR_TITLE[error.errorClass]}</div>
+        <div className="text-foreground mt-0.5">{error.message}</div>
         {(note !== false || error.correlationId) && (
           <div className="text-xs text-muted-foreground mt-1">
             {note !== false && note}
-            {error.correlationId && ` Correlation ID: ${error.correlationId}`}
+            {error.correlationId && ` Support reference: ${error.correlationId} (${error.code})`}
           </div>
         )}
       </div>
@@ -2097,7 +2190,7 @@ export function InfoBanner({
   return (
     <div
       role="note"
-      className={`flex flex-wrap items-start gap-3 rounded-lg border ${t.border} ${t.soft} px-4 py-3 ${className} text-sm`}
+      className={`flex flex-wrap items-start gap-3 rounded-lg border ${t.border} ${t.soft} px-4 py-3 ${className} text-base`}
     >
       <Icon className={`size-5 shrink-0 mt-0.5 ${t.text}`} aria-hidden />
       <div className="flex-1 min-w-[200px]">
@@ -2127,12 +2220,12 @@ export function EmptyState({
 }) {
   return (
     <div className="text-center py-12 px-4">
-      <div className="mx-auto size-12 rounded-full bg-brand-soft text-brand grid place-items-center">
+      <div className="mx-auto size-12 rounded-full bg-brand-soft text-brand-strong grid place-items-center">
         <Icon className="size-6" aria-hidden />
       </div>
-      <p className="mt-3 font-semibold text-foreground">{title}</p>
+      <p className="mt-3 text-base font-semibold text-foreground">{title}</p>
       {children && (
-        <div className="mt-1 text-sm text-muted-foreground max-w-md mx-auto">{children}</div>
+        <div className="mt-1 text-base text-muted-foreground max-w-md mx-auto">{children}</div>
       )}
       {action && <div className="mt-4 flex justify-center gap-2">{action}</div>}
     </div>
@@ -2144,45 +2237,91 @@ export function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-muted ${className}`} aria-hidden />;
 }
 
-export function Stepper({ steps, current }: { steps: string[]; current: number }) {
+/**
+ * Wizard progress: full-width bar, connectors fill in as steps complete. Pass onStepClick to let people jump
+ * back to a completed step; later steps stay locked.
+ */
+export function Stepper({
+  steps,
+  current,
+  onStepClick,
+}: {
+  steps: string[];
+  current: number;
+  onStepClick?: (i: number) => void;
+}) {
   return (
-    <>
-      {/* Compact form on phones; the full sequence wraps awkwardly at 360px. */}
-      <p className="sm:hidden mb-6 text-sm">
-        <span className="text-muted-foreground">
-          Step {current + 1} of {steps.length}:
-        </span>{" "}
-        <span className="font-semibold">{steps[current]}</span>
-      </p>
-      <ol className="hidden sm:flex flex-wrap items-center gap-2 mb-6" aria-label="Progress">
+    <div className="mb-6 rounded-xl border border-border bg-card px-4 py-3 sm:px-5">
+      {/* Compact form on phones; the full sequence is too cramped at 360px. */}
+      <div className="sm:hidden">
+        <p className="text-sm">
+          <span className="text-muted-foreground">
+            Step {current + 1} of {steps.length}:
+          </span>{" "}
+          <span className="font-semibold">{steps[current]}</span>
+        </p>
+        <div className="mt-2 flex gap-1" aria-hidden>
+          {steps.map((s, i) => (
+            <span key={s} className={`h-1 flex-1 rounded-full ${i <= current ? "bg-brand" : "bg-muted"}`} />
+          ))}
+        </div>
+      </div>
+      <ol className="hidden sm:flex items-center" aria-label="Progress">
         {steps.map((s, i) => {
           const done = i < current;
           const on = i === current;
-          return (
-            <li key={s} className="flex items-center gap-2" aria-current={on ? "step" : undefined}>
+          const last = i === steps.length - 1;
+          const body = (
+            <>
               <span
-                className={`size-8 rounded-full grid place-items-center text-sm font-bold ${
+                className={`size-8 shrink-0 rounded-full grid place-items-center text-sm font-semibold transition-colors ${
                   done
                     ? "bg-success text-white"
                     : on
-                      ? "bg-brand text-white"
-                      : "bg-muted text-muted-foreground"
+                      ? "bg-brand-strong text-white ring-4 ring-brand/15"
+                      : "border border-border bg-card text-muted-foreground"
                 }`}
               >
-                <span aria-hidden>{done ? "✓" : i + 1}</span>
+                {done ? <Check className="size-4" strokeWidth={3} aria-hidden /> : <span aria-hidden>{i + 1}</span>}
               </span>
-              <span className={`text-sm ${on ? "font-semibold" : "text-muted-foreground"}`}>
-                {s}
-                <span className="sr-only">
-                  {done ? " (completed)" : on ? " (current step)" : ""}
+              <span className="min-w-0 text-left leading-tight">
+                <span className="block text-xs text-muted-foreground">Step {i + 1}</span>
+                <span className={`block text-sm truncate ${on ? "font-semibold text-foreground" : done ? "text-foreground" : "text-muted-foreground"}`}>
+                  {s}
                 </span>
+                <span className="sr-only">{done ? " (completed)" : on ? " (current step)" : ""}</span>
               </span>
-              {i < steps.length - 1 && <span className="w-8 h-px bg-border mx-1" aria-hidden />}
+            </>
+          );
+          return (
+            <li
+              key={s}
+              className={`flex items-center gap-3 min-w-0 ${last ? "shrink-0" : "flex-1"}`}
+              aria-current={on ? "step" : undefined}
+            >
+              {done && onStepClick ? (
+                <button
+                  type="button"
+                  onClick={() => onStepClick(i)}
+                  className="flex items-center gap-3 min-w-0 rounded-lg -m-1 p-1 hover:bg-muted transition-colors"
+                  title={`Back to ${s}`}
+                >
+                  {body}
+                </button>
+              ) : (
+                <span className="flex items-center gap-3 min-w-0">{body}</span>
+              )}
+              {!last && (
+                <span
+                  className={`h-0.5 flex-1 min-w-6 rounded-full mr-3 transition-colors ${done ? "bg-success" : "bg-border"}`}
+                  aria-hidden
+                />
+              )}
             </li>
           );
         })}
       </ol>
-    </>
+    </div>
   );
 }
 

@@ -30,6 +30,7 @@ import {
   missingFields,
   type ApiError,
   type Tone,
+  TableSection,
 } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
 import {
@@ -184,7 +185,7 @@ function Page() {
             if (adminHolders(users, roles).length > 0 && adminHolders(next, roles).length === 0) return false;
             setUsers(next);
             setOpen({ ...open, role: roleKey as User["role"] });
-            toast.success(`${open.name} is now ${roleOf(roleKey)?.label}`, { description: "Change recorded in the audit log (PERMISSION_CHANGE)." });
+            toast.success(`${open.name} is now ${roleOf(roleKey)?.label}`, { description: "Change recorded in the audit log." });
             return true;
           }}
           onDeactivate={(reassignTo) => {
@@ -264,7 +265,7 @@ function UsersTab({
               Try a different search term or remove a filter.
             </EmptyState>
           ) : (
-            <EmptyState icon={UsersIcon} title="No users yet">Users appear after their first SSO sign-in.</EmptyState>
+            <EmptyState icon={UsersIcon} title="No users yet" />
           )
         }
         columns={[
@@ -274,7 +275,7 @@ function UsersTab({
             className: "min-w-52",
             cell: (u) => (
               <div>
-                <div className="font-medium text-brand">{u.name}</div>
+                <div className="font-medium text-brand-strong">{u.name}</div>
                 <div className="text-xs text-muted-foreground">{u.email}</div>
               </div>
             ),
@@ -293,7 +294,7 @@ function UsersTab({
         ) : (
           <ul className="divide-y divide-border">
             {history.map((h) => (
-              <li key={h.id} className="px-6 py-4 text-sm flex flex-wrap gap-x-4 gap-y-1">
+              <li key={h.id} className="px-5 py-4 text-sm flex flex-wrap gap-x-4 gap-y-1">
                 <span className="tabular-nums text-muted-foreground whitespace-nowrap">{h.at}</span>
                 <StatusPill status={h.action} tone={h.action === "DEACTIVATED" ? "danger" : "info"} />
                 <span className="font-medium">{nameOf(h.userId)}</span>
@@ -415,7 +416,7 @@ function UserDrawer({
         </section>
 
         <section className="bg-card border border-border rounded-xl p-5">
-          <h3 className="font-semibold mb-3">Role</h3>
+          <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-3">Role</h3>
           <ErrorBanner error={roleError} onClose={() => setRoleError(null)} />
           <div className="flex flex-wrap items-end gap-3">
             <Field label="Assigned role" className="flex-1 min-w-48" hint={editable ? "Normally set by IdP group mapping. A manual change is audited." : VIEW_ONLY}>
@@ -436,9 +437,9 @@ function UserDrawer({
         </section>
 
         <section className="bg-card border border-border rounded-xl p-5">
-          <h3 className="font-semibold mb-3">Active sessions and API tokens</h3>
+          <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-3">Active sessions and API tokens</h3>
           {sessions.length === 0 && tokens.filter((t) => !t.revoked).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No active sessions or tokens.</p>
+            <p className="text-base text-muted-foreground">No active sessions or tokens.</p>
           ) : (
             <ul className="space-y-2 text-sm">
               {sessions.map((s) => (
@@ -463,7 +464,7 @@ function UserDrawer({
 
         {openQuotes.length > 0 && (
           <section className="bg-card border border-border rounded-xl p-5">
-            <h3 className="font-semibold mb-2">Open quotes owned ({openQuotes.length})</h3>
+            <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2">Open quotes owned ({openQuotes.length})</h3>
             <ul className="space-y-1 text-sm">
               {openQuotes.map((q) => (
                 <li key={q.id}>
@@ -497,7 +498,7 @@ function UserDrawer({
           </>
         }
       >
-        <p className="text-sm">
+        <p className="text-base">
           Their {sessions.length} active {sessions.length === 1 ? "session" : "sessions"} end and {tokens.filter((t) => !t.revoked).length} API {tokens.length === 1 ? "token stops" : "tokens stop"} working within {DEPROVISION_SLA_MINUTES} minutes. They can't sign in again until the IdP reactivates them.
         </p>
         {openQuotes.length > 0 && (
@@ -597,22 +598,22 @@ function RolesTab({
       setRoles(next);
       setSaving(false);
       setEditing(null);
-      toast.success(`${draft.label} permissions saved`, { description: "Recorded as PERMISSION_CHANGE in the audit log." });
+      toast.success(`${draft.label} permissions saved`, { description: "Change recorded in the audit log." });
     }, 400);
   };
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-muted-foreground max-w-3xl">
-          Seeded from SRS Appendix C. Levels: N none · V view · E edit · A approve · F full. <span aria-hidden>*</span> means own records only. Every API call is authorised against these grants — hiding a button is never the only control.
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-8 [&>p]:min-w-0 [&>p]:flex-1 [&>:not(p)]:shrink-0 mb-4">
+        <p className="text-base text-muted-foreground">
+          Levels: N none · V view · E edit · A approve · F full. <span aria-hidden>*</span> means own records only. Every API call is authorised against these grants — hiding a button is never the only control.
         </p>
         {editable ? (
           <Btn icon={Plus} onClick={startNew}>
             Create role
           </Btn>
         ) : (
-          <span className="text-sm text-muted-foreground">{VIEW_ONLY}</span>
+          <span className="text-base text-muted-foreground">{VIEW_ONLY}</span>
         )}
       </div>
       <DataTable<RoleRow>
@@ -735,7 +736,7 @@ function RolesTab({
 
 function PermissionCodes({ roles }: { roles: RoleRow[] }) {
   return (
-    <Card title="Permission codes" subtitle="Fine-grained codes sit under module levels. Each API endpoint checks its code on the server." className="mt-6" padded={false}>
+    <TableSection title="Permission codes" subtitle="Fine-grained codes sit under module levels. Each API endpoint checks its code on the server." className="mt-6">
       <DataTable
         caption="Permission codes"
         rows={PERMISSION_CODES}
@@ -757,7 +758,7 @@ function PermissionCodes({ roles }: { roles: RoleRow[] }) {
           },
         ]}
       />
-    </Card>
+    </TableSection>
   );
 }
 
@@ -900,7 +901,7 @@ function PolicyTab({ editable }: { editable: boolean }) {
       <Card title="Policy for local accounts" subtitle={!editable ? VIEW_ONLY : dirty ? "Unsaved changes" : "SSO users follow the identity provider's session and MFA rules."}>
         <form onSubmit={save} noValidate>
         <fieldset disabled={!editable} className="grid gap-4 md:grid-cols-2 disabled:opacity-80">
-          <Field label="Idle timeout (minutes)" required error={fe("pol-idle")} hint="Session ends after this long without activity.">
+          <Field label="Idle timeout (minutes)" required error={fe("pol-idle")}>
             <input id="pol-idle" type="number" min={5} max={30} className={inputCls} value={Number.isNaN(f.idleTimeoutMinutes) ? "" : f.idleTimeoutMinutes} onChange={num("idleTimeoutMinutes")} />
           </Field>
           <Field label="Absolute session length (hours)">
@@ -972,7 +973,7 @@ function PolicyTab({ editable }: { editable: boolean }) {
         <Card title="Approved local accounts" subtitle="Break-glass only; every one has an approver." padded={false}>
           <ul className="divide-y divide-border">
             {LOCAL_ACCOUNTS.map((a) => (
-              <li key={a.id} className="px-6 py-4 text-sm">
+              <li key={a.id} className="px-5 py-4 text-sm">
                 <div className="font-mono">{a.login}</div>
                 <div className="text-muted-foreground text-xs mt-1">
                   Owner {USERS.find((u) => u.id === a.owner)?.name} · approved by {USERS.find((u) => u.id === a.approvedBy)?.name} on {a.approvedAt} · last sign-in {a.lastLogin}

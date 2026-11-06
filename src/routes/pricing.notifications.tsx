@@ -155,9 +155,9 @@ function Inbox({ items }: { items: AppNotification[] }) {
                     <Tag>{humanize(n.event)}</Tag>
                     {CRITICAL_EVENTS.includes(n.event) && <Flag tone="danger">Critical</Flag>}
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1">{n.body}</p>
+                  <p className="text-base text-muted-foreground mt-1">{n.body}</p>
                   <p className="text-xs text-muted-foreground mt-1 tabular-nums">
-                    {n.at} · {n.deliveries.map((d) => `${CHANNEL_LABEL[d.channel]} ${humanize(d.status).toLowerCase()}`).join(" · ")}
+                    {n.at}
                   </p>
                 </div>
                 <div className="flex gap-2 shrink-0">
@@ -245,7 +245,7 @@ function Preferences() {
                   <th scope="row" className="px-5 py-3 text-left font-normal">
                     <span className="font-medium">{humanize(e)}</span>
                     {crit && <span className="ml-2"><Flag tone="danger">Critical</Flag></span>}
-                    <span className="block text-xs text-muted-foreground">{EVENT_HINT[e]}</span>
+                    <span className="block text-sm text-muted-foreground">{EVENT_HINT[e]}</span>
                   </th>
                   {NOTIFICATION_CHANNELS.map((c) => (
                     <td key={c} className="px-4 py-3 text-center">
@@ -261,7 +261,7 @@ function Preferences() {
                   ))}
                   <td className="px-5 py-3">
                     {crit ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Lock className="size-3.5" aria-hidden /> Always immediate</span>
+                      <span className="inline-flex items-center gap-1 text-sm text-muted-foreground"><Lock className="size-3.5" aria-hidden /> Always immediate</span>
                     ) : (
                       <select aria-label={`Delivery for ${humanize(e)}`} className={`${inputCls} h-9`} value={p[e].digest} onChange={(ev) => setP({ ...p, [e]: { ...p[e], digest: ev.target.value as Pref["digest"] } })}>
                         <option value="IMMEDIATE">Immediately</option>
@@ -378,9 +378,9 @@ function Templates() {
         onRowClick={(t) => open(t)}
         empty={<EmptyState icon={Mail} title="No templates yet" />}
         columns={[
-          { key: "id", header: "ID", cell: (t) => <span className="font-mono text-xs">{t.id}</span> },
+          { key: "id", header: "ID", cell: (t) => <span className="font-mono text-sm">{t.id}</span> },
           { key: "ev", header: "Event", cell: (t) => humanize(t.event) },
-          { key: "ch", header: "Channel", cell: (t) => <Tag tone={t.channel === "EMAIL" ? "info" : "brand"}>{CHANNEL_LABEL[t.channel]}</Tag> },
+          { key: "ch", header: "Channel", className: "whitespace-nowrap", cell: (t) => CHANNEL_LABEL[t.channel] },
           { key: "sub", header: "Subject", className: "min-w-64", cell: (t) => t.subject || <span className="text-muted-foreground">—</span> },
           { key: "v", header: "Version", align: "right", cell: (t) => <span className="tabular-nums">v{t.version}</span> },
           { key: "up", header: "Updated", cell: (t) => <span className="tabular-nums whitespace-nowrap">{t.updatedAt} · {userName(t.updatedBy)}</span> },
@@ -423,11 +423,11 @@ function Templates() {
               <input id="nt-subject" className={inputCls} value={f.subject} onChange={(e) => setF({ ...f, subject: e.target.value })} placeholder="e.g. Approve {{request.id}} · {{customer.name}}" />
             </Field>
             <Field label="Body" required error={fe("nt-body")}>
-              <textarea id="nt-body" rows={8} className={`${inputCls} h-auto py-2 font-mono text-xs`} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} />
+              <textarea id="nt-body" rows={8} className={`${inputCls} h-auto py-2 font-mono text-base`} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} />
             </Field>
           </form>
           <section aria-labelledby="pv-h">
-            <h3 id="pv-h" className="font-semibold mb-2">Preview</h3>
+            <h3 id="pv-h" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2">Preview</h3>
             <Field label="Recipient">
               <select className={inputCls} value={recipient} onChange={(e) => setRecipient(e.target.value)}>
                 {USERS.filter((u) => u.status === "ACTIVE" && u.role !== "CHANNEL_PARTNER").map((u) => (
@@ -438,7 +438,7 @@ function Templates() {
             <div className="mt-3">
               {preview.canSeeMargin ? <Flag tone="success">Margin included — recipient may see it</Flag> : <Flag tone="neutral">Margin left out — {userName(recipient)} can't see margin</Flag>}
             </div>
-            <pre className="mt-3 whitespace-pre-wrap rounded-lg border border-border bg-muted/40 p-4 text-sm font-sans">{preview.text}</pre>
+            <div className="mt-3 whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/40 p-4 text-base">{preview.text}</div>
             <p className="text-xs text-muted-foreground mt-2">Sample data: APR-3001 · Edmundson Electrical.</p>
           </section>
         </div>
@@ -488,7 +488,7 @@ function DeliveryLog() {
         empty={<EmptyState title="No deliveries match" action={<Btn variant="subtle" onClick={() => setStatuses([])}>Clear filters</Btn>} />}
         columns={[
           { key: "at", header: "Sent", cell: (r) => <span className="tabular-nums whitespace-nowrap">{r.n.at}</span> },
-          { key: "id", header: "Notification", className: "min-w-56", cell: (r) => <span><span className="font-mono text-xs">{r.n.id}</span> · {r.n.title}</span> },
+          { key: "id", header: "Notification", className: "min-w-56", cell: (r) => <span><span className="font-mono text-sm">{r.n.id}</span> · {r.n.title}</span> },
           { key: "ev", header: "Event", cell: (r) => humanize(r.n.event) },
           { key: "to", header: "Recipient", cell: (r) => userName(r.n.recipientId) },
           { key: "ch", header: "Channel", cell: (r) => <span className="inline-flex items-center gap-1.5">{r.d.channel === "EMAIL" ? <Mail className="size-4" aria-hidden /> : r.d.channel === "TEAMS_SLACK" ? <MessageSquare className="size-4" aria-hidden /> : <Bell className="size-4" aria-hidden />}{CHANNEL_LABEL[r.d.channel]}</span> },
@@ -563,7 +563,7 @@ function Settings() {
       >
         <ul className="flex flex-wrap gap-2 mb-4" aria-label="Lead times">
           {lead.map((d) => (
-            <li key={d} className="inline-flex items-center gap-2 rounded-full bg-brand-soft text-brand text-sm px-3 py-1.5 tabular-nums">
+            <li key={d} className="inline-flex items-center gap-2 rounded-full bg-brand-soft text-brand-strong text-sm px-3 py-1.5 tabular-nums">
               {d} days before
               <button type="button" className="hit size-5 rounded-full bg-brand/15 grid place-items-center hover:bg-brand/25" aria-label={`Remove ${d} days`} onClick={() => setLead(lead.filter((x) => x !== d))}>
                 <X className="size-3" aria-hidden />
@@ -584,10 +584,10 @@ function Settings() {
       <Card title="Teams / Slack webhooks" subtitle="URLs are secrets: stored in the vault, never shown after saving." padded={false}>
         <ul className="divide-y divide-border">
           {hooks.map((h) => (
-            <li key={h.id} className="flex flex-wrap items-center gap-3 px-6 py-4">
+            <li key={h.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
               <div className="min-w-0 flex-1">
                 <div className="font-medium">{h.name}</div>
-                <div className="text-xs text-muted-foreground font-mono">https://••••••••••••{h.last4}</div>
+                <div className="text-sm text-muted-foreground font-mono break-all">https://••••••••••••{h.last4}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">Rotated {h.rotatedAt}</div>
               </div>
               <StatusPill status={h.status} />
@@ -597,7 +597,7 @@ function Settings() {
             </li>
           ))}
         </ul>
-        <div className="px-6 py-4 border-t border-border">
+        <div className="px-5 py-4 border-t border-border">
           <InfoBanner className="" tone="info">Email goes out through the corporate SMTP relay. Failed webhook deliveries are retried 3 times and logged in the delivery log.</InfoBanner>
         </div>
       </Card>

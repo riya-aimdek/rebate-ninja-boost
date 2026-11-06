@@ -171,12 +171,12 @@ function ProfilePage() {
   return (
     <AppLayout maxWidth="max-w-[1400px]">
       {/* Profile header */}
-      <section aria-label="Profile summary" className="bg-card border border-border rounded-xl p-6 mb-6 shadow-sm">
+      <section aria-label="Profile summary" className="bg-card border border-border rounded-xl p-5 mb-6 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex items-start gap-4 min-w-0">
             <div className="relative shrink-0">
               <div
-                className="size-20 rounded-xl bg-gradient-to-br from-brand to-brand/70 grid place-items-center text-brand-foreground text-2xl font-bold"
+                className="size-20 rounded-xl bg-gradient-to-br from-brand-strong to-brand grid place-items-center text-brand-foreground text-2xl font-bold"
                 aria-hidden
               >
                 {initials}
@@ -192,10 +192,10 @@ function ProfilePage() {
               </button>
             </div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight leading-[1.2]">
                 {saved.firstName} {saved.lastName}
               </h1>
-              <p className="text-sm text-muted-foreground mt-1">{saved.jobTitle} · EnviroVent Ltd</p>
+              <p className="text-base lg:text-lg text-muted-foreground mt-1">{saved.jobTitle} · EnviroVent Ltd</p>
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 <Tag tone="brand">{ROLE}</Tag>
                 <Tag>Member since Jan 2024</Tag>
@@ -328,7 +328,7 @@ function ProfilePage() {
                     { what: "Updated a pricing rule", when: "3 days ago", to: "/pricing/rules" },
                   ].map((a) => (
                     <li key={a.what} className="flex items-start justify-between gap-3">
-                      <Link to={a.to} className="hit text-brand font-medium hover:underline">
+                      <Link to={a.to} className="hit text-brand-strong font-medium hover:underline">
                         {a.what}
                       </Link>
                       <span className="text-xs text-muted-foreground whitespace-nowrap">{a.when}</span>
@@ -391,7 +391,7 @@ function AccountTab() {
 
       <Card
         title="Roles & permissions"
-        subtitle={`Your role is ${ROLE}. Access per module comes from the role (SRS Appendix C) and is managed by your administrator.`}
+        subtitle="Access per module comes from your role and is managed by your administrator."
       >
         <DataTable
           caption={`Access by module for ${ROLE}`}
@@ -444,8 +444,10 @@ const NOTIFICATION_GROUPS: Array<{ title: string; items: Array<[string, string, 
 function NotificationsTab({ prefs, setPref }: { prefs: Record<string, boolean>; setPref: (label: string, on: boolean) => void }) {
   return (
     <div className="space-y-6">
+      {/* Said once for the whole tab instead of under every group card. */}
+      <p className="text-base text-muted-foreground">Changes are saved automatically.</p>
       {NOTIFICATION_GROUPS.map((g) => (
-        <Card key={g.title} title={g.title} subtitle="Changes are saved automatically.">
+        <Card key={g.title} title={g.title}>
           <ul className="divide-y divide-border">
             {g.items.map(([label, desc]) => (
               <li key={label} className="flex items-center justify-between gap-6 py-3 first:pt-0 last:pb-0">
@@ -534,7 +536,7 @@ function Fact({
       <div className="min-w-0">
         <div className="text-xs font-semibold text-muted-foreground">{label}</div>
 
-        <div className="text-sm font-medium truncate">{value}</div>
+        <div className="text-sm font-medium truncate" title={value}>{value}</div>
       </div>
     </div>
   );

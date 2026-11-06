@@ -111,7 +111,7 @@ function AccrualSummaryPage() {
         <button
           type="button"
           onClick={() => setProgram(r.program)}
-          className="hit text-brand font-semibold hover:underline text-left"
+          className="hit text-brand-strong font-semibold hover:underline text-left"
           aria-label={`Filter by program ${r.program}`}
           title="Filter by this program"
         >
@@ -144,6 +144,7 @@ function AccrualSummaryPage() {
       title="Accrual summary by period"
       subtitle="Revenue, eligible revenue, accrual amount and rate per payout period and program."
       onExport={exportCsv}
+      exportCount={filtered.length}
       kpis={[
         { label: "Periods", value: `${filtered.length}` },
         { label: "Total revenue", value: fmt(totals.revenue) },

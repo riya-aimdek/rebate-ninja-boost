@@ -221,7 +221,7 @@ function ImpactStat({
       <div className="min-w-0">
         <dt className="text-xs text-muted-foreground">{label}</dt>
         <dd className="flex items-baseline gap-2 min-w-0">
-          <span className={`text-lg font-bold leading-tight tabular-nums ${tone === "neutral" ? "text-foreground" : t.text}`}>
+          <span className={`text-xl font-bold tabular-nums ${tone === "neutral" ? "text-foreground" : t.text}`}>
             {value}
           </span>
           {note && (
@@ -539,7 +539,7 @@ function Page() {
       cell: (j) => (
         <button
           type="button"
-          className="hit text-brand font-medium hover:underline whitespace-nowrap"
+          className="hit text-brand-strong font-medium hover:underline whitespace-nowrap"
           onClick={(e) => {
             e.stopPropagation();
             setOpenJob(j);
@@ -596,7 +596,7 @@ function Page() {
       key: "res",
       header: "Results",
       cell: (j) => (
-        <dl className="text-xs tabular-nums whitespace-nowrap grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
+        <dl className="text-sm tabular-nums whitespace-nowrap grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
           <dt className="text-muted-foreground">Succeeded</dt>
           <dd className="text-right font-semibold text-success">
             {j.succeeded.toLocaleString("en-GB")}
@@ -644,7 +644,7 @@ function Page() {
     {
       title: "Review & apply",
       subtitle:
-        "Applying starts a background job. Nothing is published until the list is approved.",
+        "Applying starts a background job.",
     },
   ];
   const guardedSamples = previewSource
@@ -750,7 +750,7 @@ function Page() {
               )
             )}
 
-            <Stepper steps={STEPS} current={step} />
+            <Stepper steps={STEPS} current={step} onStepClick={setStep} />
             <ErrorBanner error={error} onClose={() => setError(null)} />
 
             <form onSubmit={next} noValidate>
@@ -930,7 +930,6 @@ function Page() {
                               value={value}
                               onChange={(e) => setValue(e.target.value)}
                               onBlur={() => setShowErrors(true)}
-                              placeholder="e.g. 5"
                             />
                           </Field>
                           <Field
@@ -983,7 +982,6 @@ function Page() {
                             label="Average change"
                             value={pct(avg || 0, 2)}
                             tone={Math.abs(avg) >= LARGE_CHANGE_PCT ? "warning" : "neutral"}
-                            note={`${preview.length.toLocaleString("en-GB")} ${byList ? "" : "sample "}SKU${preview.length === 1 ? "" : "s"}`}
                           />
                           <ImpactStat
                             icon={ArrowUpDown}
@@ -1142,7 +1140,7 @@ function Page() {
                           ]}
                         />
                         <InfoBanner tone="info">
-                          Runs in the background: Queued → Running → Succeeded, Partial success or
+                          Job status: Queued → Running → Succeeded, Partial success or
                           Failed. Every failed record is listed. Rollback restores prior prices
                           until the draft is published.
                         </InfoBanner>
@@ -1186,7 +1184,7 @@ function Page() {
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <h3
                               id={`bulk-sum-${g.at}`}
-                              className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                              className="text-lg lg:text-xl leading-[1.2] font-semibold text-foreground"
                             >
                               {g.title}
                             </h3>
@@ -1237,7 +1235,7 @@ function Page() {
                   count: jobs.filter((j) => j.status === st).length,
                 }))}
               />
-              <span className="text-sm text-muted-foreground tabular-nums" role="status">
+              <span className="sr-only" role="status">
                 {shownJobs.length} {shownJobs.length === 1 ? "job" : "jobs"}
               </span>
             </div>
@@ -1432,7 +1430,7 @@ function ProductPicker({
             );
           })}
           {shown.length === 0 && (
-            <p className="px-4 py-6 text-sm text-muted-foreground text-center">
+            <p className="px-4 py-6 text-base text-muted-foreground text-center">
               No products match “{q}”.
             </p>
           )}
@@ -1445,7 +1443,7 @@ function ProductPicker({
 const FAIL_REASONS = [
   ["VALIDATION_REQUIRED", "Unit of Measure missing on target line"],
   ["PRODUCT_BLOCKED", "Product A-200 is blocked (lifecycle status)"],
-  ["GUARDRAIL_BREACH", "New price below Distributor floor (FAIL handling)"],
+  ["GUARDRAIL_BREACH", "New price below Distributor floor"],
   ["ADJUSTMENT_RESULT_NEGATIVE", "Result below zero after adjustment"],
   ["DUPLICATE_LINE", "Same SKU, UoM and Min Qty already in draft"],
 ] as const;
@@ -1570,9 +1568,7 @@ function JobDrawer({
         <ErrorBanner error={error} onClose={() => setError(null)} />
         {job.status === "PARTIAL_SUCCESS" && (
           <InfoBanner tone="warning" title="Partial success">
-            {job.succeeded.toLocaleString("en-GB")} of {job.total.toLocaleString("en-GB")} records
-            updated. {job.failed.toLocaleString("en-GB")} records failed and are listed below;
-            successes are kept.
+            Failed records are listed below; successful updates are kept.
           </InfoBanner>
         )}
         {job.status === "FAILED" && (
@@ -1609,7 +1605,7 @@ function JobDrawer({
         </Card>
         {job.failed > 0 && (
           <section aria-labelledby="failed-records-heading">
-            <h3 id="failed-records-heading" className="text-base font-semibold mb-3">
+            <h3 id="failed-records-heading" className="text-lg lg:text-xl leading-[1.2] font-semibold mb-3">
               Failed records ({job.failed.toLocaleString("en-GB")})
             </h3>
             <DataTable
@@ -1620,22 +1616,16 @@ function JobDrawer({
                   header: "SKU",
                   className: "whitespace-nowrap",
                   cell: (f: { sku: string; code: string; message: string }) => (
-                    <span className="font-mono text-xs">{f.sku}</span>
+                    <span className="font-mono text-sm">{f.sku}</span>
                   ),
                 },
-                {
-                  key: "c",
-                  header: "Error code",
-                  className: "whitespace-nowrap",
-                  cell: (f) => <Tag tone="danger">{f.code}</Tag>,
-                },
-                { key: "m", header: "Message", cell: (f) => f.message },
+                { key: "m", header: "Reason", cell: (f) => f.message },
               ]}
               rows={failures}
               rowKey={(f) => f.sku}
             />
             {job.failed > failures.length && (
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-2 text-base text-muted-foreground">
                 …and {(job.failed - failures.length).toLocaleString("en-GB")} more — export results
                 for the full list.
               </p>

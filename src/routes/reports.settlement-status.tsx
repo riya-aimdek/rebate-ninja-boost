@@ -100,7 +100,7 @@ function SettlementStatusPage() {
         <button
           type="button"
           onClick={() => setProgram(r.program)}
-          className="hit text-brand font-medium hover:underline text-left"
+          className="hit text-brand-strong font-medium hover:underline text-left"
           aria-label={`Filter by program ${r.program}`}
           title="Filter by this program"
         >
@@ -118,7 +118,7 @@ function SettlementStatusPage() {
         return (
           <div className="flex items-center justify-end gap-2 tabular-nums">
             <span className="text-success font-semibold">{fmt(r.settled)}</span>
-            <span className="text-xs text-muted-foreground w-11 text-right">
+            <span className="text-sm text-muted-foreground w-11 text-right">
               {pct.toFixed(0)}%<span className="sr-only"> settled</span>
             </span>
           </div>
@@ -147,6 +147,7 @@ function SettlementStatusPage() {
       title="Settlement status"
       subtitle="Outstanding and settled rebate balances by account and program, with ageing buckets."
       onExport={exportCsv}
+      exportCount={filtered.length}
       kpis={[
         { label: "Total accrued", value: fmt(t.accrued) },
         { label: "Settled", value: fmt(t.settled), hint: `${settledPct.toFixed(1)}% of accrued`, tone: "success" },
@@ -176,13 +177,13 @@ function SettlementStatusPage() {
       </FilterBar>
 
       {/* Settlement progress */}
-      <section aria-labelledby="ss-progress" className="bg-card border border-border rounded-xl px-6 py-5 mb-6 shadow-sm">
+      <section aria-labelledby="ss-progress" className="bg-card border border-border rounded-xl px-5 py-4 mb-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
           <div>
-            <h2 id="ss-progress" className="text-lg font-semibold tracking-tight">
+            <h2 id="ss-progress" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
               Settlement progress
             </h2>
-            <p className="text-sm text-muted-foreground mt-0.5 tabular-nums">
+            <p className="text-base text-muted-foreground mt-0.5 tabular-nums">
               {fmt(t.settled)} settled of {fmt(t.accrued)} accrued
             </p>
           </div>

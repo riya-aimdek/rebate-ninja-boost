@@ -35,6 +35,7 @@ import {
   Tag,
   notifySuccess,
   notifyUndo,
+  KpiTile,
 } from "@/components/pricing/kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -141,7 +142,7 @@ const TYPE_CHIP: Record<RebateType | "Settlement", string> = {
 
 function TypeChip({ type }: { type: RebateType | "Settlement" }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold leading-none ${TYPE_CHIP[type]}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold leading-none ${TYPE_CHIP[type]}`}>
       {type}
     </span>
   );
@@ -156,7 +157,7 @@ function StatusLabel({ kind, children }: { kind: "qualified" | "warning" | "nega
       : "bg-danger-soft text-destructive";
   const Icon = kind === "qualified" ? CheckCircle2 : XCircle;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold leading-none ${cls}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold leading-none ${cls}`}>
       <Icon className="size-3" aria-hidden />
       {children}
     </span>
@@ -584,7 +585,7 @@ function RebateModeling() {
       />
 
       {loadedScenarioName && !bannerDismissed && (
-        <div role="note" className="rounded-lg border border-warning/50 bg-warning-soft px-4 py-2 flex items-center gap-3 text-sm">
+        <div role="note" className="rounded-lg border border-warning/50 bg-warning-soft px-4 py-2 flex items-center gap-3 text-base">
           <Bookmark className="size-4 shrink-0 text-warning-foreground" aria-hidden />
           <div className="flex-1 min-w-0">
             <span className="font-semibold text-warning-foreground">Viewing saved scenario: {loadedScenarioName}</span>
@@ -816,7 +817,7 @@ function buildLinear(baseT: number, baseC: number, ratePct: number, scenarios: S
 /* ---------------- Page Header ---------------- */
 
 const fmtTime = (d: Date) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-const selectCls = "h-10 px-3 rounded-lg border border-input bg-card text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand";
+const selectCls = "h-10 px-3 rounded-lg border border-input bg-card text-base font-medium focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand";
 
 function PageHeader(props: {
   year: string; setYear: (v: string) => void;
@@ -846,12 +847,8 @@ function PageHeader(props: {
       <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
         <div className="flex items-start gap-3 min-w-0">
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight leading-tight">Rebate modelling calculator</h1>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <Lock className="size-3.5" aria-hidden />
-                Baseline: prior-year actuals from Sage (read-only)
-              </span>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight leading-[1.2]">Rebate modelling calculator</h1>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-sm text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
                 {props.calculatedAt ? (
                   <>
@@ -893,11 +890,11 @@ function PageHeader(props: {
             </PopoverTrigger>
             {/* Heading stays put; only the list below it scrolls. */}
             <PopoverContent align="end" className="w-[min(420px,calc(100vw-2rem))] p-0 max-h-80 flex flex-col overflow-hidden">
-              <div className="shrink-0 px-4 py-3 border-b border-border text-sm font-semibold">Saved scenarios</div>
+              <div className="shrink-0 px-4 py-3 border-b border-border text-base font-semibold">Saved scenarios</div>
               {props.savedScenarios.length === 0 ? (
                 <div className="px-4 py-6 text-center">
-                  <p className="text-sm font-medium">No saved scenarios yet</p>
-                  <p className="mt-1 text-xs text-muted-foreground">Save the current inputs to compare options later. You can keep up to 5.</p>
+                  <p className="text-base font-medium">No saved scenarios yet</p>
+                  <p className="mt-1 text-base text-muted-foreground">Save the current inputs to compare options later. You can keep up to 5.</p>
                 </div>
               ) : (
                 <ul className="min-h-0 overflow-y-auto">
@@ -909,7 +906,7 @@ function PageHeader(props: {
                           {new Date(s.savedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} · {s.savedBy}
                         </div>
                       </div>
-                      <Btn variant="ghost" className="text-brand" onClick={() => props.onLoadSaved(s)} aria-label={`Load ${s.name}`}>
+                      <Btn variant="ghost" className="text-brand-strong" onClick={() => props.onLoadSaved(s)} aria-label={`Load ${s.name}`}>
                         Load
                       </Btn>
                       <button
@@ -956,7 +953,7 @@ function PageHeader(props: {
               id="rm-account"
               value={props.account}
               onChange={(e) => props.setAccount(e.target.value)}
-              className={`${selectCls} font-semibold text-brand`}
+              className={`${selectCls} font-semibold text-brand-strong`}
             >
               {Object.keys(ACCOUNTS).map((k) => <option key={k} value={k}>{k} — {ACCOUNTS[k].full}</option>)}
             </select>
@@ -1042,7 +1039,7 @@ function NumInput({
     min !== undefined && max !== undefined ? `Enter a value from ${min} to ${max}` : min !== undefined ? `Enter ${min} or more` : undefined;
   return (
     <div className={`flex items-center h-10 rounded-lg border overflow-hidden transition ${ro ? "border-input bg-muted/40" : "border-input bg-card focus-within:ring-2 focus-within:ring-brand/30 focus-within:border-brand"}`}>
-      {prefix && <span className="self-stretch grid place-items-center px-3 text-muted-foreground text-sm border-r border-input bg-muted font-medium" aria-hidden>{prefix}</span>}
+      {prefix && <span className="self-stretch grid place-items-center px-3 text-muted-foreground text-base border-r border-input bg-muted font-medium" aria-hidden>{prefix}</span>}
       <input
         id={id}
         type="text"
@@ -1065,10 +1062,10 @@ function NumInput({
           if (max !== undefined) n = Math.min(max, n);
           onChange?.(n);
         }}
-        className="flex-1 min-w-0 w-0 h-full px-3 text-sm bg-transparent focus:outline-none tabular-nums"
+        className="flex-1 min-w-0 w-0 h-full px-3 text-base bg-transparent focus:outline-none tabular-nums"
       />
       {locked && <span className="px-2 text-muted-foreground"><Lock className="size-3.5" aria-label="Locked" /></span>}
-      {suffix && <span className="self-stretch grid place-items-center px-3 text-muted-foreground text-sm border-l border-input bg-muted font-medium" aria-hidden>{suffix}</span>}
+      {suffix && <span className="self-stretch grid place-items-center px-3 text-muted-foreground text-base border-l border-input bg-muted font-medium" aria-hidden>{suffix}</span>}
     </div>
   );
 }
@@ -1076,8 +1073,8 @@ function NumInput({
 function SubHeading({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-2 mb-3">
-      <h3 className="text-base font-semibold">{children}</h3>
-      {aside && <span className="ml-auto text-xs text-muted-foreground">{aside}</span>}
+      <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold">{children}</h3>
+      {aside && <span className="ml-auto text-sm text-muted-foreground">{aside}</span>}
     </div>
   );
 }
@@ -1097,7 +1094,7 @@ function RebateRateConfig(props: {
       <div className="space-y-6">
         <div>
           <SubHeading><Abbr title="Electrical Wholesale">EW</Abbr> — Electrical Wholesale</SubHeading>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 2xl:grid-cols-3 gap-4">
             <Field label="Fixed EW (%)"><NumInput value={props.fixedEW} onChange={props.setFixedEW} suffix="%" {...PCT} /></Field>
             <Field label="Target EW (%)" hint="Applies only if EW turnover reaches the threshold"><NumInput value={props.targetEW} onChange={props.setTargetEW} suffix="%" {...PCT} /></Field>
             <Field label="Target threshold (£)" hint="EW turnover needed to earn the target rebate"><NumInput value={props.targetEWThreshold} onChange={props.setTargetEWThreshold} prefix="£" {...GBP} /></Field>
@@ -1161,16 +1158,16 @@ function BaselineInputs(props: {
           </span>
         </span>
       }
-      subtitle="Prior-year actuals for the selected account · read-only"
+      subtitle="Prior-year actuals for the selected account"
       className="h-full"
     >
       <div className="space-y-6">
         {/* EW with MVHR split */}
         <div>
           <SubHeading aside={gpAside(props.ewTurnover, props.ewCost)}>
-            <span className="text-brand"><Abbr title="Electrical Wholesale">EW</Abbr></span> — Electrical Wholesale
+            <span className="text-brand-strong"><Abbr title="Electrical Wholesale">EW</Abbr></span> — Electrical Wholesale
           </SubHeading>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
             <Field label="Total EW turnover (£)"><NumInput value={props.ewTurnover} prefix="£" locked /></Field>
             <Field label="Total EW cost (£)"><NumInput value={props.ewCost} prefix="£" locked /></Field>
             <Field label="Of which MVHR turnover (£)" hint="MVHR rebate applies to this portion only">
@@ -1185,9 +1182,9 @@ function BaselineInputs(props: {
         {/* SOC */}
         <div>
           <SubHeading aside={gpAside(props.socTurnover, props.socCost)}>
-            <span className="text-brand"><Abbr title="Standing Order Contract">SOC</Abbr></span> — Standing Order Contract
+            <span className="text-brand-strong"><Abbr title="Standing Order Contract">SOC</Abbr></span> — Standing Order Contract
           </SubHeading>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
             <Field label="SOC turnover (£)"><NumInput value={props.socTurnover} prefix="£" locked /></Field>
             <Field label="SOC cost (£)"><NumInput value={props.socCost} prefix="£" locked /></Field>
           </div>
@@ -1196,9 +1193,9 @@ function BaselineInputs(props: {
         {/* NBU */}
         <div>
           <SubHeading aside={gpAside(props.nbuTurnover, props.nbuCost)}>
-            <span className="text-brand"><Abbr title="New Build Units">NBU</Abbr></span> — New Build Units
+            <span className="text-brand-strong"><Abbr title="New Build Units">NBU</Abbr></span> — New Build Units
           </SubHeading>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
             <Field label="NBU turnover (£)"><NumInput value={props.nbuTurnover} prefix="£" locked /></Field>
             <Field label="NBU cost (£)"><NumInput value={props.nbuCost} prefix="£" locked /></Field>
           </div>
@@ -1249,7 +1246,7 @@ function GrowthConfig({
           disabled={atMax}
           title={atMax ? "You can compare up to 3 scenarios. Delete one to add another." : "Add another what-if scenario"}
         >
-          Add scenario <span className="font-normal text-xs">({scenarios.length}/3)</span>
+          Add scenario <span className="font-normal">({scenarios.length}/3)</span>
         </Btn>
       }
     >
@@ -1258,9 +1255,9 @@ function GrowthConfig({
           <thead>
             <tr className="text-left border-b border-border">
               <th scope="col" className="sticky left-0 z-10 bg-card py-3 px-4 sm:px-6 font-semibold min-w-44 sm:min-w-56">Parameter</th>
-              <th scope="col" className="py-3 px-3 font-semibold text-center bg-muted/40 min-w-40">Actual</th>
+              <th scope="col" className="py-3 px-3 font-semibold text-center bg-muted/40 min-w-44">Actual</th>
               {scenarios.map((s, i) => (
-                <th scope="col" key={i} className="py-3 px-3 font-semibold text-brand text-center min-w-44">
+                <th scope="col" key={i} className="py-3 px-3 font-semibold text-brand-strong text-center min-w-48">
                   <div className="flex items-center justify-center gap-1">
                     <span>{s.name}</span>
                     <button
@@ -1278,7 +1275,7 @@ function GrowthConfig({
                       value={s.type}
                       onChange={(e) => updateScenario(i, { type: e.target.value as RebateType })}
                       aria-label={`Rebate type for ${s.name}`}
-                      className="h-10 px-2 text-base sm:text-xs font-semibold rounded-lg border border-input bg-card text-foreground"
+                      className="h-10 px-2 text-base font-semibold rounded-lg border border-input bg-card text-foreground"
                     >
                       <option>Fixed</option><option>Growth</option><option>Targeted</option><option>Mixed</option>
                     </select>
@@ -1291,7 +1288,7 @@ function GrowthConfig({
             {rows.map((r) => (
               <tr key={r.label} className="border-b border-border/60 last:border-0">
                 <th scope="row" className="sticky left-0 z-10 bg-card py-2 px-4 sm:px-6 font-medium align-top text-left">
-                  <div className="leading-tight">
+                  <div>
                     <div>{r.label}</div>
                     {r.hint && <div className="text-xs text-muted-foreground font-normal mt-0.5">{r.hint}</div>}
                   </div>
@@ -1369,7 +1366,6 @@ function GrowthConfig({
         <EmptyState
           icon={Plus}
           title="No scenarios to compare"
-          action={<Btn variant="outline" icon={Plus} onClick={addScenario}>Add scenario</Btn>}
         >
           Add a what-if scenario to compare it with the actual baseline.
         </EmptyState>
@@ -1429,10 +1425,8 @@ function ResultsArea({
     ? " — the expected effect of higher rebate payouts on a larger turnover base."
     : ".";
   const insightNode =
-    activeIdx === 0 ? (
-      <span>Showing actual baseline results.</span>
-    ) : (
-      <span>
+    activeIdx === 0 ? null : (
+      <span className="">
         <strong className="font-semibold">Gross profit (£) {gpDir}</strong> by {fmtGBP(Math.abs(gpDelta))} under Scenario {activeIdx} ({scenarios[activeIdx - 1]?.growth ?? 0}% growth), {conj}{" "}
         <strong className="font-semibold">GP % {gpPctDir}</strong> by {Math.abs(gpPctDelta).toFixed(1)} pts{tail}
       </span>
@@ -1441,7 +1435,7 @@ function ResultsArea({
   return (
     <section aria-labelledby="rm-results-title" className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h2 id="rm-results-title" className="text-lg font-semibold tracking-tight">Results</h2>
+        <h2 id="rm-results-title" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">Results</h2>
         <Btn variant="outline" icon={Printer} onClick={onPrint} title="Print or save as PDF">
           Print results
         </Btn>
@@ -1472,10 +1466,12 @@ function ResultsArea({
       </div>
 
       {/* Insight callout */}
-      <div className="rounded-lg border border-info/40 bg-info-soft px-4 py-3 text-sm text-foreground flex items-start gap-2">
-        <Sparkles className="size-4 mt-0.5 shrink-0 text-info" aria-hidden />
-        {insightNode}
-      </div>
+      {insightNode && (
+        <div className="rounded-lg border border-info/40 bg-info-soft px-4 py-3 text-base text-foreground flex items-start gap-2">
+          <Sparkles className="size-4 mt-0.5 shrink-0 text-info" aria-hidden />
+          {insightNode}
+        </div>
+      )}
 
       {/* Per-layer tables */}
       <ResultsTable label="EW" fullName="Electrical Wholesale" scenarios={allScenarios} result={ewResults} layer="ew" activeIdx={activeIdx} bestIdx={bestIdx} mvhrTurnoverBase={mvhrTurnover} />
@@ -1507,15 +1503,17 @@ function KpiCard({ label, value, delta, positiveGood, isPct }: { label: string; 
     ? "No change vs actual"
     : `${isPct ? `${delta > 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} pts` : fmtSignedGBP(delta)} vs actual`;
   return (
-    <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-      <div className="text-sm font-medium text-muted-foreground">{label}</div>
-      <div className="text-2xl font-bold tabular-nums mt-1">{value}</div>
-      <div className={`text-xs font-semibold mt-1 tabular-nums ${color}`}>
-        <span aria-hidden>{arrow} </span>
-        {deltaText}
-        {!isZero && <span className="sr-only">{isGood ? " (favourable)" : " (unfavourable)"}</span>}
-      </div>
-    </div>
+    <KpiTile
+      label={label}
+      value={value}
+      hint={
+        <span className={`font-semibold tabular-nums ${color}`}>
+          <span aria-hidden>{arrow} </span>
+          {deltaText}
+          {!isZero && <span className="sr-only">{isGood ? " (favourable)" : " (unfavourable)"}</span>}
+        </span>
+      }
+    />
   );
 }
 
@@ -1565,7 +1563,7 @@ function ResultsTable({
   return (
     <section aria-labelledby={titleId} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
       <div className="px-6 py-3 border-b border-border flex items-center gap-3 flex-wrap">
-        <h3 id={titleId} className="text-base font-semibold flex items-center gap-2">
+        <h3 id={titleId} className="text-lg lg:text-xl leading-[1.2] font-semibold flex flex-wrap items-center gap-2">
           <span className="inline-block text-xs font-bold uppercase tracking-wider text-foreground bg-brand-soft px-2 py-1 rounded">{label}</span>
           <span>{fullName}</span>
         </h3>
@@ -1602,7 +1600,7 @@ function ResultsTable({
               if (isNatGrowth) {
                 elems.push(
                   <tr key={`${k}-qual`} className="border-b border-border/60">
-                    <th scope="row" className="py-2 px-6 pl-12 text-left font-normal text-muted-foreground text-xs">National growth — qualification</th>
+                    <th scope="row" className="py-2 px-6 pl-12 text-left font-normal text-muted-foreground text-sm">National growth — qualification</th>
                     {result.cols.map((c, i) => (
                       <td key={i} className={`text-right py-2 px-6 border-l-4 ${i === activeIdx ? "border-l-success" : "border-l-transparent"} ${isBestCol(i) ? "bg-success-soft/25" : ""}`}>
                         {c.qualified ? (
@@ -1678,7 +1676,7 @@ function ScenarioColHeader({ label, active, best }: { label: string; active: boo
       <span className="inline-flex items-center gap-2 justify-end">
         {label}
         {active && <span className="sr-only">(selected)</span>}
-        {best && <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-success text-white">Best GP</span>}
+        {best && <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-success text-white">Best GP</span>}
       </span>
     </th>
   );
@@ -1702,7 +1700,7 @@ function Row({
   tooltip?: string;
 }) {
   const accentClass =
-    accent === "brand" ? "text-brand font-semibold bg-brand-soft/40"
+    accent === "brand" ? "text-brand-strong font-semibold bg-brand-soft/40"
     : accent === "success" ? "text-success font-semibold bg-success-soft/50"
     : "";
   const labelClass = muted ? "text-muted-foreground italic" : "";
@@ -1752,8 +1750,7 @@ function TotalSummary({
   return (
     <section aria-labelledby="rm-total-summary" className="bg-card border-2 border-brand/30 rounded-xl overflow-hidden shadow-sm">
       <div className="px-6 py-3 border-b border-border bg-brand-soft/30 flex items-center justify-between flex-wrap gap-2">
-        <h3 id="rm-total-summary" className="font-semibold text-base">Total summary <span className="text-muted-foreground font-normal text-sm">(EW + SOC + NBU combined)</span></h3>
-        <span className="text-xs text-muted-foreground">All layers added together</span>
+        <h3 id="rm-total-summary" className="text-lg lg:text-xl leading-[1.2] font-semibold">Total summary <span className="text-muted-foreground font-normal text-sm">(EW + SOC + NBU combined)</span></h3>
       </div>
       <div className="relative overflow-x-auto overflow-y-hidden" tabIndex={0} role="region" aria-label="Total summary (scrolls horizontally)">
         <table className="w-full text-sm">
@@ -1884,9 +1881,9 @@ function VarianceAnalysis({
   return (
     <section aria-labelledby="rm-variance-title" className="space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="min-w-0 max-w-3xl">
-          <h2 id="rm-variance-title" className="text-lg font-semibold tracking-tight">Variance analysis</h2>
-          <p className="text-sm text-muted-foreground mt-1">
+        <div className="min-w-0 flex-1">
+          <h2 id="rm-variance-title" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">Variance analysis</h2>
+          <p className="text-base text-muted-foreground mt-1">
             Compare the current agreement's projected results with a proposed new agreement to show the financial impact of changes. Column A (prior-year actual) comes from Sage and is locked.
           </p>
         </div>
@@ -1914,7 +1911,7 @@ function VarianceAnalysis({
                 <th scope="col" className="text-right py-3 px-6 font-semibold whitespace-nowrap bg-info-soft text-foreground">
                   B · Current agreement projected
                 </th>
-                <th scope="col" className="text-right py-3 px-6 font-semibold whitespace-nowrap bg-brand-soft text-foreground min-w-48">
+                <th scope="col" className="text-right py-3 px-6 font-semibold whitespace-nowrap bg-brand-soft text-foreground min-w-56">
                   C · Proposed agreement projected
                 </th>
                 <th scope="col" className="text-right py-3 px-6 font-semibold whitespace-nowrap">Variance (C vs B)</th>
@@ -2002,7 +1999,7 @@ function BottomKPIBar({
           <div className="font-bold text-sm">{account}</div>
           <div className="text-xs text-muted-foreground truncate">{subLabel}</div>
         </div>
-        <div className="hidden md:flex items-center gap-x-8">
+        <div className="hidden md:flex flex-wrap items-center gap-x-8 gap-y-1">
           <BKpi label="Total rebate" value={fmtGBP(active.rebate)} accent="brand" />
           <BKpi
             label="Net GP (£)" value={fmtGBP(active.gp)} accent="success"
@@ -2029,12 +2026,12 @@ function BottomKPIBar({
 }
 
 function BKpi({ label, value, accent, chip }: { label: string; value: string; accent?: "brand" | "success"; chip?: ReactNode }) {
-  const color = accent === "brand" ? "text-brand" : accent === "success" ? "text-success" : "text-foreground";
+  const color = accent === "brand" ? "text-brand-strong" : accent === "success" ? "text-success" : "text-foreground";
   return (
-    <div className="leading-tight">
-      <div className="text-xs text-muted-foreground font-medium">{label}</div>
+    <div>
+      <div className="text-sm text-muted-foreground font-medium">{label}</div>
       <div className="flex items-center gap-2">
-        <div className={`font-bold tabular-nums text-base ${color}`}>{value}</div>
+        <div className={`font-bold tabular-nums text-xl ${color}`}>{value}</div>
         {chip}
       </div>
     </div>

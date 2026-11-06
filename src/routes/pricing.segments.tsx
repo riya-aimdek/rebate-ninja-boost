@@ -27,6 +27,7 @@ import {
   missingFields,
   notifyUndo,
   type ApiError,
+  KpiTile,
 } from "@/components/pricing/kit";
 import {
   CUSTOMERS,
@@ -525,7 +526,7 @@ function Page() {
   const listNameDup = !!newName.trim() && lists[tab].includes(newName.trim());
 
   return (
-    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Segments" }]}>
+    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segments" }, { label: "Segments" }]}>
       <ListHeader
         title="Segments"
         count={rows.length}
@@ -613,9 +614,7 @@ function Page() {
               Try a different search term or remove a filter.
             </EmptyState>
           ) : (
-            <EmptyState title="No segments yet" action={<Btn icon={Plus} onClick={() => openEditor()}>Create segment</Btn>}>
-              Segments decide which price structure applies to each customer or product.
-            </EmptyState>
+            <EmptyState title="No segments yet" />
           )
         }
         columns={[
@@ -626,7 +625,7 @@ function Page() {
             cell: (s) => (
               <button
                 type="button"
-                className="hit text-brand font-semibold hover:underline text-left"
+                className="hit text-brand-strong font-semibold hover:underline text-left"
                 onClick={(e) => {
                   e.stopPropagation();
                   openEditor(s);
@@ -637,7 +636,7 @@ function Page() {
               </button>
             ),
           },
-          { key: "method", header: "Method", className: "whitespace-nowrap", cell: (s) => <Tag tone={s.method === "AI_DERIVED" ? "brand" : s.method === "MANUAL" ? "neutral" : "info"}>{methodLabel(s.method)}</Tag> },
+          { key: "method", header: "Method", className: "whitespace-nowrap", cell: (s) => methodLabel(s.method) },
           {
             key: "def",
             header: "Definition",
@@ -684,10 +683,10 @@ function Page() {
 
       <section className="mt-8" aria-labelledby="seg-history-h">
         <div className="mb-3">
-          <h2 id="seg-history-h" className="text-lg font-semibold tracking-tight">
+          <h2 id="seg-history-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
             Assignment history
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5">Retained for audit. Manual overrides are flagged.</p>
+          <p className="text-base text-muted-foreground mt-0.5">Retained for audit. Manual overrides are flagged.</p>
         </div>
         <DataTable
           caption="Segment assignment history"
@@ -715,7 +714,7 @@ function Page() {
       </section>
 
       <Card className="mt-6" title="Segment lists" subtitle={`Names offered when creating ${tab === "CUSTOMER" ? "customer" : "product"} segments.`}>
-        {lists[tab].length === 0 && <p className="text-sm text-muted-foreground">No list values yet — add the first one below.</p>}
+        {lists[tab].length === 0 && <p className="text-base text-muted-foreground">No list values yet — add the first one below.</p>}
         <ul className="flex flex-wrap gap-2" aria-label={`${tab === "CUSTOMER" ? "Customer" : "Product"} segment list`}>
           {lists[tab].map((n) => (
             <li key={n} className="inline-flex items-center gap-1 rounded-full bg-muted pl-3 pr-1 py-1 text-sm">
@@ -928,7 +927,7 @@ function Page() {
                   <dt className="text-muted-foreground">Confidence</dt>
                   <dd className="font-medium">{segments.find((s) => s.id === draft.id)?.confidence ?? 0.82}</dd>
                 </dl>
-                <p className="text-xs text-muted-foreground mt-3">Read-only — produced by a model run. Model version and confidence are stored with each assignment.</p>
+                <p className="text-base text-muted-foreground mt-3">Read-only — produced by a model run. Model version and confidence are stored with each assignment.</p>
               </Card>
             )}
             {draft.method === "MANUAL" && (
@@ -968,23 +967,16 @@ function Page() {
               }
             >
               {!previewed || !preview ? (
-                <p className="text-sm text-muted-foreground">Preview to see members, changes and overlaps. Activation requires a preview.</p>
+                <p className="text-base text-muted-foreground">Preview to see members, changes and overlaps.</p>
               ) : (
                 <div className="space-y-4" role="status">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {[
-                      { l: "Members", v: preview.matches.length, t: "text-foreground" },
-                      { l: "Newly added", v: preview.added.length, t: "text-success" },
-                      { l: "Removed", v: preview.removed.length, t: "text-destructive" },
-                    ].map((k) => (
-                      <div key={k.l} className="rounded-lg border border-border p-3">
-                        <div className="text-xs text-muted-foreground">{k.l}</div>
-                        <div className={`text-2xl font-bold tabular-nums ${k.t}`}>{k.v}</div>
-                      </div>
-                    ))}
+                    <KpiTile label="Members" value={preview.matches.length} />
+                    <KpiTile label="Newly added" value={preview.added.length} tone="success" />
+                    <KpiTile label="Removed" value={preview.removed.length} tone="danger" />
                   </div>
                   <div className="text-sm">
-                    <h3 className="font-semibold mb-1">Members</h3>
+                    <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-1">Members</h3>
                     <ul className="space-y-1">
                       {preview.matches.map((r) => (
                         <li key={preview.keyOf(r)} className="flex items-center gap-2">
@@ -1001,7 +993,7 @@ function Page() {
                   </div>
                   {preview.multi.length > 0 && (
                     <div className="rounded-lg border border-warning/50 bg-warning-soft p-3 text-sm">
-                      <h3 className="font-semibold text-warning-foreground mb-1">Matching more than one segment ({preview.multi.length})</h3>
+                      <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold text-warning-foreground mb-1">Matching more than one segment ({preview.multi.length})</h3>
                       <ul className="space-y-1">
                         {preview.multi.map((m) => (
                           <li key={m.c.id}>
@@ -1026,7 +1018,7 @@ function Page() {
                     { seg: live, status: live.status, note: live.status === "ACTIVE" ? "Assigning members now" : "Never activated" },
                     ...(segHistory[live.id] ?? []).map((h) => ({ seg: h.seg, status: "SUPERSEDED", note: `Superseded ${h.supersededAt}` })),
                   ].map(({ seg, status, note }) => (
-                    <li key={`${seg.version ?? 1}-${status}`} className="px-6 py-3">
+                    <li key={`${seg.version ?? 1}-${status}`} className="px-5 py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold tabular-nums">v{seg.version ?? 1}</span>
                         <StatusPill status={status} />

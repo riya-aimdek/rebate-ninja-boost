@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { BellRing, TrendingDown } from "lucide-react";
-import { Btn, Card, DataTable, DetailTitle, EmptyState, Field, Flag, InfoBanner, KpiTile, PricingLayout, RecordLink, StatusPill, inputCls, notifySuccess, type Column } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, DetailTitle, EmptyState, Field, Flag, InfoBanner, KpiTile, PricingLayout, RecordLink, StatusPill, inputCls, notifySuccess, type Column, TableSection } from "@/components/pricing/kit";
 import { RequireAccess, pctBand } from "@/components/pricing/access";
 import { Freshness } from "@/components/pricing/analytics-ui";
 import { NOTIFICATIONS, NOW, QUOTES, priceQuote, pushNotification, quoteById, type Quote } from "@/lib/pricing/deals";
@@ -136,7 +136,7 @@ function Page() {
         actions={
           <>
             <Freshness />
-            <Btn variant="outline" onClick={exportCsv}>
+            <Btn variant="outline" onClick={exportCsv} disabled={rows.length === 0}>
               Export CSV
             </Btn>
           </>
@@ -152,7 +152,7 @@ function Page() {
         <KpiTile label="Margin drift above threshold" value={breaches.length} tone={breaches.length ? "danger" : "success"} hint={`More than ${limit} points below expected`} />
       </section>
 
-      <Card
+      <TableSection
         title="Expected vs actual margin"
         actions={
           <div className="flex flex-wrap items-end gap-3">
@@ -164,7 +164,6 @@ function Page() {
             </Btn>
           </div>
         }
-        padded={false}
         className="mb-6"
       >
         <DataTable<Row>
@@ -178,9 +177,9 @@ function Page() {
             ...cols.slice(5),
           ]}
         />
-      </Card>
+      </TableSection>
 
-      <Card title="Renewals" subtitle="Start a renewal from what the prior term really earned." padded={false}>
+      <TableSection title="Renewals" subtitle="Start a renewal from what the prior term really earned.">
         <DataTable<Quote>
           caption="Renewal quotes"
           rows={renewals}
@@ -203,7 +202,7 @@ function Page() {
             },
           ]}
         />
-      </Card>
+      </TableSection>
     </PricingLayout>
   );
 }

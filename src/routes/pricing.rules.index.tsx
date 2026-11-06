@@ -58,7 +58,7 @@ function Page() {
   };
 
   return (
-    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Pricing rules" }]}>
+    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segments" }, { label: "Pricing rules" }]}>
       <ListHeader
         title="Pricing rules"
         count={rows.length}
@@ -148,9 +148,9 @@ function Page() {
           )
         }
         columns={[
-          { key: "id", header: "ID", className: "whitespace-nowrap", cell: (r) => <span className="font-mono text-xs">{r.id}</span> },
+          { key: "id", header: "ID", className: "whitespace-nowrap", cell: (r) => <span className="font-mono text-sm">{r.id}</span> },
           { key: "name", header: "Name", className: "min-w-48", cell: (r) => <RecordLink to="/pricing/rules/$id" params={{ id: r.id }}>{r.name}</RecordLink> },
-          { key: "type", header: "Rule type", className: "whitespace-nowrap", cell: (r) => <Tag tone="info">{humanize(r.type)}</Tag> },
+          { key: "type", header: "Rule type", className: "whitespace-nowrap", cell: (r) => humanize(r.type) },
           { key: "strategy", header: "Strategy", className: "min-w-32", cell: (r) => humanize(r.strategy) },
           { key: "action", header: "Action", cell: (r) => <span className="block min-w-40">{actionSummary(r.action)}</span> },
           { key: "prio", header: "Priority", align: "right", cell: (r) => <span className="tabular-nums">{r.priority}</span> },
@@ -200,7 +200,7 @@ function RuleQuickView({ rule: r, onClose, onOpen }: { rule: PricingRule | null;
           <section className="bg-card border border-border rounded-xl px-5">
             <DetailGrid
               items={[
-                { label: `Conditions (${r.conditions.length})`, value: <span className="text-sm">{conditionSummary(r.conditions)}</span>, full: true },
+                { label: `Conditions (${r.conditions.length})`, value: <span>{conditionSummary(r.conditions)}</span>, full: true },
                 { label: "Action", value: actionSummary(r.action), full: true },
                 { label: "Strategy", value: humanize(r.strategy) },
                 { label: "Priority", value: <span className="tabular-nums">{r.priority}</span> },
@@ -212,7 +212,7 @@ function RuleQuickView({ rule: r, onClose, onOpen }: { rule: PricingRule | null;
               ]}
             />
           </section>
-          <p className="text-xs text-muted-foreground">Within a precedence tier, the lower priority number wins. Edit conditions, test the rule and see its version history on the full rule page.</p>
+          <p className="text-base text-muted-foreground">Within a precedence tier, the lower priority number wins. Edit conditions, test the rule and see its version history on the full rule page.</p>
         </>
       )}
     </Drawer>

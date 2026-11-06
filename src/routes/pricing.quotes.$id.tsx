@@ -30,6 +30,7 @@ import {
   pct,
   type ApiError,
   type Tone,
+  KpiTile,
 } from "@/components/pricing/kit";
 import { RequireAccess, Secure, pctBand } from "@/components/pricing/access";
 import { QuoteLinesTable } from "@/components/pricing/quote-lines";
@@ -284,7 +285,7 @@ function Detail({ id }: { id: string }) {
       )}
       <ErrorBanner error={error} onClose={() => setError(null)} note={false} />
 
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-5 mb-6">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 mb-6">
         <Kpi label="Net value" value={money(t.net)} />
         <Kpi label="List value" value={money(t.list)} />
         <Kpi label="Discount off list" value={pct(-t.discountPct)} />
@@ -313,8 +314,8 @@ function Detail({ id }: { id: string }) {
         {tab === "lines" && (
           <div className="space-y-4">
             {isOwner && status === "DRAFT" && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-muted-foreground">Prices recalculate as you edit. Pricing date {q.pricingDate}.</p>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-8 [&>p]:min-w-0 [&>p]:flex-1 [&>:not(p)]:shrink-0">
+                <p className="text-base text-muted-foreground">Prices recalculate as you edit. Pricing date {q.pricingDate}.</p>
                 {editing ? (
                   <div className="flex gap-2">
                     <Btn variant="subtle" onClick={() => setEditing(false)} disabled={busy === "lines"}>
@@ -378,21 +379,26 @@ function Detail({ id }: { id: string }) {
 
         {tab === "documents" && (
           <Card title="Documents" subtitle="Each file records the quote revision, template version, time and a content hash. Cost and margin never appear in customer documents." actions={<Btn variant="outline" size="sm" icon={FileDown} onClick={openDoc}>Generate document</Btn>}>
-            <DataTable
-              caption="Generated documents"
-              rows={q.documents}
-              rowKey={(d) => d.id}
-              empty={<EmptyState icon={FileText} title="No documents yet">Approved quotes can produce a branded PDF and an ERP-ready order summary.</EmptyState>}
-              columns={[
-                { key: "id", header: "Document", cell: (d) => <RecordId>{d.id}</RecordId> },
-                { key: "k", header: "Type", cell: (d) => <Tag>{d.kind === "PDF" ? "PDF" : "ERP order summary"}</Tag> },
-                { key: "t", header: "Template", cell: (d) => `${d.template} ${d.templateVersion}` },
-                { key: "r", header: "Quote rev.", align: "right", cell: (d) => d.quoteRevision },
-                { key: "at", header: "Generated", cell: (d) => <span className="tabular-nums whitespace-nowrap">{d.at}</span> },
-                { key: "by", header: "By", cell: (d) => userName(d.by) },
-                { key: "h", header: "Content hash", cell: (d) => <code className="text-xs">{d.hash}</code> },
-              ]}
-            />
+            {q.documents.length === 0 ? (
+              <EmptyState icon={FileText} title="No documents yet">
+                Approved quotes can produce a branded PDF and an ERP-ready order summary.
+              </EmptyState>
+            ) : (
+              <DataTable
+                caption="Generated documents"
+                rows={q.documents}
+                rowKey={(d) => d.id}
+                columns={[
+                  { key: "id", header: "Document", cell: (d) => <RecordId>{d.id}</RecordId> },
+                  { key: "k", header: "Type", className: "whitespace-nowrap", cell: (d) => d.kind === "PDF" ? "PDF" : "ERP order summary" },
+                  { key: "t", header: "Template", cell: (d) => `${d.template} ${d.templateVersion}` },
+                  { key: "r", header: "Quote rev.", align: "right", cell: (d) => d.quoteRevision },
+                  { key: "at", header: "Generated", cell: (d) => <span className="tabular-nums whitespace-nowrap">{d.at}</span> },
+                  { key: "by", header: "By", cell: (d) => userName(d.by) },
+                  { key: "h", header: "Content hash", cell: (d) => <code className="text-sm break-all">{d.hash}</code> },
+                ]}
+              />
+            )}
           </Card>
         )}
 
@@ -441,7 +447,7 @@ function Detail({ id }: { id: string }) {
                   items={[
                     { label: "Status", value: <StatusPill status={q.sync.status} tone={SYNC_TONE[q.sync.status]} /> },
                     { label: "ERP order reference", value: q.sync.erpOrderRef ? <code>{q.sync.erpOrderRef}</code> : "—" },
-                    { label: "Idempotency key", value: <code className="text-xs">{q.sync.idempotencyKey}</code> },
+                    { label: "Idempotency key", value: <code className="text-sm break-all">{q.sync.idempotencyKey}</code> },
                     { label: "Attempts", value: q.sync.attempts },
                     { label: "Next retry", value: q.sync.nextRetryAt ?? "—" },
                     { label: "Last update", value: q.sync.updatedAt },
@@ -486,19 +492,14 @@ function Detail({ id }: { id: string }) {
       </ConfirmDialog>
 
       <Drawer open={payloadOpen} onClose={() => setPayloadOpen(false)} title="ERP order payload" subtitle="What the ERP receives. No cost or margin is sent." size="md">
-        <pre className="text-xs bg-muted rounded-lg p-4 overflow-x-auto overflow-y-hidden">{JSON.stringify(erpPayload(q), null, 2)}</pre>
+        <pre className="text-sm bg-muted rounded-lg p-4 overflow-x-auto overflow-y-hidden">{JSON.stringify(erpPayload(q), null, 2)}</pre>
       </Drawer>
     </>
   );
 }
 
 function Kpi({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="bg-card border border-border rounded-xl shadow-sm p-4">
-      <div className="text-sm text-muted-foreground">{label}</div>
-      <div className="text-xl font-bold tabular-nums mt-1">{value}</div>
-    </div>
-  );
+  return <KpiTile label={label} value={value} />;
 }
 
 /* ---------------- Revision compare (US-CQ-04 AC#2) ---------------- */
@@ -587,7 +588,7 @@ function DocumentModal({ open, q, onClose, onGenerated, by }: { open: boolean; q
       onGenerated({ ...q, documents: [doc, ...q.documents] });
       setBusy(false);
       onClose();
-      toast.success(`${kind === "PDF" ? "PDF" : "ERP order summary"} generated`, { description: `${doc.id} · revision ${q.revision} · ${doc.hash}` });
+      toast.success(`${kind === "PDF" ? "PDF" : "ERP order summary"} generated`, { description: `${doc.id} · revision ${q.revision}` });
     }, 400);
   };
   return (
@@ -634,10 +635,10 @@ function DocumentModal({ open, q, onClose, onGenerated, by }: { open: boolean; q
       <article className="rounded-lg border border-border bg-white text-[#111] p-6 text-sm" aria-label="Document preview">
         <header className="flex flex-wrap justify-between gap-4 border-b border-[#ddd] pb-4 mb-4">
           <div>
-            <p className="text-lg font-black tracking-tight">REBATE <span className="text-brand">ninja</span></p>
+            <p className="text-lg font-black tracking-tight">REBATE <span className="text-brand-strong">ninja</span></p>
             <p className="text-xs text-[#555]">AIMDek Technologies · {kind === "PDF" ? tpl.name : "Order summary"}</p>
           </div>
-          <div className="text-right text-xs">
+          <div className="text-right text-sm">
             <p className="font-semibold text-base">
               Quote {q.id} · rev {q.revision}
             </p>
@@ -650,7 +651,7 @@ function DocumentModal({ open, q, onClose, onGenerated, by }: { open: boolean; q
           <br />
           Ship to: {q.shipTo}
         </p>
-        <table className="w-full text-xs">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-[#ddd] text-left">
               <th scope="col" className="py-1.5">Product</th>
@@ -682,7 +683,7 @@ function DocumentModal({ open, q, onClose, onGenerated, by }: { open: boolean; q
             </tr>
           </tfoot>
         </table>
-        <p className="mt-4 text-[11px] text-[#555]">Prices exclude VAT and duties. This quote is subject to AIMDek standard terms of sale. Price list {q.priceListVersion}.</p>
+        <p className="mt-4 text-xs text-[#555]">Prices exclude VAT and duties. This quote is subject to AIMDek standard terms of sale. Price list {q.priceListVersion}.</p>
       </article>
     </Modal>
   );

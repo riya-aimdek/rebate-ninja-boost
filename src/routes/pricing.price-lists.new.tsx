@@ -286,7 +286,7 @@ function Page() {
       const k = `${l.sku}|${l.uom}|${l.minQty}`;
       if (l.sku && seen.has(k))
         errs[l.key] =
-          "DUPLICATE_LINE — same product, UoM and min qty already on this list. Change the min qty or remove the line.";
+          "Duplicate line — same product, UoM and min qty already on this list. Change the min qty or remove the line.";
       seen.set(k, l.key);
     }
     return errs;
@@ -295,7 +295,7 @@ function Page() {
   const validateLines = () => {
     const errs = checkLines();
     setLineErr(errs);
-    const dup = Object.values(errs).find((e) => e.startsWith("DUPLICATE_LINE"));
+    const dup = Object.values(errs).find((e) => e.startsWith("Duplicate line"));
     if (dup) {
       setError({
         errorClass: "VALIDATION",
@@ -366,8 +366,8 @@ function Page() {
     if (s === 2) {
       const errs = validateLines();
       // Only duplicates block progress; other invalid lines can be saved as a draft (fix before submitting).
-      if (Object.values(errs).some((e) => e.startsWith("DUPLICATE_LINE"))) {
-        const first = lines.find((l) => errs[l.key]?.startsWith("DUPLICATE_LINE"));
+      if (Object.values(errs).some((e) => e.startsWith("Duplicate line"))) {
+        const first = lines.find((l) => errs[l.key]?.startsWith("Duplicate line"));
         if (first) focusLater(`pl-line-${first.key}-sku`);
         return false;
       }
@@ -416,7 +416,7 @@ function Page() {
     setLineErr(errs);
     for (const s of [0, 1, 2, 3]) {
       const ok =
-        s === 2 ? !Object.values(errs).some((x) => x.startsWith("DUPLICATE_LINE")) : checkStep(s);
+        s === 2 ? !Object.values(errs).some((x) => x.startsWith("Duplicate line")) : checkStep(s);
       if (!ok) {
         setStep(s);
         if (s === 2)
@@ -550,7 +550,7 @@ function Page() {
         status="DRAFT"
         unsaved={dirty}
       />
-      <Stepper steps={STEPS} current={step} />
+      <Stepper steps={STEPS} current={step} onStepClick={setStep} />
       <ErrorBanner error={error} onClose={() => setError(null)} />
 
       <form onSubmit={last ? save : next} noValidate className="space-y-6">
@@ -607,9 +607,7 @@ function Page() {
                   label="Effective to"
                   required={!h.openEnded}
                   error={fieldErr.effectiveTo}
-                  hint={
-                    h.openEnded ? "Open-ended list — no end date" : "Must be after the start date"
-                  }
+                  hint={h.openEnded ? undefined : "Must be after the start date"}
                 >
                   <input
                     id={fid("effectiveTo")}
@@ -733,7 +731,7 @@ function Page() {
                   value={h.parentId}
                   onChange={(e) => {
                     set("parentId", e.target.value);
-                    // Derived prices are in the parent's currency, so follow it by default.
+                    // Derived prices use the parent list currency, so follow it by default.
                     const p = PRICE_LISTS.find((l) => l.id === e.target.value);
                     if (p && p.currency !== h.currency) set("currency", p.currency);
                   }}
@@ -826,13 +824,13 @@ function Page() {
               </Field>
             </div>
             {h.type === "BASE" && (
-              <p className="text-sm text-muted-foreground mt-4">
+              <p className="text-base text-muted-foreground mt-4">
                 Base lists are not derived. Go back and choose another list type to set a parent, or
                 select Next to continue.
               </p>
             )}
             {h.type !== "BASE" && !h.parentId && (
-              <p className="text-sm text-muted-foreground mt-4">
+              <p className="text-base text-muted-foreground mt-4">
                 Choose a parent list to enable the adjustment fields, or select Next to create an
                 independent list.
               </p>
@@ -913,7 +911,7 @@ function Page() {
               rowKey={(l) => l.id}
               empty={`${parent.name} has no priced lines to derive from.`}
             />
-            <div className="px-6 py-3 text-xs text-muted-foreground border-t border-border">
+            <div className="px-5 py-3 text-xs text-muted-foreground border-t border-border">
               {h.inheritanceMode === "LIVE_LINK"
                 ? "Live link — these prices recalculate when the parent changes."
                 : "Snapshot — copied once; later parent changes don't apply."}{" "}
@@ -1149,7 +1147,7 @@ function Page() {
                 </tbody>
               </table>
             </div>
-            <div className="px-6 py-3 text-xs text-muted-foreground border-t border-border">
+            <div className="px-5 py-3 text-xs text-muted-foreground border-t border-border">
               Line dates default to the list dates when blank. Each product can appear once per UoM
               and min qty; blocked products can't be priced.
             </div>

@@ -63,7 +63,7 @@ const CATEGORIES: Category[] = [
     title: "Performance and analytics",
     description: "Track how rebate programs and products are performing.",
     icon: TrendingUp,
-    accent: "bg-brand/10 text-brand",
+    accent: "bg-brand/10 text-brand-strong",
     reports: [
       {
         key: "program-register",
@@ -248,7 +248,7 @@ function ReportsPage() {
                           <Icon className="size-5" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className={`block font-semibold ${disabled ? "text-muted-foreground" : "text-brand group-hover:underline"}`}>{r.title}</span>
+                          <span className={`block font-semibold ${disabled ? "text-muted-foreground" : "text-brand-strong group-hover:underline"}`}>{r.title}</span>
                           <span id={descId} className="block text-sm text-muted-foreground mt-0.5">
                             {r.desc}
                           </span>
@@ -262,7 +262,7 @@ function ReportsPage() {
                         )}
                       </>
                     );
-                    const rowCls = "flex items-start gap-4 px-6 py-4";
+                    const rowCls = "flex items-start gap-4 px-5 py-4";
                     return (
                       <li key={r.key}>
                         {disabled ? (

@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useId, useMemo, useState, type FormEvent } from "react";
-import { BadgeCheck, CalendarClock, Plus, Trash2, UserCheck, X } from "lucide-react";
+import { useId, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { BadgeCheck, CalendarClock, CheckCircle2, Plus, Trash2, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   Btn,
   Card,
   DataTable,
   EmptyState,
+  FilterPills,
   ErrorBanner,
   Field,
   Flag,
@@ -17,6 +18,7 @@ import {
   PillTabs,
   PricingLayout,
   StatusPill,
+  TableSection,
   Tag,
   Toggle,
   humanize,
@@ -55,6 +57,19 @@ import {
 } from "@/lib/pricing/deals";
 import { PARTNER_TIERS, USERS, useSession, userById, userName } from "@/lib/pricing/session";
 
+/** Operator wording for the rule editor; tables keep the compact symbols from OPERATOR_LABEL. */
+const OPERATOR_WORDS: Record<ApprovalCondition["operator"], string> = {
+  EQ: "equals",
+  NEQ: "doesn't equal",
+  GT: "is more than",
+  GTE: "is at least",
+  LT: "is less than",
+  LTE: "is at most",
+  IN: "is one of",
+  NOT_IN: "isn't one of",
+  BETWEEN: "is between",
+};
+
 export const Route = createFileRoute("/pricing/approval-matrix")({
   head: () => ({ meta: [{ title: "Approval matrix · Rebate Ninja" }] }),
   component: () => (
@@ -83,7 +98,20 @@ const ATTR_LABEL: Record<string, string> = {
 const TITLES = Array.from(new Set(USERS.filter((u) => u.approvalAuthorityPct !== undefined || u.title === "Pricing Manager").map((u) => u.title)));
 const APPROVERS = USERS.filter((u) => u.status === "ACTIVE" && (u.approvalAuthorityPct !== undefined || u.title === "Pricing Manager"));
 
-const condText = (c: ApprovalCondition) => `${ATTR_LABEL[c.attribute]} ${OPERATOR_LABEL[c.operator]} ${c.value}`;
+/** Readable condition value: runtime variables get names, CODE_VALUES become words. */
+const VAR_LABEL: Record<string, string> = {
+  "$guardrail.minMarginPct": "the margin floor",
+  "$partner.discountLimitPct": "the partner's discount limit",
+  "$today": "today",
+  "$requester.role": "the requester's role",
+};
+const valueText = (v: string) =>
+  v
+    .split(",")
+    .map((x) => x.trim())
+    .map((x) => VAR_LABEL[x] ?? (/^[A-Z][A-Z0-9_]+$/.test(x) ? humanize(x) : /^\d{4,}$/.test(x) ? Number(x).toLocaleString("en-GB") : x))
+    .join(", ");
+const condText = (c: ApprovalCondition) => `${ATTR_LABEL[c.attribute]} ${OPERATOR_LABEL[c.operator]} ${valueText(c.value)}`;
 const approverText = (a: Approver) => (a.type === "ROLE" ? a.value : a.type === "USER" ? userName(a.value) : a.type === "POOL" ? `${a.value} (pool)` : "Requester's manager");
 const levelText = (l: ApprovalLevel) => l.approvers.map(approverText).join(l.mode === "PARALLEL" ? (l.parallelRule === "ANY" ? " or " : " + ") : ", ");
 const dayBefore = (iso: string) => {
@@ -102,7 +130,7 @@ function Page() {
     <>
       <ListHeader
         title="Approval matrix"
-        subtitle="Who must approve what — by discount, margin, deal value, customer, product, region and exception type. No code needed."
+        subtitle="Who must approve what — by discount, margin, deal value, customer, product, region and exception type."
         eyebrow="Deal desk"
       />
       {!canEdit && <InfoBanner title="View only">Finance controllers can review the matrix but not change it.</InfoBanner>}
@@ -158,7 +186,9 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState(false);
-  const rows = [...APPROVAL_RULES].sort((a, b) => a.id.localeCompare(b.id) || b.version - a.version);
+  const [statuses, setStatuses] = useState<ApprovalRule["status"][]>([]);
+  const all = [...APPROVAL_RULES].sort((a, b) => a.id.localeCompare(b.id) || b.version - a.version);
+  const rows = statuses.length ? all.filter((r) => statuses.includes(r.status)) : all;
 
   const open = (r?: ApprovalRule) => {
     if (!canEdit) return;
@@ -257,42 +287,41 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-muted-foreground max-w-2xl">All matching rules apply. Approvers already in an earlier step are merged out, so nobody approves the same item twice. Example: discount up to 10% needs none, 10–20% needs the Sales Manager, above 20% the Sales VP.</p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-8 [&>p]:min-w-0 [&>p]:flex-1 [&>:not(p)]:shrink-0 mb-4">
+        <p className="text-base text-muted-foreground">Every matching rule applies. Someone already approving in an earlier step isn't asked twice.</p>
         {canEdit && (
           <Btn icon={Plus} onClick={() => open()}>
             Create rule
           </Btn>
         )}
       </div>
+      <FilterPills<ApprovalRule["status"]>
+        label="Status"
+        selected={statuses}
+        onChange={setStatuses}
+        options={(["ACTIVE", "SCHEDULED", "INACTIVE"] as const).map((k) => ({ key: k, label: humanize(k), count: all.filter((r) => r.status === k).length }))}
+      />
       <DataTable<ApprovalRule>
         caption="Approval rules"
         rows={rows}
         rowKey={(r) => `${r.id}-v${r.version}`}
         onRowClick={canEdit ? (r) => (r.status === "INACTIVE" ? undefined : open(r)) : undefined}
-        empty={<EmptyState icon={BadgeCheck} title="No approval rules yet" action={canEdit ? <Btn icon={Plus} onClick={() => open()}>Create rule</Btn> : undefined}>Without rules, every quote and exception is approved automatically.</EmptyState>}
+        empty={<EmptyState icon={BadgeCheck} title="No approval rules yet">Without rules, every quote and exception is approved automatically.</EmptyState>}
         columns={[
-          { key: "id", header: "ID", cell: (r) => <span className="font-mono text-xs whitespace-nowrap">{r.id}</span> },
-          { key: "name", header: "Rule", className: "min-w-52", cell: (r) => <span className="font-medium">{r.name}</span> },
-          { key: "applies", header: "Applies to", cell: (r) => <div className="flex flex-wrap gap-1">{r.appliesTo.map((a) => <Tag key={a}>{humanize(a)}</Tag>)}</div> },
-          { key: "cond", header: "When", className: "min-w-56", cell: (r) => <ul className="space-y-0.5 text-sm">{r.conditions.map((c, i) => <li key={i}>{i > 0 && <span className="text-muted-foreground">and </span>}{condText(c)}</li>)}</ul> },
+          { key: "id", header: "ID", className: "whitespace-nowrap", cell: (r) => <span className="font-mono text-sm">{r.id}</span> },
+          { key: "name", header: "Name", className: "min-w-44", cell: (r) => <span className="font-medium">{r.name}</span> },
+          { key: "applies", header: "Applies to", className: "whitespace-nowrap", cell: (r) => r.appliesTo.map((a) => humanize(a)).join(", ") },
+          { key: "cond", header: "When", className: "min-w-52", cell: (r) => r.conditions.map(condText).join(" and ") },
           {
             key: "levels",
-            header: "Approval flow",
-            className: "min-w-56",
-            cell: (r) => (
-              <ol className="space-y-0.5 text-sm">
-                {r.levels.map((l, i) => (
-                  <li key={i}>
-                    <span className="text-muted-foreground tabular-nums">{i + 1}.</span> {levelText(l)} <span className="text-xs text-muted-foreground">· {l.slaHours} h</span>
-                  </li>
-                ))}
-              </ol>
-            ),
+            header: "Approvers",
+            className: "min-w-40",
+            // One line per approval chain: levels in order, joined by arrows.
+            cell: (r) => r.levels.map(levelText).join(" → "),
           },
-          { key: "eff", header: "Effective", cell: (r) => <span className="tabular-nums whitespace-nowrap">{r.effectiveFrom} → {r.effectiveTo ?? "open"}</span> },
-          { key: "v", header: "Version", align: "right", cell: (r) => <span className="tabular-nums">v{r.version}</span> },
-          { key: "st", header: "Status", cell: (r) => <StatusPill status={r.status} /> },
+          { key: "ver", header: "Version", align: "right", cell: (r) => <span className="tabular-nums">v{r.version}</span> },
+          { key: "st", header: "Status", className: "whitespace-nowrap", cell: (r) => <StatusPill status={r.status} /> },
+          { key: "eff", header: "Effective from", cell: (r) => <span className="text-muted-foreground tabular-nums whitespace-nowrap">{r.effectiveTo ? `${r.effectiveFrom} → ${r.effectiveTo}` : r.effectiveFrom}</span> },
         ]}
       />
 
@@ -300,9 +329,9 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
         open={editing !== null}
         onClose={() => setEditing(null)}
         dismissible={!dirty && !saving}
-        size="xl"
+        size="lg"
         title={editing === "new" ? "Create approval rule" : `Edit ${prev?.id} — creates version ${(prev?.version ?? 0) + 1}`}
-        subtitle={dirty ? "Unsaved changes · rules are effective-dated and versioned." : "Declarative only — custom steps use outbound webhooks."}
+        subtitle={dirty ? "Unsaved changes" : "When a deal matches, who must approve it and in what order."}
         footer={
           <>
             <MissingHint id={ruleHintId} missing={missingRule} />
@@ -338,8 +367,8 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
           </div>
 
           <fieldset className="border-t border-border pt-4">
-            <legend className="text-sm font-semibold">Conditions — all must match</legend>
-            <p className="text-xs text-muted-foreground mb-3">Values can use runtime variables: {RUNTIME_VARIABLES.join(", ")}. "Between" takes two numbers, e.g. 10..20.</p>
+            <legend className="text-base font-semibold">Conditions — all must match</legend>
+            <p className="text-base text-muted-foreground mb-3">Values can use runtime variables: {RUNTIME_VARIABLES.join(", ")}. "Between" takes two numbers, e.g. 10..20.</p>
             {fe("ar-conds") && <p id="ar-conds" tabIndex={-1} className="text-xs text-destructive mb-2">{errs["ar-conds"]}</p>}
             <datalist id="runtime-vars">
               {RUNTIME_VARIABLES.map((v) => (
@@ -348,7 +377,7 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
             </datalist>
             <ul className="space-y-3">
               {form.conditions.map((c, i) => (
-                <li key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_140px_1fr_auto] gap-3 items-end">
+                <li key={i} className="grid grid-cols-1 sm:grid-cols-[1fr_180px_1fr_auto] gap-3 items-end">
                   <Field label={`Attribute ${i + 1}`}>
                     <select className={inputCls} value={c.attribute} onChange={(e) => setCond(i, { attribute: e.target.value as ApprovalCondition["attribute"] })}>
                       {APPROVAL_ATTRIBUTES.map((a) => (
@@ -362,7 +391,7 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
                     <select className={inputCls} value={c.operator} onChange={(e) => setCond(i, { operator: e.target.value as ApprovalCondition["operator"] })}>
                       {APPROVAL_OPERATORS.map((o) => (
                         <option key={o} value={o}>
-                          {OPERATOR_LABEL[o]} ({o})
+                          {OPERATOR_WORDS[o]}
                         </option>
                       ))}
                     </select>
@@ -370,7 +399,9 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
                   <Field label="Value" error={fe(`ar-cv-${i}`)}>
                     <input id={`ar-cv-${i}`} list="runtime-vars" className={inputCls} value={c.value} onChange={(e) => setCond(i, { value: e.target.value })} placeholder={c.attribute === "EXCEPTION_TYPE" ? "e.g. COMPETITIVE_PRESSURE" : "e.g. 20"} />
                   </Field>
-                  <Btn variant="ghost" icon={X} aria-label={`Remove condition ${i + 1}`} onClick={() => setForm({ ...form, conditions: form.conditions.filter((_, j) => j !== i) })} className="mb-0.5 w-10 px-0" />
+                  <button type="button" aria-label={`Remove condition ${i + 1}`} onClick={() => setForm({ ...form, conditions: form.conditions.filter((_, j) => j !== i) })} className="size-10 grid place-items-center rounded-md text-muted-foreground hover:text-destructive hover:bg-danger-soft">
+                    <Trash2 className="size-4" aria-hidden />
+                  </button>
                 </li>
               ))}
             </ul>
@@ -380,19 +411,19 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
           </fieldset>
 
           <fieldset className="border-t border-border pt-4">
-            <legend className="text-sm font-semibold">Approval levels</legend>
-            <p className="text-xs text-muted-foreground mb-3">Up to {MAX_APPROVAL_LEVELS} levels, run in order. A parallel level has several approvers: all, or any one, must approve.</p>
+            <legend className="text-base font-semibold">Approval levels</legend>
+            <p className="text-base text-muted-foreground mb-3">Up to {MAX_APPROVAL_LEVELS} levels, run in order. A parallel level has several approvers: all, or any one, must approve.</p>
             {fe("ar-levels") && <p id="ar-levels" tabIndex={-1} className="text-xs text-destructive mb-2" role="alert">{errs["ar-levels"]}</p>}
             <ol className="space-y-4">
               {form.levels.map((l, i) => (
                 <li key={i} className={`rounded-lg border p-4 ${i >= MAX_APPROVAL_LEVELS ? "border-destructive/50 bg-danger-soft/40" : "border-border"}`}>
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <h4 className="font-semibold text-sm">Level {i + 1}</h4>
+                    <h4 className="text-base leading-[1.2] font-semibold">Level {i + 1}</h4>
                     <Btn variant="ghost" size="sm" icon={Trash2} onClick={() => setForm({ ...form, levels: form.levels.filter((_, j) => j !== i) })}>
                       Remove level
                     </Btn>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
                     <Field label="Mode">
                       <select className={inputCls} value={l.mode} onChange={(e) => setLevel(i, { mode: e.target.value as ApprovalLevel["mode"], parallelRule: e.target.value === "PARALLEL" ? "ALL" : undefined })}>
                         <option value="SEQUENTIAL">Sequential</option>
@@ -418,7 +449,7 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
                   </div>
                   <ul className="mt-3 space-y-2">
                     {l.approvers.map((a, k) => (
-                      <li key={k} className="grid grid-cols-1 sm:grid-cols-[180px_1fr_auto] gap-3 items-end">
+                      <li key={k} className="grid grid-cols-1 sm:grid-cols-[200px_1fr_auto] gap-3 items-end">
                         <Field label={`Approver ${k + 1} type`}>
                           <select
                             className={inputCls}
@@ -438,7 +469,7 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
                         </Field>
                         <Field label="Approver">
                           {a.type === "REQUESTER_MANAGER" ? (
-                            <div className="h-10 px-3 rounded-lg bg-muted flex items-center text-sm">Resolved from the requester's manager link</div>
+                            <div className="min-h-10 px-3 py-2 rounded-lg bg-muted flex items-center text-base">Resolved from the requester's manager link</div>
                           ) : (
                             <select className={inputCls} value={a.value} onChange={(e) => setLevel(i, { approvers: l.approvers.map((x, j) => (j === k ? { ...x, value: e.target.value } : x)) })}>
                               {(a.type === "ROLE" ? TITLES.map((t) => [t, t]) : a.type === "USER" ? APPROVERS.map((u) => [u.id, `${u.name} · ${u.title}`]) : Object.keys(APPROVAL_POOLS).map((p) => [p, p])).map(([v, label]) => (
@@ -449,7 +480,9 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
                             </select>
                           )}
                         </Field>
-                        <Btn variant="ghost" icon={X} aria-label={`Remove approver ${k + 1} from level ${i + 1}`} className="mb-0.5 w-10 px-0" onClick={() => setLevel(i, { approvers: l.approvers.filter((_, j) => j !== k) })} />
+                        <button type="button" aria-label={`Remove approver ${k + 1} from level ${i + 1}`} className="size-10 grid place-items-center rounded-md text-muted-foreground hover:text-destructive hover:bg-danger-soft" onClick={() => setLevel(i, { approvers: l.approvers.filter((_, j) => j !== k) })}>
+                          <Trash2 className="size-4" aria-hidden />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -466,7 +499,7 @@ function RulesTab({ canEdit, onChange }: { canEdit: boolean; onChange: () => voi
           </fieldset>
 
           <fieldset className="border-t border-border pt-4">
-            <legend className="text-sm font-semibold">Effective dates{prev ? " and reason" : ""}</legend>
+            <legend className="text-base font-semibold">Effective dates{prev ? " and reason" : ""}</legend>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 mt-2">
               <Field label="Effective from" required error={fe("ar-from")} hint="A future date schedules this version.">
                 <input id="ar-from" type="date" min={TODAY_ISO} className={inputCls} value={form.effectiveFrom} onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })} />
@@ -527,144 +560,188 @@ function TestTab() {
   };
   const res = useMemo(() => resolveApprovals(ctx), [JSON.stringify(ctx)]); // eslint-disable-line react-hooks/exhaustive-deps
   const set = (k: keyof TestForm) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+  const isException = f.appliesTo === "EXCEPTION";
+  const group = (title: string, children: ReactNode) => (
+    <fieldset className="border-t border-border pt-5 first:border-t-0 first:pt-0">
+      <legend className="text-base font-semibold mb-3 float-left w-full">{title}</legend>
+      <div className="clear-both grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">{children}</div>
+    </fieldset>
+  );
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-6 items-start">
-      <Card title="Deal to test" subtitle="Nothing is saved — this runs the live matrix.">
-        <div className="flex flex-wrap gap-2 mb-4" role="group" aria-label="Examples">
-          {PRESETS.map((p) => (
-            <Btn key={p.label} variant="subtle" size="sm" onClick={() => setF({ ...BLANK_TEST, ...p.f })}>
-              {p.label}
-            </Btn>
-          ))}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-          <Field label="Record type">
-            <select className={inputCls} value={f.appliesTo} onChange={set("appliesTo")}>
-              {APPLIES_TO.map((a) => (
-                <option key={a} value={a}>
-                  {humanize(a)}
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-6 items-start">
+      <Card
+        title="Deal to test"
+        subtitle="Nothing is saved — results update as you type."
+        actions={
+          <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            Load an example
+            <select
+              className={`${inputCls} w-56`}
+              // Derived, so the picked example stays shown until a field is edited away from it.
+              value={String(PRESETS.findIndex((x) => JSON.stringify({ ...BLANK_TEST, ...x.f }) === JSON.stringify(f)))}
+              onChange={(e) => {
+                const ex = PRESETS[Number(e.target.value)];
+                if (ex) setF({ ...BLANK_TEST, ...ex.f });
+              }}
+            >
+              <option value="-1">Choose…</option>
+              {PRESETS.map((x, i) => (
+                <option key={x.label} value={i}>
+                  {x.label}
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="Requester">
-            <select className={inputCls} value={f.requesterId} onChange={set("requesterId")}>
-              {USERS.filter((u) => u.status === "ACTIVE" && u.role !== "CHANNEL_PARTNER").map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} · {u.title}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Discount (%)">
-            <input type="number" inputMode="decimal" className={inputCls} value={f.discountPct} onChange={set("discountPct")} />
-          </Field>
-          <Field label="Margin (%)">
-            <input type="number" inputMode="decimal" className={inputCls} value={f.marginPct} onChange={set("marginPct")} />
-          </Field>
-          <Field label="Margin floor in force (%)" hint="Value of $guardrail.minMarginPct">
-            <input type="number" inputMode="decimal" className={inputCls} value={f.minMarginPct} onChange={set("minMarginPct")} placeholder="e.g. 22" />
-          </Field>
-          <Field label="Deal value (£)">
-            <input type="number" inputMode="decimal" className={inputCls} value={f.dealValue} onChange={set("dealValue")} />
-          </Field>
-          <Field label="Customer">
-            <select className={inputCls} value={f.customerId} onChange={set("customerId")}>
-              <option value="">Any</option>
-              {CUSTOMERS.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.segment})
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Product">
-            <select className={inputCls} value={f.sku} onChange={set("sku")}>
-              <option value="">Any</option>
-              {PRODUCTS.map((p) => (
-                <option key={p.sku} value={p.sku}>
-                  {p.sku} · {p.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Channel">
-            <select className={inputCls} value={f.channel} onChange={set("channel")}>
-              <option value="">Any</option>
-              {CHANNELS.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Region" hint="Defaults to the customer's geography">
-            <select className={inputCls} value={f.region} onChange={set("region")}>
-              <option value="">From customer</option>
-              {REGIONS.map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Exception type">
-            <select className={inputCls} value={f.exceptionType} onChange={set("exceptionType")}>
-              <option value="">None</option>
-              {JUSTIFICATIONS.map((j) => (
-                <option key={j} value={j}>
-                  {humanize(j)}
-                </option>
-              ))}
-            </select>
-          </Field>
+          </label>
+        }
+      >
+        <div className="space-y-5">
+          {group(
+            "Request",
+            <>
+              <Field label="Record type">
+                <select className={inputCls} value={f.appliesTo} onChange={(e) => setF({ ...f, appliesTo: e.target.value as AppliesTo, exceptionType: e.target.value === "EXCEPTION" ? f.exceptionType : "" })}>
+                  {APPLIES_TO.map((a) => (
+                    <option key={a} value={a}>
+                      {humanize(a)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {isException && (
+                <Field label="Exception type">
+                  <select className={inputCls} value={f.exceptionType} onChange={set("exceptionType")}>
+                    <option value="">Choose…</option>
+                    {JUSTIFICATIONS.map((j) => (
+                      <option key={j} value={j}>
+                        {humanize(j)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+              <Field label="Requester">
+                <select className={inputCls} value={f.requesterId} onChange={set("requesterId")}>
+                  {USERS.filter((u) => u.status === "ACTIVE" && u.role !== "CHANNEL_PARTNER").map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name} · {u.title}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </>,
+          )}
+          {group(
+            "Price",
+            <>
+              <Field label="Deal value (£)">
+                <input type="number" inputMode="decimal" className={inputCls} value={f.dealValue} onChange={set("dealValue")} />
+              </Field>
+              <Field label="Discount (%)">
+                <input type="number" inputMode="decimal" className={inputCls} value={f.discountPct} onChange={set("discountPct")} />
+              </Field>
+              <Field label="Margin (%)">
+                <input type="number" inputMode="decimal" className={inputCls} value={f.marginPct} onChange={set("marginPct")} />
+              </Field>
+              <Field label="Margin floor (%)" hint="For rules that check the floor.">
+                <input type="number" inputMode="decimal" className={inputCls} value={f.minMarginPct} onChange={set("minMarginPct")} placeholder="e.g. 22" />
+              </Field>
+            </>,
+          )}
+          {group(
+            "Customer and product",
+            <>
+              <Field label="Customer">
+                <select className={inputCls} value={f.customerId} onChange={set("customerId")}>
+                  <option value="">Any</option>
+                  {CUSTOMERS.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.segment})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Product">
+                <select className={inputCls} value={f.sku} onChange={set("sku")}>
+                  <option value="">Any</option>
+                  {PRODUCTS.map((p) => (
+                    <option key={p.sku} value={p.sku}>
+                      {p.name} ({p.sku})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Channel">
+                <select className={inputCls} value={f.channel} onChange={set("channel")}>
+                  <option value="">Any</option>
+                  {CHANNELS.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Region">
+                <select className={inputCls} value={f.region} onChange={set("region")}>
+                  <option value="">From customer</option>
+                  {REGIONS.map((r) => (
+                    <option key={r}>{r}</option>
+                  ))}
+                </select>
+              </Field>
+            </>,
+          )}
         </div>
       </Card>
-      <Card title="Result" subtitle={res.required ? `${res.steps.length} approval level${res.steps.length === 1 ? "" : "s"}` : "No approval needed"}>
-        <div aria-live="polite">
-          <h3 className="text-sm font-semibold mb-2">Matched rules</h3>
-          {res.matched.length ? (
-            <ul className="space-y-1.5 text-sm mb-5">
-              {res.matched.map((r) => (
-                <li key={`${r.id}-${r.version}`} className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-xs">{r.id}</span>
-                  <span>{r.name}</span>
+
+      {/* Verdict first, then the chain in order, then why — the answer a deal desk user is looking for. */}
+      <section aria-labelledby="test-result-h" aria-live="polite" className="lg:sticky lg:top-4 rounded-xl border border-border bg-card shadow-sm">
+        <div className={`flex items-center gap-3 px-5 py-4 border-b border-border rounded-t-xl ${res.required ? "bg-warning-soft" : "bg-success-soft"}`}>
+          {res.required ? <UserCheck className="size-6 text-warning-foreground shrink-0" aria-hidden /> : <CheckCircle2 className="size-6 text-success shrink-0" aria-hidden />}
+          <div>
+            <h2 id="test-result-h" className="text-lg font-semibold leading-tight">
+              {res.required ? `Needs ${res.steps.length} approval${res.steps.length === 1 ? "" : "s"}` : "Approved automatically"}
+            </h2>
+            <p className="text-sm text-muted-foreground">{res.required ? (res.steps.length > 1 ? "One after another, in this order" : "Before the deal can go ahead") : "No rule matches this deal."}</p>
+          </div>
+        </div>
+        <div className="p-5 space-y-5">
+          {res.steps.length > 0 && (
+            <ol className="relative space-y-4 before:absolute before:left-3 before:top-3 before:bottom-3 before:w-px before:bg-border">
+              {res.steps.map((st) => (
+                <li key={st.level} className="relative flex gap-3">
+                  <span className="relative z-10 size-6 shrink-0 rounded-full bg-navy text-navy-foreground grid place-items-center text-xs font-semibold">{st.level}</span>
+                  <div className="min-w-0 text-sm">
+                    {st.approverIds.map((id) => (
+                      <p key={id}>
+                        <span className="font-medium">{userName(id)}</span> <span className="text-muted-foreground">· {userById(id)?.title}</span>
+                      </p>
+                    ))}
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {st.mode === "PARALLEL" ? (st.parallelRule === "ANY" ? "Any one of them · " : "All of them · ") : ""}within {st.slaHours} h
+                    </p>
+                    {st.fromRules.length > 1 && st.approverIds.length === 1 && <p className="text-xs text-muted-foreground mt-0.5">Needed by {st.fromRules.join(" and ")} — asked once</p>}
+                  </div>
                 </li>
               ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground mb-5">No rule matches — the deal is approved automatically.</p>
-          )}
-          {res.steps.length > 0 && (
-            <>
-              <h3 className="text-sm font-semibold mb-2">Approval tasks</h3>
-              <ol className="space-y-3">
-                {res.steps.map((s) => (
-                  <li key={s.level} className="rounded-lg border border-border p-3 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-semibold">Level {s.level}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {s.mode === "PARALLEL" ? (s.parallelRule === "ANY" ? "Parallel — any one" : "Parallel — all") : "Sequential"} · SLA {s.slaHours} h
-                      </span>
-                    </div>
-                    <ul className="mt-1.5">
-                      {s.approverIds.map((id) => (
-                        <li key={id} className="flex items-center gap-2">
-                          <UserCheck className="size-4 text-muted-foreground" aria-hidden />
-                          {userName(id)} <span className="text-xs text-muted-foreground">{userById(id)?.title}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {s.fromRules.length > 1 && s.approverIds.length === 1 && <p className="mt-1.5"><Flag tone="info">{`${s.fromRules.join(" and ")} both need this approver — merged into one task`}</Flag></p>}
-                    {s.fromRules.length > 0 && !(s.fromRules.length > 1 && s.approverIds.length === 1) && <p className="text-xs text-muted-foreground mt-1">From {s.fromRules.join(", ")}</p>}
-                  </li>
-                ))}
-              </ol>
-            </>
+            </ol>
           )}
           {res.conflicts.map((c, i) => (
-            <InfoBanner key={i} tone="warning" className="mt-4" title="Segregation of duties">
-              {userName(c.requesterId)} can't approve their own request at level {c.level} — {c.action === "BLOCKED" ? "blocked by policy" : c.action === "ESCALATED_FALLBACK" ? `escalated to the fallback approver ${userName(c.replacedWith)}` : `reassigned to ${userName(c.replacedWith)}`}. The conflict is logged.
+            <InfoBanner key={i} tone="warning" title="Segregation of duties">
+              {userName(c.requesterId)} can't approve their own request at step {c.level} — {c.action === "BLOCKED" ? "blocked by policy" : c.action === "ESCALATED_FALLBACK" ? `escalated to the fallback approver ${userName(c.replacedWith)}` : `reassigned to ${userName(c.replacedWith)}`}.
             </InfoBanner>
           ))}
+          {res.matched.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Why</h3>
+              <ul className="space-y-1 text-sm">
+                {res.matched.map((r) => (
+                  <li key={`${r.id}-${r.version}`}>
+                    {r.name} <span className="font-mono text-xs text-muted-foreground">{r.id}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-      </Card>
+      </section>
     </div>
   );
 }
@@ -673,10 +750,10 @@ function TestTab() {
 /* Segregation of duties                                               */
 /* ================================================================== */
 
-const SOD_RULE_HINT: Record<string, string> = {
-  REQUESTER_NE_APPROVER: "The person who submits can't approve.",
-  CREATOR_NE_APPROVER: "The person who created the record can't approve.",
-  APPROVER_CHAIN_DISTINCT: "Nobody approves twice in one chain.",
+const SOD_RULE_LABEL: Record<string, string> = {
+  REQUESTER_NE_APPROVER: "The person who submits can't approve",
+  CREATOR_NE_APPROVER: "The person who created the record can't approve",
+  APPROVER_CHAIN_DISTINCT: "Nobody approves twice in one chain",
 };
 const SOD_APPLIES = ["QUOTE", "EXCEPTION", "PRICE_LIST", "GUARDRAIL", "RULE"];
 
@@ -693,83 +770,111 @@ function SodTab({ canEdit }: { canEdit: boolean }) {
     window.setTimeout(() => {
       Object.assign(SOD_POLICY, structuredClone(p));
       setSaving(false);
-      toast.success("Segregation of duties policy saved", { description: "Enforced on the server for the UI, API and integrations." });
+      toast.success("Segregation of duties policy saved", { description: "Applies to every approval from now on." });
     }, 400);
   };
   return (
     <div className="space-y-6">
       <Card
         title="Policy"
-        subtitle={dirty ? "Unsaved changes" : "Enforced server-side for UI, API and integrations — hiding a button is never the only control."}
+        subtitle="Applies to every approval, whether made in the app or through an integration."
         actions={
           canEdit && (
             <>
-              <Btn variant="subtle" disabled={!dirty || saving} onClick={() => setP(structuredClone(SOD_POLICY))}>
-                Cancel
-              </Btn>
-              <Btn loading={saving} disabled={!dirty} onClick={save}>
+              {dirty && <Tag tone="warning">Unsaved changes</Tag>}
+              {dirty && (
+                <Btn variant="subtle" disabled={saving} onClick={() => setP(structuredClone(SOD_POLICY))}>
+                  Cancel
+                </Btn>
+              )}
+              <Btn loading={saving} disabled={!dirty} onClick={save} title={!dirty ? "No changes to save" : undefined}>
                 Save policy
               </Btn>
             </>
           )
         }
       >
-        <fieldset disabled={!canEdit} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="space-y-5">
-            <div>
-              <p className="text-sm font-semibold mb-2">Rules</p>
-              <ul className="space-y-3">
-                {SOD_RULES.map((r) => (
-                  <li key={r}>
-                    <Toggle checked={p.rules.includes(r)} onChange={(v) => setP({ ...p, rules: v ? [...p.rules, r] : p.rules.filter((x) => x !== r) })} label={humanize(r)} />
-                    <p className="text-xs text-muted-foreground ml-12">{SOD_RULE_HINT[r]}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-sm font-semibold mb-2">Applies to</p>
-              <div className="flex flex-wrap gap-x-4">
-                {SOD_APPLIES.map((a) => (
-                  <label key={a} className="inline-flex items-center gap-2 text-sm h-10">
-                    <input type="checkbox" className="size-4" checked={p.appliesTo.includes(a)} onChange={(e) => setP({ ...p, appliesTo: e.target.checked ? [...p.appliesTo, a] : p.appliesTo.filter((x) => x !== a) })} />
-                    {humanize(a)}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="space-y-4">
-            <p className="text-sm font-semibold">High-risk when</p>
-            <Field label="Deal value above (£)">
-              <input type="number" inputMode="numeric" min={0} className={inputCls} value={p.highRisk.dealValueAbove} onChange={(e) => setP({ ...p, highRisk: { ...p.highRisk, dealValueAbove: Number(e.target.value) } })} />
-            </Field>
-            <Toggle checked={p.highRisk.marginBelowFloor} onChange={(v) => setP({ ...p, highRisk: { ...p.highRisk, marginBelowFloor: v } })} label="Margin is below the floor" />
-            <Toggle checked={p.highRisk.priceListPublication} onChange={(v) => setP({ ...p, highRisk: { ...p.highRisk, priceListPublication: v } })} label="A price list is published" />
-            <Toggle checked={p.highRisk.ruleOrGuardrailChange} onChange={(v) => setP({ ...p, highRisk: { ...p.highRisk, ruleOrGuardrailChange: v } })} label="A rule or guardrail changes" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-              <Field label="On conflict" hint={p.onConflict === "BLOCK" ? "The request can't proceed." : "Moves to the next eligible approver."}>
-                <select className={inputCls} value={p.onConflict} onChange={(e) => setP({ ...p, onConflict: e.target.value as "REASSIGN_NEXT" | "BLOCK" })}>
-                  <option value="REASSIGN_NEXT">Reassign to next approver</option>
-                  <option value="BLOCK">Block</option>
-                </select>
-              </Field>
-              <Field label="Fallback approver" hint="Used when no other approver exists.">
-                <select className={inputCls} value={p.fallbackApproverId} onChange={(e) => setP({ ...p, fallbackApproverId: e.target.value })}>
-                  {APPROVERS.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} · {u.title}
-                    </option>
+        {/* Settings rows: what the setting is on the left, its controls on the right. */}
+        <fieldset disabled={!canEdit} className="divide-y divide-border -my-5">
+          {[
+            {
+              title: "Separation rules",
+              desc: "Who is kept out of an approval chain.",
+              body: (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 items-center">
+                  {SOD_RULES.map((r) => (
+                    <Toggle key={r} checked={p.rules.includes(r)} onChange={(v) => setP({ ...p, rules: v ? [...p.rules, r] : p.rules.filter((x) => x !== r) })} label={SOD_RULE_LABEL[r] ?? humanize(r)} />
                   ))}
-                </select>
-              </Field>
+                </div>
+              ),
+            },
+            {
+              title: "Records covered",
+              desc: "Approvals these rules apply to.",
+              body: (
+                <div className="flex flex-wrap gap-x-5 gap-y-3">
+                  {SOD_APPLIES.map((a) => (
+                    <label key={a} className="inline-flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" className="size-4 accent-[var(--color-brand)]" checked={p.appliesTo.includes(a)} onChange={(e) => setP({ ...p, appliesTo: e.target.checked ? [...p.appliesTo, a] : p.appliesTo.filter((x) => x !== a) })} />
+                      {humanize(a)}
+                    </label>
+                  ))}
+                </div>
+              ),
+            },
+            {
+              title: "High-risk approvals",
+              desc: "Always need someone other than the requester, even with a fallback.",
+              body: (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 items-center">
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    Deal value above £
+                    <input type="number" inputMode="numeric" min={0} className={`${inputCls} w-32`} value={p.highRisk.dealValueAbove} onChange={(e) => setP({ ...p, highRisk: { ...p.highRisk, dealValueAbove: Number(e.target.value) } })} />
+                  </label>
+                  <div className="contents">
+                    <Toggle checked={p.highRisk.marginBelowFloor} onChange={(v) => setP({ ...p, highRisk: { ...p.highRisk, marginBelowFloor: v } })} label="Margin is below the floor" />
+                    <Toggle checked={p.highRisk.priceListPublication} onChange={(v) => setP({ ...p, highRisk: { ...p.highRisk, priceListPublication: v } })} label="A price list is published" />
+                    <Toggle checked={p.highRisk.ruleOrGuardrailChange} onChange={(v) => setP({ ...p, highRisk: { ...p.highRisk, ruleOrGuardrailChange: v } })} label="A rule or guardrail changes" />
+                  </div>
+                </div>
+              ),
+            },
+            {
+              title: "Conflicts",
+              desc: "When the only approver left is someone the rules exclude.",
+              body: (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="What happens" hint={p.onConflict === "BLOCK" ? "The request can't proceed." : "Moves to the next eligible approver."}>
+                    <select className={inputCls} value={p.onConflict} onChange={(e) => setP({ ...p, onConflict: e.target.value as "REASSIGN_NEXT" | "BLOCK" })}>
+                      <option value="REASSIGN_NEXT">Reassign to next approver</option>
+                      <option value="BLOCK">Block</option>
+                    </select>
+                  </Field>
+                  <Field label="Fallback approver" hint="Used when no other approver exists.">
+                    <select className={inputCls} value={p.fallbackApproverId} onChange={(e) => setP({ ...p, fallbackApproverId: e.target.value })}>
+                      {APPROVERS.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} · {u.title}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              ),
+            },
+          ].map((row) => (
+            <div key={row.title} className="grid grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)] md:items-center gap-x-8 gap-y-3 py-4">
+              <div>
+                <p className="text-base font-semibold">{row.title}</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{row.desc}</p>
+              </div>
+              {row.body}
             </div>
-          </div>
+          ))}
         </fieldset>
       </Card>
 
-      <section aria-labelledby="sod-log-h">
-        <h2 id="sod-log-h" className="text-lg font-semibold mb-3">Conflict log</h2>
+      <TableSection title="Conflict log" subtitle="Times the rules stopped someone approving, and what happened next.">
         <DataTable
           caption="Segregation of duties conflicts"
           rows={SOD_LOG}
@@ -777,15 +882,15 @@ function SodTab({ canEdit }: { canEdit: boolean }) {
           empty={<EmptyState title="No conflicts logged" />}
           columns={[
             { key: "at", header: "When", cell: (r) => <span className="tabular-nums whitespace-nowrap">{r.at}</span> },
-            { key: "ref", header: "Record", cell: (r) => <span className="whitespace-nowrap"><Tag>{humanize(r.entity)}</Tag> <span className="font-mono text-xs ml-1">{r.ref}</span></span> },
-            { key: "req", header: "Requester", cell: (r) => userName(r.requesterId) },
-            { key: "act", header: "Outcome", cell: (r) => <StatusPill status={r.action === "DENIED" ? "BLOCKED" : r.action === "REASSIGNED" ? "ACTIVE" : "PENDING"} label={humanize(r.action)} /> },
-            { key: "to", header: "Routed to", cell: (r) => (r.toId ? userName(r.toId) : "—") },
-            { key: "ch", header: "Channel", cell: (r) => <Tag tone="neutral">{r.channel}</Tag> },
+            { key: "ref", header: "Record", cell: (r) => <span className="whitespace-nowrap">{humanize(r.entity)} <span className="font-mono text-sm ml-1">{r.ref}</span></span> },
+            { key: "req", header: "Requester", className: "whitespace-nowrap", cell: (r) => userName(r.requesterId) },
+            { key: "act", header: "Outcome", className: "whitespace-nowrap", cell: (r) => <StatusPill status={r.action === "DENIED" ? "BLOCKED" : r.action === "REASSIGNED" ? "ACTIVE" : "PENDING"} label={humanize(r.action)} /> },
+            { key: "to", header: "Routed to", className: "whitespace-nowrap", cell: (r) => (r.toId ? userName(r.toId) : "—") },
+            { key: "ch", header: "Channel", className: "whitespace-nowrap", cell: (r) => r.channel },
             { key: "note", header: "Detail", className: "min-w-72", cell: (r) => <span className="text-sm">{r.note}</span> },
           ]}
         />
-      </section>
+      </TableSection>
     </div>
   );
 }
@@ -861,8 +966,8 @@ function DelegationsTab({ canEdit, onChange }: { canEdit: boolean; onChange: () 
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-muted-foreground">An approver can hand their decisions to a colleague for a date range. The trail records the delegate as deciding on their behalf.</p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-8 [&>p]:min-w-0 [&>p]:flex-1 [&>:not(p)]:shrink-0 mb-4">
+        <p className="text-base text-muted-foreground">An approver can hand their decisions to a colleague for a date range. The trail records the delegate as deciding on their behalf.</p>
         {canEdit && (
           <Btn
             icon={CalendarClock}
@@ -883,9 +988,9 @@ function DelegationsTab({ canEdit, onChange }: { canEdit: boolean; onChange: () 
         rowKey={(d) => d.id}
         empty={<EmptyState icon={CalendarClock} title="No delegations">Create one when an approver will be away so requests don't stall.</EmptyState>}
         columns={[
-          { key: "id", header: "ID", cell: (d) => <span className="font-mono text-xs">{d.id}</span> },
-          { key: "from", header: "Approver", cell: (d) => <span>{userName(d.fromId)} <span className="text-xs text-muted-foreground">· {userById(d.fromId)?.title}</span></span> },
-          { key: "to", header: "Delegate", cell: (d) => <span>{userName(d.toId)} <span className="text-xs text-muted-foreground">· {userById(d.toId)?.title}</span></span> },
+          { key: "id", header: "ID", cell: (d) => <span className="font-mono text-sm">{d.id}</span> },
+          { key: "from", header: "Approver", className: "whitespace-nowrap", cell: (d) => <span>{userName(d.fromId)} <span className="text-xs text-muted-foreground">· {userById(d.fromId)?.title}</span></span> },
+          { key: "to", header: "Delegate", className: "whitespace-nowrap", cell: (d) => <span>{userName(d.toId)} <span className="text-xs text-muted-foreground">· {userById(d.toId)?.title}</span></span> },
           { key: "dates", header: "Dates", cell: (d) => <span className="tabular-nums whitespace-nowrap">{d.from} → {d.to}</span> },
           { key: "reason", header: "Reason", className: "min-w-52", cell: (d) => d.reason },
           { key: "st", header: "Status", cell: (d) => <StatusPill status={state(d)} /> },

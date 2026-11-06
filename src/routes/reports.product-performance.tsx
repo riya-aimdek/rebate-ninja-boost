@@ -93,6 +93,7 @@ function ProductPerformancePage() {
       title="Product performance"
       subtitle="Products ranked by eligible purchase amount, with quantity sold and attributed rebate."
       onExport={exportCsv}
+      exportCount={filtered.length}
       kpis={[
         { label: "Products", value: `${filtered.length}` },
         { label: "Qty sold", value: totals.qty.toLocaleString("en-GB") },

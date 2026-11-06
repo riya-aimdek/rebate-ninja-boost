@@ -110,12 +110,12 @@ function Lifecycle({ stages, ended }: { stages: Stage[]; ended: Stage[] }) {
   const done = sum(ended);
   return (
     <section aria-labelledby="lifecycle-h" className="bg-card border border-border rounded-xl shadow-sm mb-6">
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1 px-5 sm:px-6 pt-5 pb-4 border-b border-border">
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1 px-5 pt-4 pb-3 border-b border-border">
         <div>
-          <h2 id="lifecycle-h" className="text-lg font-semibold">
+          <h2 id="lifecycle-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold">
             Price list lifecycle
           </h2>
-          <p className="text-sm text-muted-foreground">Every price list, by where it is from draft to end of life.</p>
+          <p className="text-base text-muted-foreground">Every price list, by where it is from draft to end of life.</p>
         </div>
         <p className="text-sm text-muted-foreground tabular-nums">
           <span className="text-2xl font-bold text-foreground align-middle mr-1.5">{inFlow + done}</span>
@@ -123,7 +123,7 @@ function Lifecycle({ stages, ended }: { stages: Stage[]; ended: Stage[] }) {
         </p>
       </header>
 
-      <div className="grid xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] gap-6 xl:gap-0 p-5 sm:p-6">
+      <div className="grid xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)] gap-6 xl:gap-0 p-5">
         <StageGroup title="In progress and live" count={inFlow} stages={stages} flow />
         <StageGroup title="Ended" count={done} stages={ended} className="xl:border-l xl:border-border xl:pl-6 xl:ml-6" />
       </div>
@@ -135,7 +135,7 @@ function StageGroup({ title, count, stages, flow = false, className = "" }: { ti
   const id = `stage-${title.replace(/\W+/g, "-").toLowerCase()}`;
   return (
     <div className={className}>
-      <h3 id={id} className="text-sm font-medium text-muted-foreground mb-3">
+      <h3 id={id} className="text-lg lg:text-xl leading-[1.2] font-medium text-muted-foreground mb-3">
         {title} <span className="tabular-nums">({count})</span>
       </h3>
       <ol
@@ -147,7 +147,7 @@ function StageGroup({ title, count, stages, flow = false, className = "" }: { ti
             <StageCard stage={s} compact={!flow} />
             {flow && i < stages.length - 1 && (
               // Direction of travel between stages, centred in the gap (one row from sm up).
-              <ArrowRight className="hidden sm:block absolute top-1/2 -right-[19px] -translate-y-1/2 size-3.5 text-muted-foreground/60" aria-hidden />
+              <ArrowRight className="hidden sm:block absolute top-1/2 -right-[19px] -translate-y-1/2 size-3.5 text-muted-foreground" aria-hidden />
             )}
           </li>
         ))}
@@ -168,13 +168,13 @@ function StageCard({ stage: s, compact }: { stage: Stage; compact: boolean }) {
       to="/pricing/price-lists"
       search={{ status: s.key } as never}
       aria-label={`${s.label}: ${plural(s.value, "price list")}. View list`}
-      className={`group flex h-full min-h-[88px] flex-col justify-between gap-2 rounded-lg border px-4 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${tone}`}
+      className={`group flex h-full flex-col justify-between gap-1.5 rounded-lg border px-4 py-3 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${tone}`}
     >
-      <span className={`text-sm font-medium leading-tight ${s.primary ? "text-navy-foreground/85" : "text-muted-foreground"}`}>{s.label}</span>
+      <span className={`text-sm font-medium ${s.primary ? "text-navy-foreground/85" : "text-muted-foreground"}`}>{s.label}</span>
       <span className="flex items-end justify-between gap-2">
-        <span className={`font-bold tabular-nums leading-none ${compact ? "text-2xl" : "text-3xl"} ${empty && !s.primary ? "text-muted-foreground" : ""}`}>{s.value}</span>
+        <span className={`font-bold tabular-nums leading-none text-2xl ${empty && !s.primary ? "text-muted-foreground" : ""}`}>{s.value}</span>
         <ChevronRight
-          className={`size-4 shrink-0 transition group-hover:translate-x-0.5 ${s.primary ? "" : "text-brand opacity-60 group-hover:opacity-100"}`}
+          className={`size-4 shrink-0 transition group-hover:translate-x-0.5 ${s.primary ? "" : "text-brand-strong opacity-60 group-hover:opacity-100"}`}
           aria-hidden
         />
       </span>
@@ -233,7 +233,7 @@ function AttentionQueue() {
       tone: "danger",
       count: syncIssues.length,
       title: `${plural(syncIssues.length, "accepted quote")} not yet in the ERP`,
-      detail: syncIssues.map((q) => `${q.id} ${q.sync?.status === "RETRYING" ? "retrying" : `failed (${q.sync?.lastError?.code})`}`).join(", "),
+      detail: syncIssues.map((q) => `${q.id} ${q.sync?.status === "RETRYING" ? "retrying" : "failed"}`).join(", "),
       action: "Fix",
       to: "/pricing/quotes",
       show: can("CPQ") && role !== "CHANNEL_PARTNER" && role !== "EXECUTIVE",
@@ -301,10 +301,10 @@ function AttentionQueue() {
   return (
     <Card title="Needs your attention" subtitle={open.length ? `${plural(totalItems, "item")} across ${plural(open.length, "area")}` : undefined} padded={false}>
       {open.length === 0 ? (
-        <div className="px-6 py-10 flex flex-col items-center text-center gap-2">
+        <div className="px-5 py-10 flex flex-col items-center text-center gap-2">
           <CheckCircle2 className="size-8 text-success" aria-hidden />
           <p className="font-semibold">You’re all caught up</p>
-          <p className="text-sm text-muted-foreground">Nothing is waiting for approval, review or a fix.</p>
+          <p className="text-base text-muted-foreground">Nothing is waiting for approval, review or a fix.</p>
         </div>
       ) : (
         <ul className="divide-y divide-border">
@@ -313,14 +313,14 @@ function AttentionQueue() {
               <Link
                 to={t.to}
                 search={t.search as never}
-                className="group flex items-center gap-4 px-5 sm:px-6 py-4 hover:bg-muted/40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                className="group flex items-center gap-4 px-5 py-4 hover:bg-muted/40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
               >
                 <TaskIcon icon={t.icon} tone={t.tone} />
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold">{t.title}</p>
                   {t.detail && <p className="text-sm text-muted-foreground truncate" title={t.detail}>{t.detail}</p>}
                 </div>
-                <span className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-brand whitespace-nowrap group-hover:underline">
+                <span className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-brand-strong whitespace-nowrap group-hover:underline">
                   {t.action}
                   <ArrowRight className="size-4" aria-hidden />
                 </span>
@@ -363,9 +363,8 @@ function TypeBreakdown() {
   return (
     <Card
       title="Price lists by type"
-      subtitle={`${plural(total, "price list")} across ${plural(rows.length, "type")}`}
       actions={
-        <Link to="/pricing/price-lists" className="hit inline-flex items-center gap-1 text-sm font-semibold text-brand hover:underline whitespace-nowrap">
+        <Link to="/pricing/price-lists" className="hit inline-flex items-center gap-1 text-sm font-semibold text-brand-strong hover:underline whitespace-nowrap">
           View all
           <ArrowRight className="size-4" aria-hidden />
         </Link>
@@ -374,7 +373,7 @@ function TypeBreakdown() {
       className="h-full flex flex-col overflow-hidden [&>div:last-child]:overflow-y-auto [&>div:last-child]:min-h-0"
     >
       {top && (
-        <p className="px-6 pt-3 pb-1.5 text-sm text-muted-foreground">
+        <p className="px-5 pt-3 pb-1.5 text-base text-muted-foreground">
           <span className="font-semibold text-foreground">{humanize(top.type)}</span> is the largest type:{" "}
           <span className="font-semibold text-foreground tabular-nums">
             {top.value} of {total}
@@ -447,7 +446,7 @@ function ExpiryTimeline({ items }: { items: Array<{ list: (typeof PRICE_LISTS)[n
       padded={false}
     >
       {shown.length === 0 ? (
-        <div className="px-6 py-6">
+        <div className="px-5 py-6">
           <EmptyState
             title={sel.length ? `No price lists expire in ${sel.map((r) => RANGES[r].text).join(" or ")}` : `Nothing expires in the next ${WINDOW_DAYS} days`}
             action={
@@ -464,7 +463,7 @@ function ExpiryTimeline({ items }: { items: Array<{ list: (typeof PRICE_LISTS)[n
       ) : (
         <>
           {/* Scale header, aligned with the bar column below (desktop). */}
-          <div className="hidden md:grid grid-cols-[minmax(0,1.4fr)_9rem_minmax(0,1fr)_7rem] gap-6 px-6 pt-4 pb-2 text-xs text-muted-foreground">
+          <div className="hidden md:grid grid-cols-[minmax(0,1.4fr)_9rem_minmax(0,1fr)_7rem] gap-6 px-5 pt-4 pb-2 text-sm text-muted-foreground">
             <span>Price list</span>
             <span>Expires</span>
             <span className="relative" aria-hidden>
@@ -479,14 +478,14 @@ function ExpiryTimeline({ items }: { items: Array<{ list: (typeof PRICE_LISTS)[n
                 <Link
                   to="/pricing/price-lists/$id"
                   params={{ id: list.id }}
-                  className="group grid grid-cols-[1fr_auto] md:grid-cols-[minmax(0,1.4fr)_9rem_minmax(0,1fr)_7rem] items-center gap-x-6 gap-y-2 px-5 sm:px-6 py-4 hover:bg-muted/40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                  className="group grid grid-cols-[1fr_auto] md:grid-cols-[minmax(0,1.4fr)_9rem_minmax(0,1fr)_7rem] items-center gap-x-6 gap-y-2 px-5 py-4 hover:bg-muted/40 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
                 >
                   <span className="min-w-0">
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-brand group-hover:underline">{list.name}</span>
+                      <span className="font-semibold text-brand-strong group-hover:underline">{list.name}</span>
                       <StatusPill status={list.status} />
                     </span>
-                    <span className="block text-xs text-muted-foreground mt-0.5">
+                    <span className="block text-sm text-muted-foreground mt-0.5">
                       {humanize(list.type)} · {list.currency} · v{list.version} · {list.id}
                     </span>
                   </span>

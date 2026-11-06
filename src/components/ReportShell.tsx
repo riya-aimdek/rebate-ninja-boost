@@ -23,6 +23,7 @@ export function ReportShell({
   kpis,
   children,
   onExport,
+  exportCount,
   exportLabel = "Export CSV",
   actions,
   search,
@@ -38,6 +39,8 @@ export function ReportShell({
   kpis?: ReportKpi[];
   children: ReactNode;
   onExport?: () => void;
+  /** Rows the export would contain; 0 disables Export (the table below already says why). */
+  exportCount?: number;
   exportLabel?: string;
   /** Extra header actions, shown left of Export. */
   actions?: ReactNode;
@@ -53,7 +56,7 @@ export function ReportShell({
         {asOf !== false && <DataAsOf at={asOf} />}
         {actions}
         {onExport && (
-          <Btn variant="outline" icon={Download} onClick={onExport}>
+          <Btn variant="outline" icon={Download} onClick={onExport} disabled={exportCount === 0} title={exportCount === 0 ? "Nothing to export: no rows match" : undefined}>
             {exportLabel}
           </Btn>
         )}
@@ -79,7 +82,8 @@ export function ReportShell({
 
 /** Report filter bar. Pass `onSubmit` on run-style reports so Enter in any field runs the report (Run button is `type="submit"`). */
 export function FilterBar({ children, onSubmit }: { children: ReactNode; onSubmit?: () => void }) {
-  const body = <div className="flex flex-wrap items-start gap-4">{children}</div>;
+  // Equal-width filter columns that wrap as whole columns; anything that is not a Field (pills, result count, buttons) spans the row.
+  const body = <div className="grid gap-4 items-start grid-cols-[repeat(auto-fill,minmax(12rem,1fr))] [&>*:not(.rf-field)]:col-span-full">{children}</div>;
   return (
     <section aria-label="Filters" className="bg-card border border-border rounded-xl p-5 mb-6 shadow-sm">
       {onSubmit ? (
@@ -126,7 +130,7 @@ export function Field({
       })
     : children;
   return (
-    <div className="flex flex-col gap-1.5 min-w-[160px] flex-1 basis-40 sm:max-w-[15rem]">
+    <div className="rf-field flex flex-col gap-1.5 min-w-0">
       <label htmlFor={only ? controlId : undefined} className="text-sm font-medium text-foreground">
         {label}
         {required && (
@@ -174,7 +178,9 @@ export function FilterResult({
   return (
     <FilterBarEnd>
       <span role="status" className="text-sm text-muted-foreground tabular-nums">
-        Showing {shown.toLocaleString("en-GB")} of {total.toLocaleString("en-GB")} {noun}
+        {shown === total
+          ? `${total.toLocaleString("en-GB")} ${noun}`
+          : `Showing ${shown.toLocaleString("en-GB")} of ${total.toLocaleString("en-GB")} ${noun}`}
       </span>
       <Btn variant="subtle" icon={X} onClick={onClear} disabled={activeCount === 0} title={activeCount === 0 ? "No filters applied" : undefined}>
         Clear filters{activeCount > 0 && ` (${activeCount})`}
@@ -184,7 +190,7 @@ export function FilterResult({
 }
 
 export const inputCls =
-  "w-full h-10 px-3 rounded-lg border border-input bg-card text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
+  "w-full h-10 px-3 rounded-lg border border-input bg-card text-base focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand transition aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-destructive/20";
 
 /** Report figures are in the source data's currency (USD). Deterministic en-GB grouping. */
 export const usd = (n: number, digits = 2) => money(n, "USD", digits);

@@ -370,7 +370,7 @@ function Page() {
   const rows = useMemo(() => formulas.filter((f) => !search || `${f.id} ${f.name}`.toLowerCase().includes(search.toLowerCase())), [formulas, search]);
 
   return (
-    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segmentation" }, { label: "Formula pricing" }]}>
+    <PricingLayout crumbs={[{ label: "Pricing", to: "/pricing" }, { label: "Strategy & segments" }, { label: "Formula pricing" }]}>
       <ListHeader
         title="Formula pricing"
         count={rows.length}
@@ -408,7 +408,7 @@ function Page() {
                 <StatusPill status={f.status} />
               </div>
               <code className="block mt-2 text-xs bg-muted rounded px-2 py-1.5 truncate">{f.expression}</code>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <div className="mt-2 flex flex-wrap gap-2 text-sm text-muted-foreground">
                 <span>{humanize(f.trigger)}</span>·<span>{f.affectedLines} lines</span>·<span>{f.testsPassed} tests passed</span>
               </div>
             </button>
@@ -418,7 +418,7 @@ function Page() {
         <form onSubmit={save} noValidate className="space-y-6 min-w-0">
           <ErrorBanner error={error} onClose={() => setError(null)} />
           {issues.length > 0 && (
-            <div role="alert" className="rounded-lg border border-destructive/40 bg-danger-soft px-4 py-3 text-sm">
+            <div role="alert" className="rounded-lg border border-destructive/40 bg-danger-soft px-4 py-3 text-base">
               <div className="font-semibold text-destructive mb-1">Activation blocked — fix {issues.length} validation {issues.length === 1 ? "issue" : "issues"}</div>
               <ul className="list-disc pl-5 space-y-0.5">
                 {issues.map((i) => (
@@ -456,12 +456,12 @@ function Page() {
             }
           >
             {!canActivate && draft.status !== "ACTIVE" && (
-              <p id="formula-activate-why" className="text-xs text-muted-foreground -mt-2 mb-4">
+              <p id="formula-activate-why" className="text-base text-muted-foreground -mt-2 mb-4">
                 Run at least one passing test in the test panel before activating.
               </p>
             )}
             {draft.status === "ACTIVE" && logicChanged && draft.testsPassed === 0 && (
-              <p className="text-xs text-muted-foreground -mt-2 mb-4">This formula is active. Run a passing test before saving changes to its expression or variables.</p>
+              <p className="text-base text-muted-foreground -mt-2 mb-4">This formula is active. Run a passing test before saving changes to its expression or variables.</p>
             )}
             <p className="text-xs text-muted-foreground mb-4">
               <span className="text-destructive" aria-hidden>*</span> Required
@@ -492,7 +492,6 @@ function Page() {
                   value={draft.expression}
                   onChange={(e) => setDraft({ ...draft, expression: e.target.value, testsPassed: 0 })}
                   onBlur={() => setExprTouched(true)}
-                  placeholder={EXAMPLE}
                 />
               </Field>
               {draft.expression.trim() && !syntaxError && (
@@ -511,7 +510,7 @@ function Page() {
                         key={n}
                         type="button"
                         onClick={() => addVar(n)}
-                        className="hit inline-flex items-center gap-1 rounded border border-warning/60 bg-warning-soft px-1.5 py-0.5 font-mono text-warning-foreground hover:border-warning"
+                        className="hit inline-flex items-center gap-1 rounded border border-warning/60 bg-warning-soft px-1.5 py-0.5 font-mono text-sm text-warning-foreground hover:border-warning"
                         title={`${n} is not defined — add it as a variable`}
                       >
                         <Plus className="size-3" aria-hidden /> {n}
@@ -538,7 +537,7 @@ function Page() {
                 aria-expanded={advancedOpen || limitsInvalid}
                 aria-controls="formula-advanced"
                 onClick={() => setAdvancedOpen((o) => !o)}
-                className="inline-flex items-center gap-2 min-h-10 text-sm font-semibold text-foreground hover:text-brand"
+                className="inline-flex items-center gap-2 min-h-10 text-sm font-semibold text-foreground hover:text-brand-strong"
               >
                 <ChevronDown className={`size-4 transition ${advancedOpen || limitsInvalid ? "rotate-180" : ""}`} aria-hidden />
                 Advanced: rounding and price limits
@@ -588,7 +587,7 @@ function Page() {
                 <tbody className="divide-y divide-border">
                   {draft.variables.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                      <td colSpan={5} className="px-4 py-8 text-center text-base text-muted-foreground">
                         No variables yet — add one for each name used in the expression.
                       </td>
                     </tr>
@@ -693,7 +692,7 @@ function Page() {
                 </tbody>
               </table>
             </div>
-            <div className="px-6 py-4 border-t border-border">
+            <div className="px-5 py-4 border-t border-border">
               <Btn variant="outline" size="sm" icon={Plus} onClick={() => addVar()}>
                 Add variable
               </Btn>
@@ -706,7 +705,7 @@ function Page() {
                 <FlaskConical className="size-5 text-brand" aria-hidden /> Test panel
               </span>
             }
-            subtitle="Evaluate the formula on sample inputs. The formula can't be activated until at least one test has passed."
+            subtitle="Evaluate the formula on sample inputs."
           >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div>
@@ -722,7 +721,7 @@ function Page() {
                       </Field>
                     ),
                   )}
-                  {draft.variables.length === 0 && <p className="text-sm text-muted-foreground">Add variables to enter sample inputs.</p>}
+                  {draft.variables.length === 0 && <p className="text-base text-muted-foreground">Add variables to enter sample inputs.</p>}
                 </div>
                 <Btn
                   variant="outline"
@@ -759,10 +758,10 @@ function Page() {
                 )}
                 {/* Any edit to the expression or variables resets testsPassed, so an earlier result no longer applies. */}
                 {test?.ok && draft.testsPassed === 0 && (
-                  <p className="text-sm text-muted-foreground">The expression or variables changed since the last test. Run the test again to see the new result.</p>
+                  <p className="text-base text-muted-foreground">The expression or variables changed since the last test. Run the test again to see the new result.</p>
                 )}
                 {test && !test.ok && (
-                  <div className="text-sm text-destructive">
+                  <div className="text-base text-destructive">
                     <p className="font-semibold">Test failed</p>
                     <p className="text-foreground mt-1">{test.error ?? "The formula couldn't be evaluated."} Check the sample inputs and variable names, then run the test again.</p>
                   </div>
@@ -789,7 +788,7 @@ function Page() {
                     </div>
                     <div className="flex items-center justify-between border-t border-border pt-2 text-base font-bold">
                       <span>Calculated price</span>
-                      <span className="text-brand tabular-nums">
+                      <span className="text-brand-strong tabular-nums">
                         {money(test.final, draft.currency)} <span className="text-xs text-muted-foreground font-normal">{draft.currency}</span>
                       </span>
                     </div>
@@ -805,12 +804,12 @@ function Page() {
           </Card>
 
           <section aria-labelledby="formula-log-h">
-            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 id="formula-log-h" className="text-lg font-semibold tracking-tight">
+            <div className="mb-3 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-6 gap-y-2">
+              <div className="min-w-0">
+                <h2 id="formula-log-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
                   Recalculation log
                 </h2>
-                <p className="text-sm text-muted-foreground mt-0.5">When an input changes, affected prices are recalculated within guardrails and approval rules and logged with the triggering input.</p>
+                <p className="text-base text-muted-foreground mt-0.5">When an input changes, affected prices are recalculated within guardrails and approval rules and logged with the triggering input.</p>
               </div>
               {draft.status === "ACTIVE" && (
                 <Btn variant="outline" size="sm" icon={RefreshCw} onClick={recalculate} loading={recalculating} disabled={dirty || !!busy} title={dirty ? "Save your changes before recalculating" : undefined}>
@@ -840,7 +839,7 @@ function Page() {
                   },
                 },
                 { key: "lines", header: "Lines affected", align: "right", cell: (r) => <span className="tabular-nums">{r.linesAffected}</span> },
-                { key: "sample", header: "Example", cell: (r) => <span className="font-mono text-xs whitespace-nowrap">{r.sample}</span> },
+                { key: "sample", header: "Example", cell: (r) => <span className="font-mono text-sm whitespace-nowrap">{r.sample}</span> },
                 { key: "status", header: "Status", cell: (r) => <StatusPill status={r.status} /> },
               ]}
             />

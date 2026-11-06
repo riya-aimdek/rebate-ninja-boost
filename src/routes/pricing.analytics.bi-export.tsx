@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { Copy, Download, FileSpreadsheet, PlugZap } from "lucide-react";
 import { toast } from "sonner";
-import { Btn, Card, DataTable, DetailTitle, ErrorBanner, Field, Flag, InfoBanner, PricingLayout, Tag, humanize, inputCls, notifySuccess, type ApiError } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, DetailTitle, ErrorBanner, Field, Flag, InfoBanner, PricingLayout, Tag, humanize, inputCls, notifySuccess, type ApiError, TableSection } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
 import { Freshness } from "@/components/pricing/analytics-ui";
 import { EXCEPTIONS, NOW, QUOTES, priceQuote, shortHash, type Transaction } from "@/lib/pricing/deals";
@@ -163,7 +163,7 @@ function Page() {
             </Field>
             <dl className="grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
               <dt className="text-muted-foreground">Service account</dt>
-              <dd className="font-mono text-xs">svc-bi-export</dd>
+              <dd className="font-mono text-sm">svc-bi-export</dd>
               <dt className="text-muted-foreground">Scopes</dt>
               <dd className="flex flex-wrap gap-1">{DATASETS.map((d) => <Tag key={d}>{d}</Tag>)}</dd>
               <dt className="text-muted-foreground">Rate limit</dt>
@@ -181,7 +181,7 @@ function Page() {
                 </Btn>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">Only pricing and IT administrators can change the connection.</p>
+              <p className="text-base text-muted-foreground">Only pricing and IT administrators can change the connection.</p>
             )}
           </div>
         </Card>
@@ -210,11 +210,11 @@ function Page() {
                 </select>
               </Field>
             </div>
-            <p className="mt-4 text-sm" role="status">
+            <p className="mt-4 text-base" role="status">
               <strong className="tabular-nums">{changed.length.toLocaleString("en-GB")}</strong> of {all.length.toLocaleString("en-GB")} rows {sinceIso ? "changed since then" : "in the dataset"}.
             </p>
             {dropped.length > 0 && (
-              <p className="mt-2 text-sm">
+              <p className="mt-2 text-base">
                 <Flag tone="info">Field-level security</Flag> <span className="text-muted-foreground">Removed for your role: {dropped.map(humanize).join(", ")}.</span>
               </p>
             )}
@@ -225,7 +225,7 @@ function Page() {
                   Copy URL
                 </Btn>
               </div>
-              <pre className="rounded-lg bg-muted px-4 py-3 text-xs overflow-x-auto overflow-y-hidden whitespace-pre" tabIndex={0} aria-label="API request and response headers">
+              <pre className="rounded-lg bg-muted px-4 py-3 text-sm overflow-x-auto overflow-y-hidden whitespace-pre" tabIndex={0} aria-label="API request and response headers">
                 {request}
               </pre>
             </div>
@@ -238,7 +238,7 @@ function Page() {
         </Card>
       </div>
 
-      <Card title="Export log" subtitle="Every export — by a person or a service — is recorded here and in the audit log." padded={false}>
+      <TableSection title="Export log" subtitle="Every export — by a person or a service — is recorded here and in the audit log.">
         <DataTable<ExportEntry>
           caption="Export log"
           rows={log}
@@ -247,15 +247,15 @@ function Page() {
           empty={<span className="inline-flex items-center gap-2"><FileSpreadsheet className="size-4" aria-hidden /> No exports yet.</span>}
           columns={[
             { key: "at", header: "When", cell: (e) => <span className="tabular-nums whitespace-nowrap">{e.at}</span> },
-            { key: "u", header: "User or service", cell: (e) => (e.userId.startsWith("svc-") ? <span className="font-mono text-xs">{e.userId}</span> : userName(e.userId)) },
-            { key: "d", header: "Dataset", cell: (e) => <span className="font-mono text-xs">{e.dataset}</span> },
-            { key: "f", header: "Filters", cell: (e) => <span className="text-xs break-all">{e.filters}</span> },
-            { key: "fmt", header: "Format", cell: (e) => <Tag>{e.format}</Tag> },
+            { key: "u", header: "User or service", cell: (e) => (e.userId.startsWith("svc-") ? <span className="font-mono text-sm">{e.userId}</span> : userName(e.userId)) },
+            { key: "d", header: "Dataset", cell: (e) => <span className="font-mono text-sm">{e.dataset}</span> },
+            { key: "f", header: "Filters", cell: (e) => <span className="text-sm break-all">{e.filters}</span> },
+            { key: "fmt", header: "Format", className: "whitespace-nowrap", cell: (e) => e.format },
             { key: "r", header: "Rows", align: "right", cell: (e) => <span className="tabular-nums">{e.rows.toLocaleString("en-GB")}</span> },
-            { key: "c", header: "Channel", cell: (e) => <Tag tone={e.channel === "API" ? "info" : "neutral"}>{e.channel}</Tag> },
+            { key: "c", header: "Channel", className: "whitespace-nowrap", cell: (e) => e.channel },
           ]}
         />
-      </Card>
+      </TableSection>
     </PricingLayout>
   );
 }

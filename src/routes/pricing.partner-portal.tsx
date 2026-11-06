@@ -48,6 +48,8 @@ function Page() {
   );
 }
 
+const SELLABLE = PRODUCTS.filter((p) => p.lifecycleStatus !== "BLOCKED");
+
 const plusDays = (iso: string, d: number) => {
   const x = new Date(`${iso}T00:00:00Z`);
   x.setUTCDate(x.getUTCDate() + d);
@@ -78,50 +80,64 @@ function Portal() {
   const partner = customerById(pid);
   const tier = PARTNER_TIERS[pid];
   const [version, setVersion] = useState(0);
-  const quotes = useMemo(() => QUOTES.filter((q) => q.partnerId === pid).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [pid, version]);
+  // Price each quote once per list change; the table reads total and discount from here.
+  const quotes = useMemo(
+    () =>
+      QUOTES.filter((q) => q.partnerId === pid)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .map((q) => ({ q, totals: priceQuote(q).totals })),
+    [pid, version],
+  );
   const [open, setOpen] = useState<Quote | null>(null);
   const [apiOpen, setApiOpen] = useState(false);
-  const [lookup, setLookup] = useState("");
-  const [lookupErr, setLookupErr] = useState<ApiError | null>(null);
+  const [search, setSearch] = useState("");
   const [requesting, setRequesting] = useState(false);
+  // New key per opening, so a cancelled request never comes back half-filled.
+  const [requestKey, setRequestKey] = useState(0);
+  const startRequest = () => (setRequestKey((k) => k + 1), setRequesting(true));
 
-  const openById = (e: FormEvent) => {
-    e.preventDefault();
-    const id = lookup.trim().toUpperCase();
-    const q = QUOTES.find((x) => x.id === id);
-    // Same answer whether the quote is another partner's or doesn't exist, so IDs can't be probed (US-CQ-05 AC#4).
-    if (!q || q.partnerId !== pid) {
-      setLookupErr({ errorClass: "AUTHORIZATION", code: "PERMISSION_DENIED", message: `You don't have access to quote ${id || "—"}, or it doesn't exist. Partners can only open their own quotes.`, correlationId: `c-${id.toLowerCase().replace(/\W/g, "")}7f` });
-      return;
-    }
-    setLookupErr(null);
-    setOpen(q);
-  };
+  // Search only ever looks inside this partner's own quotes, so another partner's quote ID gets the same
+  // "no match" as one that doesn't exist and IDs can't be probed (US-CQ-05 AC#4).
+  const ql = search.trim().toLowerCase();
+  const rows = ql ? quotes.filter(({ q }) => q.id.toLowerCase().includes(ql) || q.name.toLowerCase().includes(ql)) : quotes;
 
   const rebates = PARTNER_REBATES[pid] ?? [];
-  const awaiting = quotes.filter((q) => effectiveStatus(q) === "PENDING_APPROVAL").length;
+  const awaiting = quotes.filter(({ q }) => effectiveStatus(q) === "PENDING_APPROVAL").length;
+  const requestBlocker = !isPartner ? "Only partner users can request quotes" : !tier ? "No partner tier is configured yet. Ask your channel manager to set one up." : undefined;
 
   return (
     <>
       <ListHeader
         title="Partner portal"
         eyebrow={partner?.name}
-        count={quotes.length}
+        count={rows.length}
         noun="quote"
-        subtitle={tier ? `${tier.tier} partner · up to ${tier.discountLimitPct}% discount without approval` : "No partner tier configured"}
+        search={search}
+        onSearch={setSearch}
+        subtitle={
+          <>
+            {tier ? `${tier.tier} partner` : "No partner tier configured"}
+            {isPartner && (
+              <span className="inline-flex items-center gap-1 ml-2">
+                <ShieldCheck className="size-4 text-success" aria-hidden /> Signed in with single sign-on
+              </span>
+            )}
+          </>
+        }
         actions={
-          <Btn icon={Plus} onClick={() => setRequesting(true)} disabled={!isPartner} title={isPartner ? undefined : "Only partner users can request quotes"}>
+          <Btn icon={Plus} onClick={startRequest} disabled={!!requestBlocker} title={requestBlocker}>
             Request quote
           </Btn>
         }
       />
-      {isPartner ? (
-        <InfoBanner tone="success" title="Signed in with corporate single sign-on and MFA">
-          {user.name} · federated identity from {user.email.split("@")[1]}. You see only {partner?.name}'s quotes and rebate status.
+      {isPartner && !tier && (
+        <InfoBanner tone="warning" title="Quote requests aren't available yet">
+          {requestBlocker}
         </InfoBanner>
-      ) : (
+      )}
+      {!isPartner && (
         <InfoBanner title="Previewing the partner view" action={
-          <select className={`${inputCls} w-auto`} aria-label="Partner to preview" value={previewId} onChange={(e) => (setPreviewId(e.target.value), setOpen(null))}>
+          <select className={`${inputCls} w-auto`} aria-label="Partner to preview" value={previewId} onChange={(e) => (setPreviewId(e.target.value), setOpen(null), setSearch(""))}>
             {Object.keys(PARTNER_TIERS).map((id) => (
               <option key={id} value={id}>
                 {customerById(id)?.name}
@@ -134,40 +150,37 @@ function Portal() {
       )}
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 mb-6">
-        <KpiTile label="Open quotes" value={quotes.filter((q) => ["DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT"].includes(effectiveStatus(q))).length} />
+        <KpiTile label="Open quotes" value={quotes.filter(({ q }) => ["DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT"].includes(effectiveStatus(q))).length} />
         <KpiTile label="Awaiting approval" value={awaiting} tone={awaiting ? "warning" : "success"} />
         <KpiTile label="Discount limit" value={`${tier?.discountLimitPct ?? 0}%`} tone="navy" hint="Above this, quotes route to approval and need a justification." />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
-          <form onSubmit={openById} className="flex flex-wrap items-end gap-3">
-            <Field label="Open quote by ID" className="flex-1 min-w-48">
-              <input className={inputCls} value={lookup} onChange={(e) => setLookup(e.target.value)} placeholder="e.g. Q-10234" />
-            </Field>
-            <Btn type="submit" variant="outline" icon={Search}>
-              Open
-            </Btn>
-          </form>
-          <ErrorBanner error={lookupErr} onClose={() => setLookupErr(null)} note={false} />
-          <DataTable<Quote>
+        <div className="lg:col-span-2">
+          <DataTable<(typeof quotes)[number]>
             caption="Your quotes"
-            rows={quotes}
-            rowKey={(q) => q.id}
-            onRowClick={setOpen}
+            rows={rows}
+            rowKey={({ q }) => q.id}
+            onRowClick={({ q }) => setOpen(q)}
             selectedKey={open?.id ?? null}
             empty={
-              <EmptyState icon={FileText} title="No quotes yet" action={isPartner ? <Btn icon={Plus} onClick={() => setRequesting(true)}>Request quote</Btn> : undefined}>
-                Request a quote to get your partner price. Inside your discount limit it's approved straight away.
-              </EmptyState>
+              ql ? (
+                <EmptyState icon={Search} title={`No quotes match “${search.trim()}”`} action={<Btn variant="subtle" onClick={() => setSearch("")}>Clear search</Btn>}>
+                  Search covers your own quotes by ID or name.
+                </EmptyState>
+              ) : (
+                <EmptyState icon={FileText} title="No quotes yet">
+                  Request a quote to get your partner price.
+                </EmptyState>
+              )
             }
             columns={[
-              { key: "id", header: "Quote", cell: (q) => <span className="font-mono text-xs">{q.id}</span> },
-              { key: "n", header: "Name", className: "min-w-48", cell: (q) => q.name },
-              { key: "v", header: "Total", align: "right", cell: (q) => money(priceQuote(q).totals.net) },
-              { key: "d", header: "Discount", align: "right", cell: (q) => pct(-priceQuote(q).totals.discountPct) },
-              { key: "s", header: "Status", cell: (q) => <StatusPill status={effectiveStatus(q)} /> },
-              { key: "u", header: "Updated", cell: (q) => <span className="tabular-nums whitespace-nowrap">{q.updatedAt}</span> },
+              { key: "id", header: "Quote", cell: ({ q }) => <span className="font-mono text-sm whitespace-nowrap">{q.id}</span> },
+              { key: "n", header: "Name", className: "min-w-48", cell: ({ q }) => q.name },
+              { key: "v", header: "Total", align: "right", cell: ({ totals }) => money(totals.net) },
+              { key: "d", header: "Discount", align: "right", cell: ({ totals }) => pct(-totals.discountPct) },
+              { key: "s", header: "Status", cell: ({ q }) => <StatusPill status={effectiveStatus(q)} /> },
+              { key: "u", header: "Updated", cell: ({ q }) => <span className="tabular-nums whitespace-nowrap">{q.updatedAt}</span> },
             ]}
           />
         </div>
@@ -175,26 +188,28 @@ function Portal() {
           {rebates.length === 0 ? (
             <EmptyState icon={Handshake} title="No rebate programs">Ask your channel manager about available programs.</EmptyState>
           ) : (
-            <ul className="space-y-5">
-              {rebates.map((r) => (
-                <li key={r.programId}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-medium">{r.name}</span>
-                    <Flag tone={r.status === "ACHIEVED" ? "success" : r.status === "AT_RISK" ? "warning" : "info"}>{humanize(r.status)}</Flag>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {r.programId} · {r.period}
-                  </p>
-                  <div className="mt-2">
-                    <ProgressBar value={(r.achieved / r.target) * 100} tone={r.status === "AT_RISK" ? "warning" : "success"} label={`${r.name} progress`} />
-                  </div>
-                  <p className="text-xs mt-1.5 tabular-nums">
-                    {money(r.achieved, "GBP", 0)} of {money(r.target, "GBP", 0)} · accrued {money(r.accrued, "GBP", 0)}
-                  </p>
-                </li>
-              ))}
-              <li className="text-xs text-muted-foreground">As of {rebates[0].asOf}</li>
-            </ul>
+            <>
+              <ul className="space-y-5">
+                {rebates.map((r) => (
+                  <li key={r.programId}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-medium">{r.name}</span>
+                      <Flag tone={r.status === "ACHIEVED" ? "success" : r.status === "AT_RISK" ? "warning" : "info"}>{humanize(r.status)}</Flag>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {r.programId} · {r.period}
+                    </p>
+                    <div className="mt-2">
+                      <ProgressBar value={(r.achieved / r.target) * 100} tone={r.status === "AT_RISK" ? "warning" : "success"} label={`${r.name} progress`} />
+                    </div>
+                    <p className="text-sm mt-1.5 tabular-nums">
+                      {money(r.achieved, "GBP", 0)} of {money(r.target, "GBP", 0)} · accrued {money(r.accrued, "GBP", 0)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted-foreground mt-5">As of {rebates[0].asOf}</p>
+            </>
           )}
         </Card>
       </div>
@@ -207,9 +222,12 @@ function Portal() {
         subtitle={open && <StatusPill status={effectiveStatus(open)} />}
         footer={
           <>
-            <Btn variant="subtle" icon={Code2} onClick={() => setApiOpen((v) => !v)} aria-expanded={apiOpen}>
-              {apiOpen ? "Hide API response" : "View API response"}
-            </Btn>
+            {/* Staff-only proof of field-level security; partners never need raw JSON. */}
+            {!isPartner && (
+              <Btn variant="subtle" icon={Code2} onClick={() => setApiOpen((v) => !v)} aria-expanded={apiOpen}>
+                {apiOpen ? "Hide API response" : "View API response"}
+              </Btn>
+            )}
             <Btn variant="subtle" onClick={() => setOpen(null)}>
               Close
             </Btn>
@@ -247,11 +265,11 @@ function Portal() {
                     { key: "d", header: "Discount", align: "right", cell: (l) => pct(-l.discountPct) },
                   ]}
                 />
-                {apiOpen && (
+                {apiOpen && !isPartner && (
                   <div>
-                    <h3 className="text-sm font-semibold mb-2">GET /partner/quotes/{v.id}</h3>
-                    <pre className="text-xs bg-muted rounded-lg p-4 overflow-x-auto overflow-y-hidden">{JSON.stringify(v, null, 2)}</pre>
-                    <p className="text-xs text-muted-foreground mt-2">No cost, margin, internal comments, competitor data or other partners' prices — removed by field-level security on the server.</p>
+                    <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2 break-words">GET /partner/quotes/{v.id}</h3>
+                    <pre className="text-sm bg-muted rounded-lg p-4 overflow-x-auto overflow-y-hidden">{JSON.stringify(v, null, 2)}</pre>
+                    <p className="text-base text-muted-foreground mt-2">No cost, margin, internal comments, competitor data or other partners' prices — removed by field-level security on the server.</p>
                   </div>
                 )}
               </>
@@ -261,6 +279,7 @@ function Portal() {
 
       {isPartner && tier && (
         <RequestModal
+          key={requestKey}
           open={requesting}
           onClose={() => setRequesting(false)}
           partnerId={pid}
@@ -278,8 +297,8 @@ function Portal() {
 
 function RequestModal({ open, onClose, partnerId, limit, onDone }: { open: boolean; onClose: () => void; partnerId: string; limit: number; onDone: (q: Quote) => void }) {
   const { user } = useSession();
-  const [sku, setSku] = useState("LT-PNL-60");
-  const [qty, setQty] = useState("100");
+  const [sku, setSku] = useState("");
+  const [qty, setQty] = useState("");
   const [discount, setDiscount] = useState("");
   const [delivery, setDelivery] = useState("");
   const [justification, setJustification] = useState("");
@@ -288,18 +307,21 @@ function RequestModal({ open, onClose, partnerId, limit, onDone }: { open: boole
   const [error, setError] = useState<ApiError | null>(null);
   const d = discount.trim() === "" ? undefined : Number(discount);
   const over = d !== undefined && d > limit;
-  const preview = priceLine({ customerId: partnerId, channel: "Partner", pricingDate: TODAY_ISO }, { sku, qty: Number(qty), requestedDiscountPct: d });
+  const product = SELLABLE.find((p) => p.sku === sku);
+  // Price only once a real product and quantity are in; until then the preview asks for them.
+  const preview = product && Number(qty) > 0 ? priceLine({ customerId: partnerId, channel: "Partner", pricingDate: TODAY_ISO }, { sku, qty: Number(qty), requestedDiscountPct: d }) : null;
   const hintId = useId();
   // Justification becomes required once the discount is above the partner's limit.
   const missing = missingFields([
-    ["Product", sku],
-    ["Quantity", qty],
+    ["Product", product?.sku],
+    ["Quantity", Number(qty) > 0 ? qty : ""],
     ["Justification", justification, over],
   ]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setTried(true);
+    if (!preview) return;
     if (!preview.ok) return setError({ errorClass: preview.error.errorClass === "CONFLICT" ? "CONFLICT" : "VALIDATION", code: preview.error.code, message: preview.error.message, field: preview.error.field });
     if (d !== undefined && (Number.isNaN(d) || d < 0 || d > 100)) return setError({ errorClass: "VALIDATION", code: "VALIDATION_REQUIRED", message: "Enter a discount between 0 and 100%.", field: "requestedDiscount" });
     if (over && !justification.trim()) return setError({ errorClass: "VALIDATION", code: "VALIDATION_REQUIRED", message: `${d}% is above your ${limit}% limit, so a justification is required.`, field: "justification" });
@@ -383,19 +405,27 @@ function RequestModal({ open, onClose, partnerId, limit, onDone }: { open: boole
       <form id="partner-quote" onSubmit={submit} noValidate className="space-y-4">
         <ErrorBanner error={error} onClose={() => setError(null)} />
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Product" required>
-            <select className={inputCls} value={sku} onChange={(e) => setSku(e.target.value)}>
-              {PRODUCTS.filter((p) => p.lifecycleStatus !== "BLOCKED").map((p) => (
+          <Field label="Product" required hint={product?.name} error={sku && !product ? "Pick a product from the list." : undefined}>
+            <input
+              className={inputCls}
+              list="partner-skus"
+              value={sku}
+              onChange={(e) => setSku(e.target.value.trim().toUpperCase())}
+              placeholder="Type a SKU or product name"
+              autoComplete="off"
+            />
+            <datalist id="partner-skus">
+              {SELLABLE.map((p) => (
                 <option key={p.sku} value={p.sku}>
-                  {p.sku} · {p.name}
+                  {p.name}
                 </option>
               ))}
-            </select>
+            </datalist>
           </Field>
           <Field label="Quantity" required error={tried && !(Number(qty) > 0) ? "Enter a quantity of 1 or more." : undefined}>
-            <input type="number" min={1} inputMode="numeric" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} />
+            <input type="number" min={1} inputMode="numeric" className={inputCls} value={qty} onChange={(e) => setQty(e.target.value)} placeholder="e.g. 100" />
           </Field>
-          <Field label="Requested discount (%)" hint={`Your limit is ${limit}%`}>
+          <Field label="Requested discount (%)">
             <input type="number" min={0} max={100} step="0.5" inputMode="decimal" className={inputCls} value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="e.g. 10" />
           </Field>
           <Field label="Requested delivery">
@@ -407,8 +437,10 @@ function RequestModal({ open, onClose, partnerId, limit, onDone }: { open: boole
             </Field>
           )}
         </div>
-        <div className="rounded-lg border border-border p-4 text-sm" role="status" aria-live="polite">
-          {preview.ok ? (
+        <div className="rounded-lg border border-border p-4 text-base" role="status" aria-live="polite">
+          {!preview ? (
+            <span className="text-muted-foreground">Choose a product and quantity to see your price.</span>
+          ) : preview.ok ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span>
                 Your price <b className="tabular-nums">{money(preview.netPrice)}</b> / {preview.uom} · total <b className="tabular-nums">{money(preview.extended)}</b> · {pct(-preview.discountPct)} off list

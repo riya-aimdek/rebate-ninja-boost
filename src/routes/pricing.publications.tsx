@@ -20,6 +20,7 @@ import {
   Modal,
   PillTabs,
   PricingLayout,
+  RadioPills,
   RecordId,
   RecordLink,
   StatusPill,
@@ -37,7 +38,6 @@ import { PRICE_LISTS, PRODUCTS, REASON_CODES, REGIONS, LIST_TYPES } from "@/lib/
 import { pushNotification } from "@/lib/pricing/deals";
 import {
   DESTINATIONS,
-  DESTINATION_TYPES,
   IDEMPOTENCY_KEYS,
   IDEMPOTENCY_RETENTION_DAYS,
   NOW,
@@ -74,16 +74,29 @@ export const Route = createFileRoute("/pricing/publications")({
 
 type TabKey = "publications" | "destinations" | "read-api" | "idempotency";
 type Status = Publication["status"];
+/** What people see: a reversal waiting for its approver reads "Pending approval", not "Queued". */
+type ShownStatus = Status | "PENDING_APPROVAL";
+const shownStatus = (p: Publication): ShownStatus => (p.awaitingApprovalBy ? "PENDING_APPROVAL" : p.status);
+const SHOWN_STATUSES: ShownStatus[] = ["PENDING_APPROVAL", ...PUBLICATION_STATUSES];
 
 const KIND_TONE: Record<Publication["kind"], Tone> = { PUBLICATION: "neutral", ROLLBACK: "brand", COMPENSATING_CHANGE: "brand", CANCELLATION: "warning" };
 const MODE_HINT: Record<RollbackMode, string> = {
-  CANCEL_PENDING: "Cancel pending — the queued publication is withdrawn before the destination applies it.",
-  NATIVE_ROLLBACK: "Native rollback — the destination reverses the change itself; a linked rollback publication records it.",
-  COMPENSATING_CHANGE: "Compensating change — a new publication restores the previous version's prices.",
+  CANCEL_PENDING: "The queued publication is withdrawn before the destination applies it.",
+  NATIVE_ROLLBACK: "The destination reverses the change itself; a linked rollback publication records it.",
+  COMPENSATING_CHANGE: "A new publication restores the previous version's prices.",
 };
 const KIND_FOR_MODE: Record<RollbackMode, Publication["kind"]> = { CANCEL_PENDING: "CANCELLATION", NATIVE_ROLLBACK: "ROLLBACK", COMPENSATING_CHANGE: "COMPENSATING_CHANGE" };
 const stamp = () => NOW;
 const corr = () => `c-${Math.random().toString(16).slice(2, 8)}`;
+/** Idempotency keys are kept for the retention window, counted from first use. */
+const keyExpiry = (from: string) => {
+  const t = new Date(`${from.replace(" ", "T")}Z`);
+  t.setUTCDate(t.getUTCDate() + IDEMPOTENCY_RETENTION_DAYS);
+  return t.toISOString().slice(0, 16).replace("T", " ");
+};
+const keyExpired = (k: IdemKey) => k.expiresAt < NOW;
+const rollbackLabel = (r: Destination["rollback"]) => (r === "NONE" ? "Compensating only" : humanize(r));
+const listTypesLabel = (types: string[]) => (types.length === LIST_TYPES.length ? "All list types" : types.map((t) => humanize(t)).join(", "));
 
 function Page() {
   const { user, role } = useSession();
@@ -91,11 +104,17 @@ function Page() {
   const [tab, setTab] = useState<TabKey>("publications");
   const [pubs, setPubs] = useState<Publication[]>(PUBLICATIONS);
   const [dests, setDests] = useState<Destination[]>(DESTINATIONS);
+  // Keys live here, not in the tab, so the tab count stays right and new keys survive switching tabs.
+  const [keys, setKeys] = useState<IdemKey[]>(IDEMPOTENCY_KEYS);
   const [publishOpen, setPublishOpen] = useState(false);
 
   const save = (next: Publication[]) => {
     setPubs(next);
     PUBLICATIONS.splice(0, PUBLICATIONS.length, ...next);
+  };
+  const saveKeys = (next: IdemKey[]) => {
+    setKeys(next);
+    IDEMPOTENCY_KEYS.splice(0, IDEMPOTENCY_KEYS.length, ...next);
   };
 
   return (
@@ -121,16 +140,26 @@ function Page() {
           { key: "publications", label: "Publications", count: pubs.length },
           { key: "destinations", label: "Destinations", count: dests.length },
           { key: "read-api", label: "Price read API" },
-          { key: "idempotency", label: "Idempotency keys", count: IDEMPOTENCY_KEYS.length },
+          { key: "idempotency", label: "Idempotency keys", count: keys.length },
         ]}
       />
       <div role="tabpanel" id={`pub-panel-${tab}`} aria-labelledby={`pub-tab-${tab}`}>
         {tab === "publications" && <PublicationsTab pubs={pubs} save={save} operator={operator} userId={user.id} dests={dests} />}
         {tab === "destinations" && <DestinationsTab dests={dests} setDests={setDests} operator={operator} />}
         {tab === "read-api" && <ReadApiTab />}
-        {tab === "idempotency" && <IdempotencyTab />}
+        {tab === "idempotency" && <IdempotencyTab keys={keys} setKeys={saveKeys} />}
       </div>
-      {publishOpen && <PublishModal onClose={() => setPublishOpen(false)} pubs={pubs} save={save} dests={dests} userId={user.id} onDone={() => setTab("publications")} />}
+      {publishOpen && (
+        <PublishModal
+          onClose={() => setPublishOpen(false)}
+          pubs={pubs}
+          save={save}
+          dests={dests}
+          userId={user.id}
+          onKey={(k) => saveKeys([k, ...keys])}
+          onDone={() => setTab("publications")}
+        />
+      )}
     </PricingLayout>
   );
 }
@@ -139,12 +168,14 @@ function Page() {
 /* Publish (US-EX-01)                                                 */
 /* ================================================================== */
 
-function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose: () => void; pubs: Publication[]; save: (p: Publication[]) => void; dests: Destination[]; userId: string; onDone: () => void }) {
+function PublishModal({ onClose, pubs, save, dests, userId, onKey, onDone }: { onClose: () => void; pubs: Publication[]; save: (p: Publication[]) => void; dests: Destination[]; userId: string; onKey: (k: IdemKey) => void; onDone: () => void }) {
   const lists = publishableLists();
-  const [listId, setListId] = useState("BL-001");
-  const [destId, setDestId] = useState("DST-ERP");
-  const [mode, setMode] = useState<PublicationMode>("BATCH");
-  const [runDate, setRunDate] = useState("2026-11-15");
+  // A disabled destination can't receive anything, so it isn't offered.
+  const activeDests = dests.filter((d) => d.status === "ACTIVE");
+  const [listId, setListId] = useState(lists.find((l) => l.id === "BL-001")?.id ?? lists[0].id);
+  const [destId, setDestId] = useState(activeDests[0]?.id ?? "");
+  const [mode, setMode] = useState<PublicationMode>(activeDests[0]?.modes[0] ?? "BATCH");
+  const [runDate, setRunDate] = useState(TODAY_ISO);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const publishHintId = useId();
@@ -155,7 +186,7 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
     ["Run date", runDate],
   ]);
   const list = listById(listId)!;
-  const dest = destinationById(destId) ?? dests[0];
+  const dest = destinationById(destId) ?? activeDests[0] ?? dests[0];
   const gates = gateLines(list, runDate);
   const authorized = destinationAuthorized(dest, list);
   const sent = gates.filter((g) => g.sent);
@@ -176,7 +207,8 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
       setError({ errorClass: "VALIDATION", code: "MODE_NOT_SUPPORTED", message: `${dest.name} accepts ${dest.modes.map((m) => humanize(m).toLowerCase()).join(" or ")} only.`, field: "mode" });
       return;
     }
-    const dup = pubs.find((p) => p.idempotencyKey === key && p.kind === "PUBLICATION");
+    // Same list version to the same destination for the same run date is the same request, whatever key it was sent with.
+    const dup = pubs.find((p) => p.kind === "PUBLICATION" && p.listId === list.id && p.listVersion === `v${list.version}` && p.destinationId === dest.id && p.runDate === runDate);
     if (dup) {
       toast.info(`Already processed — ${dup.id} returned`, { description: "Same list version, destination and date. No duplicate prices were sent (idempotency key reused)." });
       onClose();
@@ -224,6 +256,7 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
         correlationId: corr(),
       };
       save([pub, ...pubs]);
+      onKey({ key, scope: "PUBLICATION", endpoint: "POST /v1/publications", bodyHash: bodyHash(`${list.id}${list.version}${dest.id}${runDate}${mode}`), state: status === "FAILED" ? "FAILED" : "COMPLETED", firstSeen: NOW, lastSeen: NOW, replays: 0, result: status === "FAILED" ? `422 · ${rejected[0].code}` : `201 · ${pub.id}`, expiresAt: keyExpiry(NOW) });
       setBusy(false);
       onClose();
       onDone();
@@ -250,8 +283,9 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
           <Btn variant="subtle" onClick={onClose} disabled={busy}>
             Cancel
           </Btn>
-          <Btn type="submit" form="publish-form" icon={Send} loading={busy} disabled={missingPublish.length > 0} aria-describedby={missingPublish.length ? publishHintId : undefined}>
-            {sent.length ? `Publish ${sent.length} record${sent.length === 1 ? "" : "s"}` : "Record rejected attempt"}
+          {/* Every line held: there's nothing to send or log yet, and the label says why. */}
+          <Btn type="submit" form="publish-form" icon={Send} loading={busy} disabled={missingPublish.length > 0 || sent.length + rejected.length === 0} aria-describedby={missingPublish.length ? publishHintId : undefined}>
+            {sent.length ? `Publish ${sent.length} record${sent.length === 1 ? "" : "s"}` : rejected.length ? "Record rejected attempt" : "Nothing effective on this date"}
           </Btn>
         </>
       }
@@ -269,22 +303,35 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
             </select>
           </Field>
           <Field label="Destination" required>
-            <select className={inputCls} value={destId} onChange={(e) => (setDestId(e.target.value), setError(null))}>
-              {dests.map((d) => (
+            <select
+              className={inputCls}
+              value={destId}
+              onChange={(e) => {
+                const next = destinationById(e.target.value);
+                setDestId(e.target.value);
+                // Only the modes the destination accepts are offered, so keep the pick valid.
+                if (next && !next.modes.includes(mode)) setMode(next.modes[0]);
+                setError(null);
+              }}
+            >
+              {activeDests.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="Mode" required hint={modeOk ? undefined : `Not supported by ${dest.name}`}>
+          <Field label="Mode" required>
             <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value as PublicationMode)}>
-              <option value="BATCH">Batch</option>
-              <option value="EVENT">Event (price-updated)</option>
+              {dest.modes.map((m) => (
+                <option key={m} value={m}>
+                  {m === "EVENT" ? "Event (price-updated)" : "Batch"}
+                </option>
+              ))}
             </select>
           </Field>
           <Field label="Run date" required hint="Lines starting after this date are held.">
-            <input type="date" className={inputCls} value={runDate} onChange={(e) => setRunDate(e.target.value || TODAY_ISO)} />
+            <input type="date" className={inputCls} min={TODAY_ISO} value={runDate} onChange={(e) => setRunDate(e.target.value || TODAY_ISO)} />
           </Field>
         </div>
 
@@ -295,7 +342,7 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
           {rejected.length > 0 && <Flag tone="danger">{rejected.length} rejected</Flag>}
         </div>
 
-        <h3 className="text-sm font-semibold mt-6 mb-2">Gate check per record</h3>
+        <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mt-6 mb-2">Gate check per record</h3>
         <DataTable
           caption="Publication gate check per record"
           rows={gates}
@@ -305,14 +352,14 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
             { key: "price", header: "Price", align: "right", cell: (g) => (g.line.price === null ? <span className="text-muted-foreground">No price</span> : `${money(g.line.price, list.currency)} / ${g.line.uom}`) },
             { key: "band", header: "Qty band", cell: (g) => `${g.line.minQty}${g.line.maxQty ? `–${g.line.maxQty}` : "+"}` },
             { key: "eff", header: "Effective from", cell: (g) => <span className="tabular-nums">{g.effectiveFrom}</span> },
-            { key: "out", header: "Outcome", cell: (g) => (g.sent ? <Flag tone="success">Send</Flag> : g.code === "NOT_YET_EFFECTIVE" ? <Flag tone="info">Held</Flag> : <Flag tone="danger">Reject · {g.code}</Flag>) },
+            { key: "out", header: "Outcome", cell: (g) => (g.sent ? <Flag tone="success">Send</Flag> : g.code === "NOT_YET_EFFECTIVE" ? <Flag tone="info">Held</Flag> : <Flag tone="danger">Reject</Flag>) },
             { key: "why", header: "Reason", className: "min-w-64", cell: (g) => <span className="text-muted-foreground">{g.reason ?? "Approved, valid and effective"}</span> },
           ]}
         />
         {sample && (
           <details className="mt-4 text-sm">
-            <summary className="cursor-pointer font-semibold text-brand">Payload preview (first record)</summary>
-            <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto overflow-y-hidden">
+            <summary className="cursor-pointer font-semibold text-brand-strong">Payload preview (first record)</summary>
+            <pre className="mt-2 p-3 rounded-lg bg-muted text-sm overflow-x-auto overflow-y-hidden">
               {JSON.stringify(
                 { product: sample.line.sku, scope, price: sample.line.price, currency: list.currency, uom: sample.line.uom, quantityBand: { min: sample.line.minQty, max: sample.line.maxQty ?? null }, validFrom: sample.effectiveFrom, validTo: sample.line.effectiveTo ?? list.effectiveTo ?? null, listVersion: `${list.id} v${list.version}`, changeType: list.version > 1 ? "UPDATE" : "CREATE" },
                 null,
@@ -334,9 +381,9 @@ function PublishModal({ onClose, pubs, save, dests, userId, onDone }: { onClose:
 /* ================================================================== */
 
 function PublicationsTab({ pubs, save, operator, userId, dests }: { pubs: Publication[]; save: (p: Publication[]) => void; operator: boolean; userId: string; dests: Destination[] }) {
-  const [statuses, setStatuses] = useState<Status[]>([]);
+  const [statuses, setStatuses] = useState<ShownStatus[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
-  const rows = useMemo(() => pubs.filter((p) => statuses.length === 0 || statuses.includes(p.status)).sort((a, b) => b.startedAt.localeCompare(a.startedAt)), [pubs, statuses]);
+  const rows = useMemo(() => pubs.filter((p) => statuses.length === 0 || statuses.includes(shownStatus(p))).sort((a, b) => b.startedAt.localeCompare(a.startedAt)), [pubs, statuses]);
   const failing = pubs.filter((p) => p.failedCount > 0 || p.status === "FAILED");
   const open = pubs.find((p) => p.id === openId) ?? null;
   const update = (p: Publication) => save(pubs.map((x) => (x.id === p.id ? p : x)));
@@ -345,10 +392,10 @@ function PublicationsTab({ pubs, save, operator, userId, dests }: { pubs: Public
     <>
       {failing.length > 0 && (
         <InfoBanner tone="warning" title={`${failing.length} publication${failing.length === 1 ? "" : "s"} need attention`} action={<Btn variant="subtle" size="sm" onClick={() => setOpenId(failing[0].id)}>Open {failing[0].id}</Btn>}>
-          {failing.map((p) => `${p.id}: ${p.failedCount ? `${p.failedCount} failed` : ""}${p.failedCount && p.rejectedCount ? ", " : ""}${p.rejectedCount ? `${p.rejectedCount} rejected` : ""}`).join(" · ")}. A PUBLICATION_FAILURE alert was sent to the requester.
+          {failing.map((p) => `${p.id}: ${p.failedCount ? `${p.failedCount} failed` : ""}${p.failedCount && p.rejectedCount ? ", " : ""}${p.rejectedCount ? `${p.rejectedCount} rejected` : ""}`).join(" · ")}. An alert was sent to the requester.
         </InfoBanner>
       )}
-      <FilterPills<Status> label="Status" selected={statuses} onChange={setStatuses} options={PUBLICATION_STATUSES.map((s) => ({ key: s, label: humanize(s), count: pubs.filter((p) => p.status === s).length }))} />
+      <FilterPills<ShownStatus> label="Status" selected={statuses} onChange={setStatuses} options={SHOWN_STATUSES.map((s) => ({ key: s, label: humanize(s), count: pubs.filter((p) => shownStatus(p) === s).length }))} />
       <DataTable<Publication>
         caption="Publication attempts, newest first"
         rows={rows}
@@ -401,12 +448,11 @@ function PublicationsTab({ pubs, save, operator, userId, dests }: { pubs: Public
               </div>
             ),
           },
-          { key: "dest", header: "Destination", className: "whitespace-nowrap", cell: (p) => destinationById(p.destinationId)?.name ?? p.destinationId },
-          { key: "mode", header: "Mode", cell: (p) => humanize(p.mode) },
+          { key: "dest", header: "Destination", className: "min-w-48", cell: (p) => <div>{destinationById(p.destinationId)?.name ?? p.destinationId}<div className="text-xs text-muted-foreground">{humanize(p.mode)}</div></div> },
           { key: "at", header: "Started", cell: (p) => <span className="tabular-nums whitespace-nowrap">{p.startedAt}</span> },
           { key: "n", header: "Records", align: "right", cell: (p) => p.recordCount.toLocaleString("en-GB") },
           { key: "f", header: "Failed / rejected", align: "right", cell: (p) => (p.failedCount + p.rejectedCount ? <span className="font-semibold text-destructive">{p.failedCount} / {p.rejectedCount}</span> : <span className="text-muted-foreground">0 / 0</span>) },
-          { key: "st", header: "Status", cell: (p) => <StatusPill status={p.awaitingApprovalBy ? "PENDING_APPROVAL" : p.status} /> },
+          { key: "st", header: "Status", className: "whitespace-nowrap", cell: (p) => <StatusPill status={shownStatus(p)} /> },
         ]}
       />
       {open && <PublicationDrawer pub={open} all={pubs} onClose={() => setOpenId(null)} update={update} save={save} operator={operator} userId={userId} dests={dests} onOpen={setOpenId} />}
@@ -451,7 +497,8 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
   const approveRollback = () => {
     setApproving(true);
     window.setTimeout(() => {
-      update({ ...pub, awaitingApprovalBy: undefined, status: "SUCCEEDED", finishedAt: NOW, ack: `${dest.name} applied the ${humanize(pub.kind).toLowerCase()}` });
+      const records = pub.records.map((r) => ({ ...r, status: "ACKNOWLEDGED" as const, attempts: r.attempts + 1 }));
+      update({ ...pub, records, awaitingApprovalBy: undefined, status: "SUCCEEDED", finishedAt: NOW, ack: `${dest.name} applied the ${humanize(pub.kind).toLowerCase()}` });
       setApproving(false);
       notifySuccess(`${pub.id} approved and sent`, `${dest.name} received the corrected prices. ${pub.reverses} stays in the history.`);
     }, 600);
@@ -460,6 +507,9 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
   const pending = pub.status === "QUEUED" || pub.status === "IN_PROGRESS";
   const canRollback = operator && pub.kind === "PUBLICATION" && !pub.reversedBy && samples.length > 0;
   const selfRequested = pub.triggeredBy === userId;
+  const isApprover = pub.awaitingApprovalBy === userId;
+  // Nothing has reached the destination yet, so there are no failures or deliveries to report.
+  const notSent = !!pub.awaitingApprovalBy || pending;
 
   return (
     <Drawer
@@ -469,7 +519,7 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
       subtitle={
         <span className="flex flex-wrap items-center gap-2">
           <span>{dest.name}</span>
-          <StatusPill status={pub.awaitingApprovalBy ? "PENDING_APPROVAL" : pub.status} />
+          <StatusPill status={shownStatus(pub)} />
           <Tag tone={KIND_TONE[pub.kind]}>{humanize(pub.kind)}</Tag>
         </span>
       }
@@ -488,8 +538,8 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
               Retry eligible failures ({eligible.length})
             </Btn>
           )}
-          {pub.awaitingApprovalBy && operator && (
-            <Btn icon={Send} loading={approving} disabled={selfRequested} title={selfRequested ? "You requested this reversal — another approver must send it (segregation of duties)." : undefined} onClick={approveRollback}>
+          {pub.awaitingApprovalBy && isApprover && !selfRequested && (
+            <Btn icon={Send} loading={approving} onClick={approveRollback}>
               Approve and send
             </Btn>
           )}
@@ -497,15 +547,16 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
       }
     >
       {pub.awaitingApprovalBy && (
-        <InfoBanner tone="warning" title="Waiting for approval" className="">
-          The original change went through the approval matrix, so this {humanize(pub.kind).toLowerCase()} does too. {userName(pub.awaitingApprovalBy)} approves before it is sent{selfRequested ? " — you requested it, so you can't approve it yourself." : "."}
+        <InfoBanner tone="warning" title="Waiting for approval">
+          The original change went through the approval matrix, so this {humanize(pub.kind).toLowerCase()} does too.{" "}
+          {isApprover ? "You're the approver — review it and send it when it's right." : `${userName(pub.awaitingApprovalBy)} approves it before it is sent${selfRequested ? "; you requested it, so you can't approve it yourself" : ""}.`}
         </InfoBanner>
       )}
       <section className="bg-card border border-border rounded-xl px-5">
         <DetailGrid
           items={[
-            { label: "Status", value: <span className="inline-flex flex-wrap gap-2"><StatusPill status={pub.status} />{pub.failedCount > 0 && <Flag tone="danger">{pub.failedCount} failed</Flag>}{pub.rejectedCount > 0 && <Flag tone="danger">{pub.rejectedCount} rejected</Flag>}</span> },
-            { label: "Records", value: pub.recordCount.toLocaleString("en-GB") },
+            // Status is in the drawer header; here only the counts behind it.
+            { label: "Records", value: <span className="inline-flex flex-wrap items-center gap-2">{pub.recordCount.toLocaleString("en-GB")}{pub.failedCount > 0 && <Flag tone="danger">{pub.failedCount} failed</Flag>}{pub.rejectedCount > 0 && <Flag tone="danger">{pub.rejectedCount} rejected</Flag>}</span> },
             { label: "Mode", value: humanize(pub.mode) },
             { label: "Run date", value: pub.runDate },
             { label: "Started", value: pub.startedAt },
@@ -513,7 +564,7 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
             { label: "Requested by", value: userName(pub.triggeredBy) },
             { label: "Correlation ID", value: <span className="font-mono text-sm">{pub.correlationId}</span> },
             { label: "Destination acknowledgement", value: pub.ack ?? "None received", full: true },
-            { label: "Idempotency key", value: <code className="text-xs">{pub.idempotencyKey}</code> },
+            { label: "Idempotency key", value: <code className="text-sm break-all">{pub.idempotencyKey}</code> },
             ...(pub.reverses || pub.reversedBy
               ? [
                   {
@@ -522,12 +573,12 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
                     value: (
                       <span className="flex flex-wrap gap-3">
                         {pub.reverses && (
-                          <button type="button" className="hit text-brand font-medium hover:underline" onClick={() => onOpen(pub.reverses!)}>
+                          <button type="button" className="hit text-brand-strong font-medium hover:underline" onClick={() => onOpen(pub.reverses!)}>
                             Reverses {pub.reverses}
                           </button>
                         )}
                         {pub.reversedBy && (
-                          <button type="button" className="hit text-brand font-medium hover:underline" onClick={() => onOpen(pub.reversedBy!)}>
+                          <button type="button" className="hit text-brand-strong font-medium hover:underline" onClick={() => onOpen(pub.reversedBy!)}>
                             Reversed by {pub.reversedBy}
                           </button>
                         )}
@@ -536,14 +587,14 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
                   },
                 ]
               : []),
-            ...(pub.reasonCode ? [{ label: "Reason", value: <Tag tone="brand">{humanize(pub.reasonCode)}</Tag> }, { label: "Comments", value: pub.comments ?? "—" }] : []),
+            ...(pub.reasonCode ? [{ label: "Reason", value: <Tag tone="brand">{humanize(pub.reasonCode)}</Tag> }, { label: "Comments", value: pub.comments ?? "—", full: true }] : []),
           ]}
         />
       </section>
 
       {pub.retries.length > 0 && (
         <section>
-          <h3 className="font-semibold mb-2">Retries</h3>
+          <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2">Retries</h3>
           <ul className="space-y-1 text-sm">
             {pub.retries.map((r, i) => (
               <li key={i} className="tabular-nums">
@@ -554,9 +605,10 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
         </section>
       )}
 
+      {!notSent && (
       <section>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-          <h3 className="font-semibold">Failed and rejected records ({problems.length})</h3>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-2 mb-2">
+          <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold min-w-0">Failed and rejected records ({problems.length})</h3>
           {operator && problems.length > 0 && (
             <Btn variant="subtle" size="sm" icon={RefreshCw} disabled={selected.length === 0 || retrying} onClick={retrySelected}>
               Retry selected ({selected.length})
@@ -565,7 +617,7 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
         </div>
         <ErrorBanner error={error} onClose={() => setError(null)} note="Nothing was resent." />
         {problems.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No failures — every record was delivered.</p>
+          <p className="text-base text-muted-foreground">No failures — every record was delivered.</p>
         ) : (
           <ul className="space-y-2">
             {problems.map((r) => (
@@ -587,7 +639,7 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
                     <Flag tone={r.error?.retryable ? "warning" : "danger"}>{r.error?.retryable ? "Retry eligible" : "Not retry eligible"}</Flag>
                   </div>
                   <p className="mt-1">
-                    <code className="text-xs">{r.error?.code}</code> <span className="text-xs text-muted-foreground">({r.error?.errorClass})</span> — {r.error?.message}
+                    <code className="text-sm">{r.error?.code}</code> — {r.error?.message}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">Attempts: {r.attempts}</p>
                 </div>
@@ -596,10 +648,11 @@ function PublicationDrawer({ pub, all, onClose, update, save, operator, userId, 
           </ul>
         )}
       </section>
+      )}
 
       {samples.length > 0 && (
         <section>
-          <h3 className="font-semibold mb-2">Delivered records (sample)</h3>
+          <h3 className="text-lg lg:text-xl leading-[1.2] font-semibold mb-2">{notSent ? "Records to send" : "Delivered records (sample)"}</h3>
           <ul className="text-sm divide-y divide-border bg-card border border-border rounded-lg">
             {samples.map((r) => (
               <li key={r.id} className="px-3 py-2 flex flex-wrap justify-between gap-2">
@@ -645,7 +698,8 @@ function RollbackModal({ pub, dest, pending, userId, onClose, onCreate, nextId }
   const [error, setError] = useState<ApiError | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
-  const approver = userId === "U-02" ? "U-09" : "U-02";
+  // Another pricing administrator approves (never the requester), so the approver can open this page.
+  const approver = userId === "U-02" ? "U-01" : "U-02";
 
   const errs: Record<string, string> = {};
   if (!reasonCode) errs["rb-reason"] = "Select why the change is being reversed.";
@@ -734,20 +788,21 @@ function RollbackModal({ pub, dest, pending, userId, onClose, onCreate, nextId }
       >
         <form id="rollback-form" onSubmit={review} noValidate className="space-y-4">
           <ErrorBanner error={error} onClose={() => setError(null)} />
-          <InfoBanner tone={mode === "COMPENSATING_CHANGE" ? "warning" : "info"} title={`Mode: ${humanize(mode)}`} className="">
+          <InfoBanner tone={mode === "COMPENSATING_CHANGE" ? "warning" : "info"} title={`Mode: ${humanize(mode)}`}>
             {MODE_HINT[mode]}
             {mode === "COMPENSATING_CHANGE" && ` ${dest.name} doesn't support rollback, so the system applies a compensating change instead.`}
           </InfoBanner>
           <fieldset>
             <legend className="text-sm font-medium mb-2">Scope</legend>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <label className="inline-flex items-center gap-2">
-                <input type="radio" name="rb-scope" checked={scope === "ALL"} onChange={() => setScope("ALL")} /> Whole publication ({(pub.recordCount - pub.failedCount - pub.rejectedCount).toLocaleString("en-GB")} delivered records)
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="radio" name="rb-scope" checked={scope === "SELECTED"} onChange={() => setScope("SELECTED")} /> Selected records
-              </label>
-            </div>
+            <RadioPills<"ALL" | "SELECTED">
+              label="Scope"
+              value={scope}
+              onChange={setScope}
+              options={[
+                { key: "ALL", label: "Whole publication", meta: `${(pub.recordCount - pub.failedCount - pub.rejectedCount).toLocaleString("en-GB")} delivered` },
+                { key: "SELECTED", label: "Selected records" },
+              ]}
+            />
             {scope === "SELECTED" && (
               <div id="rb-scope" tabIndex={-1} className="mt-3 grid sm:grid-cols-2 gap-2">
                 {candidates.map((r) => (
@@ -773,7 +828,7 @@ function RollbackModal({ pub, dest, pending, userId, onClose, onCreate, nextId }
           <Field label="Comments" required error={fe("rb-comments")} hint="Kept in the audit history and sent to the requester and account owners.">
             <textarea id="rb-comments" rows={3} className={`${inputCls} h-auto py-2`} value={comments} onChange={(e) => setComments(e.target.value)} placeholder="e.g. Widget keyed as 92.00; approved price is 100.00" />
           </Field>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Governance: the original change followed the approval matrix, so {userName(approver)} must approve this reversal before it is sent.
           </p>
         </form>
@@ -811,10 +866,10 @@ function DestinationsTab({ dests, setDests, operator }: { dests: Destination[]; 
         selectedKey={view?.id ?? null}
         columns={[
           { key: "name", header: "Destination", className: "min-w-52", cell: (d) => <div><span className="font-medium">{d.name}</span><div className="text-xs text-muted-foreground font-mono break-all">{d.endpoint}</div></div> },
-          { key: "type", header: "Type", cell: (d) => <Tag>{humanize(d.type)}</Tag> },
-          { key: "modes", header: "Modes", cell: (d) => d.modes.map((m) => humanize(m)).join(", ") },
-          { key: "scope", header: "Authorized scope", className: "min-w-48", cell: (d) => <span className="text-sm">{d.authorizedRegions.join(", ")}<div className="text-xs text-muted-foreground">{d.authorizedListTypes.length === LIST_TYPES.length ? "All list types" : d.authorizedListTypes.map((t) => humanize(t)).join(", ")}</div></span> },
-          { key: "rb", header: "Rollback", cell: (d) => (d.rollback === "NONE" ? <Tag tone="warning">Compensating only</Tag> : <Tag tone="success">{humanize(d.rollback)}</Tag>) },
+          { key: "type", header: "Type", className: "whitespace-nowrap", cell: (d) => humanize(d.type) },
+          { key: "modes", header: "Modes", className: "whitespace-nowrap", cell: (d) => d.modes.map((m) => humanize(m)).join(", ") },
+          { key: "scope", header: "Authorized scope", className: "min-w-48", cell: (d) => <span className="text-sm">{d.authorizedRegions.join(", ")}<div className="text-xs text-muted-foreground">{listTypesLabel(d.authorizedListTypes)}</div></span> },
+          { key: "rb", header: "Rollback", className: "whitespace-nowrap", cell: (d) => <Tag tone={d.rollback === "NONE" ? "warning" : "success"}>{rollbackLabel(d.rollback)}</Tag> },
           { key: "batch", header: "Batch size", align: "right", cell: (d) => d.batchSize.toLocaleString("en-GB") },
           { key: "st", header: "Status", cell: (d) => <StatusPill status={d.status} /> },
         ]}
@@ -852,9 +907,9 @@ function DestinationsTab({ dests, setDests, operator }: { dests: Destination[]; 
                 { label: "Batch size", value: view.batchSize.toLocaleString("en-GB") },
                 { label: "Schedule", value: view.schedule },
                 { label: "Modes", value: view.modes.map((m) => humanize(m)).join(", ") },
-                { label: "Rollback capability", value: humanize(view.rollback) },
+                { label: "Rollback capability", value: rollbackLabel(view.rollback) },
                 { label: "Authorized regions", value: view.authorizedRegions.join(", ") },
-                { label: "Authorized list types", value: view.authorizedListTypes.map((t) => humanize(t)).join(", ") },
+                { label: "Authorized list types", value: listTypesLabel(view.authorizedListTypes) },
               ]}
             />
           </section>
@@ -888,6 +943,7 @@ function DestinationForm({ dest, onClose, onSave }: { dest: Destination; onClose
   if (!/^(https|sftp|snowflake):\/\//.test(f.endpoint)) errs["d-endpoint"] = "Use an https://, sftp:// or snowflake:// address — plain http isn't allowed (TLS 1.2+).";
   if (!(f.batchSize >= 1 && f.batchSize <= 50_000)) errs["d-batch"] = "Enter a batch size from 1 to 50,000.";
   if (f.authorizedRegions.length === 0) errs["d-regions"] = "Authorize at least one region.";
+  if (f.authorizedListTypes.length === 0) errs["d-types"] = "Authorize at least one list type.";
   if (f.modes.length === 0) errs["d-modes"] = "Choose at least one mode.";
   const fe = (k: string) => (submitted ? errs[k] : undefined);
   const destHintId = useId();
@@ -897,6 +953,7 @@ function DestinationForm({ dest, onClose, onSave }: { dest: Destination; onClose
     ["Batch size", f.batchSize ? String(f.batchSize) : ""],
     ["Modes", f.modes],
     ["Authorized regions", f.authorizedRegions],
+    ["Authorized list types", f.authorizedListTypes],
   ]);
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -931,13 +988,11 @@ function DestinationForm({ dest, onClose, onSave }: { dest: Destination; onClose
         <Field label="Name" required error={fe("d-name")}>
           <input id="d-name" className={inputCls} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
         </Field>
-        <Field label="Type">
-          <select className={inputCls} value={f.type} disabled>
-            {DESTINATION_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {humanize(t)}
-              </option>
-            ))}
+        {/* Type is fixed by the connector, so status takes its place: a disabled destination receives nothing. */}
+        <Field label="Status" hint={f.status === "DISABLED" ? "Not offered when publishing." : undefined}>
+          <select className={inputCls} value={f.status} onChange={(e) => setF({ ...f, status: e.target.value as Destination["status"] })}>
+            <option value="ACTIVE">Active</option>
+            <option value="DISABLED">Disabled</option>
           </select>
         </Field>
         <Field label="Endpoint" required error={fe("d-endpoint")} className="md:col-span-2">
@@ -989,6 +1044,19 @@ function DestinationForm({ dest, onClose, onSave }: { dest: Destination; onClose
             ))}
           </div>
           {fe("d-regions") && <p className="text-xs text-destructive">{fe("d-regions")}</p>}
+        </fieldset>
+        <fieldset id="d-types" tabIndex={-1} className="md:col-span-2">
+          <legend className="text-sm font-medium mb-2">
+            Authorized list types<span className="text-destructive ml-0.5" aria-hidden>*</span>
+          </legend>
+          <div className="flex flex-wrap gap-4 text-sm">
+            {LIST_TYPES.map((t) => (
+              <label key={t} className="inline-flex items-center gap-2 h-10">
+                <input type="checkbox" checked={f.authorizedListTypes.includes(t)} onChange={() => setF({ ...f, authorizedListTypes: toggle(f.authorizedListTypes, t) })} /> {humanize(t)}
+              </label>
+            ))}
+          </div>
+          {fe("d-types") && <p className="text-xs text-destructive">{fe("d-types")}</p>}
         </fieldset>
       </form>
     </Modal>
@@ -1070,7 +1138,7 @@ function ReadApiTab() {
           <p className="text-sm font-mono break-all">
             {resp.req} → <span className={resp.status === 200 ? "text-success" : "text-destructive"}>{resp.status}</span>
           </p>
-          <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(resp.body, null, 2)}</pre>
+          <pre className="mt-2 p-3 rounded-lg bg-muted text-sm overflow-x-auto overflow-y-hidden">{JSON.stringify(resp.body, null, 2)}</pre>
         </div>
       )}
     </Card>
@@ -1084,8 +1152,9 @@ function ReadApiTab() {
 const ENDPOINTS = ["POST /v1/publications", "POST /v1/events/price-updated", "POST /v1/erp/orders", "POST /v1/bulk-jobs"];
 const SCOPE_OF: Record<string, IdemKey["scope"]> = { "POST /v1/publications": "PUBLICATION", "POST /v1/events/price-updated": "EVENT", "POST /v1/erp/orders": "ERP_SYNC", "POST /v1/bulk-jobs": "BULK_JOB" };
 
-function IdempotencyTab() {
-  const [keys, setKeys] = useState<IdemKey[]>(IDEMPOTENCY_KEYS);
+function IdempotencyTab({ keys, setKeys: saveKeys }: { keys: IdemKey[]; setKeys: (k: IdemKey[]) => void }) {
+  // Functional updates read the latest list, so the delayed "two at once" completion can't drop keys added meanwhile.
+  const setKeys = (next: IdemKey[] | ((ks: IdemKey[]) => IdemKey[])) => saveKeys(typeof next === "function" ? next(IDEMPOTENCY_KEYS) : next);
   const [endpoint, setEndpoint] = useState(ENDPOINTS[1]);
   const [key, setKey] = useState("evt-cost-MSG-1001");
   const [messageId, setMessageId] = useState("MSG-1001");
@@ -1099,20 +1168,21 @@ function IdempotencyTab() {
   const process = (k: string, b: string, msg: string, concurrent = false) => {
     if (!k.trim()) return err(422, "VALIDATION_REQUIRED", "VALIDATION", "The Idempotency-Key header is required on every state-changing request.", false, "Rejected — nothing processed.");
     const h = bodyHash(b);
-    const existing = keys.find((x) => x.key === k.trim());
+    // An expired key is forgotten: the request is treated as new.
+    const existing = keys.find((x) => x.key === k.trim() && !keyExpired(x));
     if (existing) {
       if (existing.bodyHash !== h) return err(409, "IDEMPOTENCY_KEY_REUSED", "CONFLICT", `Key ${k} was first used with a different request body. Use a new key for a different request.`, false, "Rejected — the original result is unchanged.");
       if (existing.state === "IN_PROGRESS") return err(409, "REQUEST_IN_PROGRESS", "TRANSIENT_TECHNICAL", `A request with key ${k} is still being processed. Retry after it completes.`, true, "Not processed twice.");
       setKeys(keys.map((x) => (x.key === existing.key ? { ...x, replays: x.replays + 1, lastSeen: NOW } : x)));
       return setResp({ status: 200, note: "Already processed — original result returned, no duplicate active price created.", body: { alreadyProcessed: true, originalResult: existing.result, firstSeen: existing.firstSeen, messageId: existing.messageId ?? null } });
     }
-    const dupMsg = msg && keys.find((x) => x.messageId === msg.trim() && x.state === "COMPLETED");
+    const dupMsg = msg && keys.find((x) => x.messageId === msg.trim() && x.state === "COMPLETED" && !keyExpired(x));
     if (dupMsg) {
       setKeys(keys.map((x) => (x.key === dupMsg.key ? { ...x, replays: x.replays + 1, lastSeen: NOW } : x)));
       return setResp({ status: 200, note: `Message ${msg} was already processed under key ${dupMsg.key}. No duplicate active price created.`, body: { alreadyProcessed: true, originalResult: dupMsg.result } });
     }
-    const entry: IdemKey = { key: k.trim(), scope: SCOPE_OF[endpoint], endpoint, bodyHash: h, messageId: msg.trim() || undefined, state: concurrent ? "IN_PROGRESS" : "COMPLETED", firstSeen: NOW, lastSeen: NOW, replays: 0, result: concurrent ? "Processing…" : "201 · processed once", expiresAt: "2026-11-05 14:30" };
-    setKeys((ks) => [entry, ...ks]);
+    const entry: IdemKey = { key: k.trim(), scope: SCOPE_OF[endpoint], endpoint, bodyHash: h, messageId: msg.trim() || undefined, state: concurrent ? "IN_PROGRESS" : "COMPLETED", firstSeen: NOW, lastSeen: NOW, replays: 0, result: concurrent ? "Processing…" : "201 · processed once", expiresAt: keyExpiry(NOW) };
+    setKeys((ks) => [entry, ...ks.filter((x) => x.key !== entry.key)]);
     if (concurrent) {
       err(409, "REQUEST_IN_PROGRESS", "TRANSIENT_TECHNICAL", `Two requests arrived with key ${k}. The first is processing; this one was not processed.`, true, "Only one of the two concurrent requests was processed.");
       window.setTimeout(() => setKeys((ks) => ks.map((x) => (x.key === entry.key ? { ...x, state: "COMPLETED", result: "201 · processed once" } : x))), 1500);
@@ -1148,6 +1218,7 @@ function IdempotencyTab() {
       </InfoBanner>
       <Card title="Request simulator" subtitle="Send a request the way an integration would and see how retries are handled.">
         <div className="flex flex-wrap gap-2 mb-4">
+          <span className="text-sm text-muted-foreground self-center">Try:</span>
           <Btn variant="subtle" size="sm" onClick={() => preset("", "", body)}>Missing key</Btn>
           <Btn variant="subtle" size="sm" onClick={() => preset("evt-cost-MSG-1001", "MSG-1001", '{ "sku": "A-100", "price": 110.00, "list": "BL-001", "version": 4 }', ENDPOINTS[1])}>Replay MSG-1001</Btn>
           <Btn variant="subtle" size="sm" onClick={() => preset("evt-cost-MSG-1001", "MSG-1001", '{ "sku": "A-100", "price": 125.00, "list": "BL-001", "version": 4 }', ENDPOINTS[1])}>Same key, different body</Btn>
@@ -1169,7 +1240,7 @@ function IdempotencyTab() {
             <input className={inputCls} value={messageId} onChange={(e) => setMessageId(e.target.value)} placeholder="e.g. MSG-1001" />
           </Field>
           <Field label="Body (JSON)" className="md:col-span-3">
-            <textarea rows={3} className={`${inputCls} h-auto py-2 font-mono text-xs`} value={body} onChange={(e) => setBody(e.target.value)} />
+            <textarea rows={3} className={`${inputCls} h-auto py-2 font-mono`} value={body} onChange={(e) => setBody(e.target.value)} />
           </Field>
           <div className="md:col-span-3 flex justify-end">
             <Btn type="submit" icon={Send} loading={busy}>
@@ -1183,7 +1254,7 @@ function IdempotencyTab() {
               <span className={`font-mono font-semibold ${resp.status < 300 ? "text-success" : "text-destructive"}`}>HTTP {resp.status}</span>
               <span>{resp.note}</span>
             </div>
-            <pre className="mt-2 p-3 rounded-lg bg-muted text-xs overflow-x-auto overflow-y-hidden">{JSON.stringify(resp.body, null, 2)}</pre>
+            <pre className="mt-2 p-3 rounded-lg bg-muted text-sm overflow-x-auto overflow-y-hidden">{JSON.stringify(resp.body, null, 2)}</pre>
           </div>
         )}
       </Card>
@@ -1192,13 +1263,13 @@ function IdempotencyTab() {
         rows={[...keys].sort((a, b) => b.firstSeen.localeCompare(a.firstSeen))}
         rowKey={(k) => k.key}
         columns={[
-          { key: "k", header: "Key", className: "min-w-52", cell: (k) => <div><code className="text-xs break-all">{k.key}</code><div className="text-xs text-muted-foreground">{k.endpoint}</div></div> },
-          { key: "s", header: "Scope", cell: (k) => <Tag>{humanize(k.scope)}</Tag> },
-          { key: "m", header: "Message", cell: (k) => k.messageId ?? "—" },
-          { key: "st", header: "State", cell: (k) => <StatusPill status={k.state === "IN_PROGRESS" ? "RUNNING" : k.state} label={humanize(k.state)} /> },
+          { key: "k", header: "Key", className: "min-w-52", cell: (k) => <div><code className="text-sm break-all">{k.key}</code><div className="text-xs text-muted-foreground">{k.endpoint}</div></div> },
+          { key: "s", header: "Scope", className: "whitespace-nowrap", cell: (k) => humanize(k.scope) },
+          { key: "m", header: "Message", className: "whitespace-nowrap", cell: (k) => k.messageId ?? "—" },
+          { key: "st", header: "State", className: "whitespace-nowrap", cell: (k) => <StatusPill status={k.state === "IN_PROGRESS" ? "RUNNING" : k.state} label={humanize(k.state)} /> },
           { key: "r", header: "Replays", align: "right", cell: (k) => k.replays },
           { key: "res", header: "Original result", className: "min-w-48", cell: (k) => k.result },
-          { key: "exp", header: "Expires", cell: (k) => <span className="tabular-nums whitespace-nowrap">{k.expiresAt}</span> },
+          { key: "exp", header: "Expires", cell: (k) => (keyExpired(k) ? <span className="text-muted-foreground whitespace-nowrap">Expired {k.expiresAt.slice(0, 10)}</span> : <span className="tabular-nums whitespace-nowrap">{k.expiresAt}</span>) },
         ]}
       />
     </div>

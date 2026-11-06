@@ -386,9 +386,9 @@ function RepricingPage() {
       header: "Trigger source",
       className: "min-w-44",
       cell: (p) => (
-        <div className="text-xs">
+        <div>
           <div>{humanize(p.trigger)}</div>
-          <div className="text-muted-foreground font-mono whitespace-nowrap">
+          <div className="text-xs text-muted-foreground font-mono whitespace-nowrap">
             {p.eventId} · {p.ruleId}
           </div>
         </div>
@@ -494,7 +494,7 @@ function RepricingPage() {
       />
 
       <div className="grid gap-4 grid-cols-2 xl:grid-cols-4 mb-6">
-        <KpiTile label="Active rules" value={rules.filter((r) => r.status === "ACTIVE").length} hint="Watching cost, index and competitor events" />
+        <KpiTile label="Active rules" value={rules.filter((r) => r.status === "ACTIVE").length} />
         <KpiTile
           label="Pending proposals"
           value={pending}
@@ -545,12 +545,7 @@ function RepricingPage() {
             columns={ruleCols}
             rows={shownRules}
             rowKey={(r) => r.id}
-            empty={filteredEmpty(
-              "rules",
-              <Btn icon={Plus} onClick={() => setEditing("new")}>
-                Create rule
-              </Btn>,
-            )}
+            empty={filteredEmpty("rules")}
           />
         </>
       )}
@@ -619,9 +614,7 @@ function RepricingPage() {
                   }
                 />
               ) : (
-                <EmptyState title="No proposals yet">
-                  Cost, index and competitor events create proposals when a rule applies.
-                </EmptyState>
+                <EmptyState title="No proposals yet" />
               )
             }
           />
@@ -642,7 +635,7 @@ function RepricingPage() {
               key: "id",
               header: "Event ID",
               className: "whitespace-nowrap",
-              cell: (e: EventRow) => <span className="font-mono text-xs">{e.eventId}</span>,
+              cell: (e: EventRow) => <span className="font-mono text-sm">{e.eventId}</span>,
             },
             {
               key: "t",
@@ -663,7 +656,7 @@ function RepricingPage() {
             {
               key: "r",
               header: "Rule",
-              cell: (e: EventRow) => <span className="font-mono text-xs">{e.rule}</span>,
+              cell: (e: EventRow) => <span className="font-mono text-sm">{e.rule}</span>,
             },
             {
               key: "o",
@@ -770,7 +763,7 @@ function WorkedExample({ rule, proposal, onOpenProposal }: { rule?: RepricingRul
   return (
     <Card
       title={`Worked example — ${rule.id} ${rule.name}`}
-      subtitle={`How a cost rise becomes a capped price proposal, using ${rule.id}'s current settings: ${target}% target margin, +${cap}% maximum automatic increase.`}
+      subtitle={`How a cost rise becomes a capped price proposal, using the rule's current settings: ${target}% target margin, +${cap}% maximum automatic increase.`}
       actions={
         proposal && (
           <Btn variant="ghost" size="sm" onClick={onOpenProposal}>
@@ -792,7 +785,7 @@ function WorkedExample({ rule, proposal, onOpenProposal }: { rule?: RepricingRul
               </span>
               {s.label}
             </div>
-            <div className={`text-xl font-bold tabular-nums ${s.tone === "result" ? "text-brand" : s.tone === "warn" ? "text-warning-foreground" : ""}`}>{s.value}</div>
+            <div className={`text-xl font-bold tabular-nums ${s.tone === "result" ? "text-brand-strong" : s.tone === "warn" ? "text-warning-foreground" : ""}`}>{s.value}</div>
             <p className="text-muted-foreground">{s.detail}</p>
             {/* Arrow to the next step on the 4-across layout. */}
             {i < steps.length - 1 && (

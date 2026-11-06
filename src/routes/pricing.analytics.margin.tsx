@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { BarChart3 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Btn, Card, DataTable, DetailTitle, EmptyState, FilterPills, InfoBanner, LinkBtn, PricingLayout, money, type Column } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, DetailTitle, EmptyState, FilterPills, InfoBanner, KpiTile, LinkBtn, PricingLayout, money, type Column, TableSection } from "@/components/pricing/kit";
 import { RequireAccess, pctBand } from "@/components/pricing/access";
 import { DrillTrail, Freshness, MetricLabel } from "@/components/pricing/analytics-ui";
 import { type Transaction } from "@/lib/pricing/deals";
@@ -106,7 +106,7 @@ function Page() {
     );
 
   const cols: Column<Metrics>[] = [
-    { key: "g", header: DIMENSION_LABEL[groupDim], cell: (m) => <span className="font-medium text-brand">{m.label}</span> },
+    { key: "g", header: DIMENSION_LABEL[groupDim], cell: (m) => <span className="font-medium text-brand-strong">{m.label}</span> },
     { key: "r", header: "Revenue", align: "right", cell: (m) => <span className="tabular-nums">{money(m.revenue, "GBP", 0)}</span> },
     { key: "v", header: "Volume", align: "right", cell: (m) => <span className="tabular-nums">{m.volume.toLocaleString("en-GB")}</span> },
     ...(showGM ? [{ key: "gm", header: "Gross margin", align: "right" as const, cell: (m: Metrics) => <span className="tabular-nums">{money(m.grossMargin, "GBP", 0)}</span> }] : []),
@@ -127,7 +127,7 @@ function Page() {
         actions={
           <>
             <Freshness />
-            <Btn variant="outline" onClick={exportCsv}>
+            <Btn variant="outline" onClick={exportCsv} disabled={(level === "TX" ? rows : groups).length === 0}>
               Export CSV
             </Btn>
           </>
@@ -135,7 +135,7 @@ function Page() {
       />
       {note && <InfoBanner title="Row-level security">{note}</InfoBanner>}
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-2">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-2 empty:hidden">
         <FilterPills<Period>
           label="Period"
           multiple={false}
@@ -150,13 +150,13 @@ function Page() {
         />
       </div>
 
-      <section aria-label="Key figures" className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
+      <section aria-label="Key figures" className="grid gap-2 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] mb-6">
         <Kpi label="Revenue" def={METRIC_DEFINITIONS.revenue} value={compactMoney(total.revenue)} />
         <Kpi label="Volume" def={METRIC_DEFINITIONS.volume} value={total.volume.toLocaleString("en-GB")} hint="units" />
         {showGM && <Kpi label="Gross margin" def={METRIC_DEFINITIONS.grossMargin} value={compactMoney(total.grossMargin)} />}
         {pctAccess !== "HIDE" && <Kpi label="Gross margin %" def={METRIC_DEFINITIONS.grossMarginPct} value={gmPct(total) ?? ""} hint={pctAccess === "ROUND" ? "Shown as a band for your role" : undefined} />}
         {showGM && <Kpi label="Pocket margin" def={METRIC_DEFINITIONS.pocketMargin} value={compactMoney(total.pocketMargin)} />}
-        <Kpi label="Price realization" def={METRIC_DEFINITIONS.priceRealization} value={`${total.priceRealization.toFixed(1)}%`} />
+        <Kpi label="Realization %" def={METRIC_DEFINITIONS.priceRealization} value={`${total.priceRealization.toFixed(1)}%`} />
         <Kpi label="Discount %" def={METRIC_DEFINITIONS.discountPct} value={`${total.discountPct.toFixed(1)}%`} />
       </section>
       {!showGM && <p className="text-xs text-muted-foreground -mt-3 mb-6">Margin amounts are hidden for your role (field-level security).</p>}
@@ -175,12 +175,12 @@ function Page() {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <Card
             title={`Revenue by ${DIMENSION_LABEL[groupDim].toLowerCase()}`}
-            subtitle={groups.length > 10 ? "Top 10 shown — full list in the table" : "Same figures as the table"}
+            subtitle={groups.length > 10 ? "Top 10 shown — full list in the table" : undefined}
             actions={
               level === "GROUP" ? (
                 <label className="flex items-center gap-2 text-sm">
                   <span className="text-muted-foreground">View by</span>
-                  <select className="h-10 px-3 rounded-lg border border-input bg-card text-sm" value={dim} onChange={(e) => set({ dim: e.target.value as Dimension, ...CLEAR })}>
+                  <select className="h-10 px-3 rounded-lg border border-input bg-card text-base" value={dim} onChange={(e) => set({ dim: e.target.value as Dimension, ...CLEAR })}>
                     {DIMENSIONS.map((d) => (
                       <option key={d} value={d}>
                         {DIMENSION_LABEL[d]}
@@ -216,9 +216,9 @@ function Page() {
               </ResponsiveContainer>
             </figure>
           </Card>
-          <Card title="Breakdown" subtitle="Select a row to drill down." padded={false}>
+          <TableSection title="Breakdown" subtitle="Select a row to drill down.">
             <DataTable<Metrics> caption={`Margin by ${DIMENSION_LABEL[groupDim]}`} rows={groups} rowKey={(m) => m.key} onRowClick={(m) => open(m.key)} pageSize={15} columns={cols} />
-          </Card>
+          </TableSection>
         </div>
       )}
     </PricingLayout>
@@ -226,20 +226,12 @@ function Page() {
 }
 
 function Kpi({ label, def, value, hint }: { label: string; def: string; value: string; hint?: string }) {
-  return (
-    <div className="bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col gap-2">
-      <div className="text-[15px] font-medium">
-        <MetricLabel label={label} definition={def} />
-      </div>
-      <div className="text-3xl font-bold tabular-nums">{value}</div>
-      {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
-    </div>
-  );
+  return <KpiTile label={<MetricLabel label={label} definition={def} />} name={label} value={value} hint={hint} tone="default" />;
 }
 
 function TxTable({ rows, showCost }: { rows: Transaction[]; showCost: boolean }) {
   return (
-    <Card title="Transactions" subtitle="Invoice lines from ERP billing. Open one in the price waterfall to see every component." padded={false}>
+    <TableSection title="Transactions" subtitle="Invoice lines from ERP billing. Open one in the price waterfall to see every component.">
       <DataTable<Transaction>
         caption="Transactions"
         rows={[...rows].sort((a, b) => b.invoiceDate.localeCompare(a.invoiceDate))}
@@ -264,7 +256,7 @@ function TxTable({ rows, showCost }: { rows: Transaction[]; showCost: boolean })
           },
         ]}
       />
-    </Card>
+    </TableSection>
   );
 }
 

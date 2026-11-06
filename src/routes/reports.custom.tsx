@@ -161,7 +161,7 @@ function CustomReportPage() {
   };
 
   const columns: Column<Row>[] = [
-    { key: "id", header: "Account ID", className: "font-mono text-xs whitespace-nowrap", cell: (r) => r.id },
+    { key: "id", header: "Account ID", className: "font-mono text-sm whitespace-nowrap", cell: (r) => r.id },
     { key: "name", header: "Account name", className: "font-medium", cell: (r) => r.name },
     { key: "from", header: "Date from", className: "text-muted-foreground whitespace-nowrap", cell: (r) => fmtDate(r.from) },
     { key: "to", header: "Date to", className: "text-muted-foreground whitespace-nowrap", cell: (r) => fmtDate(r.to) },
@@ -174,23 +174,10 @@ function CustomReportPage() {
       title="Custom report"
       subtitle="Choose your settings and run an ad hoc rebate report across accounts, programs and periods."
       onExport={applied ? exportCsv : undefined}
+      exportCount={filtered.length}
       asOf={ranAt ?? false}
     >
       <FilterBar onSubmit={run}>
-        <Field label="Group by" hint="Program and product grouping coming soon">
-          <select value={draft.groupBy} onChange={(e) => set("groupBy", e.target.value)} className={inputCls}>
-            <option>Account</option>
-            <option disabled>Program (coming soon)</option>
-            <option disabled>Product (coming soon)</option>
-          </select>
-        </Field>
-        <Field label="Frequency" hint="Period breakdowns coming soon">
-          <select value={draft.frequency} onChange={(e) => set("frequency", e.target.value)} className={inputCls}>
-            <option>None (total)</option>
-            <option disabled>Monthly (coming soon)</option>
-            <option disabled>Quarterly (coming soon)</option>
-          </select>
-        </Field>
         <Field label="Earnings">
           <select value={draft.earnings} onChange={(e) => set("earnings", e.target.value as Config["earnings"])} className={inputCls}>
             <option value="Accrual (Estimated)">Accrual (estimated)</option>
@@ -237,15 +224,11 @@ function CustomReportPage() {
         <section aria-labelledby="cr-results">
           <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
             <div className="min-w-0">
-              <h2 id="cr-results" className="text-lg font-semibold tracking-tight">
+              <h2 id="cr-results" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
                 Results
               </h2>
-              <p role="status" className="text-sm text-muted-foreground">
-                <span className="font-medium text-foreground tabular-nums">
-                  {filtered.length} {filtered.length === 1 ? "row" : "rows"}
-                </span>{" "}
-                · <span className="font-medium text-foreground tabular-nums">{money2(totals.revenue)}</span> revenue ·{" "}
-                <span className="font-medium text-foreground tabular-nums">{money2(totals.earnings)}</span> earnings · grouped by {applied.groupBy.toLowerCase()}
+              <p role="status" className="sr-only">
+                {filtered.length} {filtered.length === 1 ? "row" : "rows"} · {money2(totals.revenue)} revenue · {money2(totals.earnings)} earnings
               </p>
             </div>
             <SearchInput value={q} onChange={setQ} placeholder="Filter rows" label="Filter result rows" className="w-full sm:w-72" />

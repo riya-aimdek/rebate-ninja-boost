@@ -385,7 +385,7 @@ function Page() {
               </label>
               <select
                 id="timeline-sku"
-                className={`${inputCls} w-64`}
+                className={`${inputCls} w-72`}
                 value={timelineSku}
                 onChange={(e) => setTimelineSku(e.target.value)}
               >
@@ -405,15 +405,15 @@ function Page() {
           }
         >
           {typesForSku.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No cost records received for {timelineSku}. Choose another product above.</p>
+            <p className="text-base text-muted-foreground">No cost records received for {timelineSku}. Choose another product above.</p>
           ) : (
           /* Fits the card at every width — no horizontal scroll. */
           <div role="region" aria-label={`Cost timeline for ${timelineSku}`}>
           <div>
             {/* Axis — ticks sit at their real dates, on the same track as the bars. */}
             <div className="flex gap-4">
-              <div className="w-20 sm:w-32 shrink-0" />
-              <div className="relative flex-1 h-8" aria-hidden>
+              <div className="w-28 sm:w-32 shrink-0" />
+              <div className="relative flex-1 h-11" aria-hidden>
                 {AXIS_TICKS.map((t, i) => (
                   <span
                     key={t.date}
@@ -424,7 +424,7 @@ function Page() {
                   </span>
                 ))}
                 <span
-                  className="absolute bottom-0 -translate-x-1/2 rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-brand-foreground whitespace-nowrap"
+                  className="absolute bottom-0 -translate-x-1/2 rounded-full bg-brand-strong px-2 py-0.5 text-xs font-semibold text-brand-foreground whitespace-nowrap"
                   style={{ left: `${pos(TODAY)}%` }}
                 >
                   Today
@@ -432,9 +432,9 @@ function Page() {
               </div>
             </div>
             <div className="flex gap-4">
-              <div className="w-20 sm:w-32 shrink-0">
+              <div className="w-28 sm:w-32 shrink-0">
                 {typesForSku.map((t) => (
-                  <div key={t} className="h-14 flex items-center text-xs sm:text-sm font-medium">
+                  <div key={t} className="h-14 flex items-center text-sm font-medium min-w-0 break-words hyphens-auto">
                     {humanize(t)}
                   </div>
                 ))}
@@ -488,10 +488,10 @@ function Page() {
           )}
         </Card>
         <section aria-labelledby="cost-changes-h">
-          <h2 id="cost-changes-h" className="text-lg font-semibold tracking-tight">
+          <h2 id="cost-changes-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight">
             Change log
           </h2>
-          <p className="text-sm text-muted-foreground mt-0.5 mb-4">Newest first. Each change is a new record; the previous one is closed, never overwritten.</p>
+          <p className="text-base text-muted-foreground mt-0.5 mb-4">Newest first. Each change is a new record and closes the previous one.</p>
           <DataTable
             caption={`Cost changes for ${timelineSku}`}
             rows={changes}
@@ -574,7 +574,7 @@ function Page() {
             </div>
           </Card>
 
-          <Card title="Approved sources" subtitle="Each source system is registered and mapped to a service account (US-AD-08)">
+          <Card title="Approved sources" subtitle="Each source system is registered and mapped to a service account">
             <ul className="divide-y divide-border">
               {APPROVED_COST_SOURCES.map((s) => (
                 <li key={s.source} className="py-3 flex flex-wrap items-center gap-3">
@@ -594,10 +594,9 @@ function Page() {
           </Card>
 
           <section className="xl:col-span-2" aria-labelledby="rejected-payloads-h">
-            <h2 id="rejected-payloads-h" className="text-lg font-semibold tracking-tight">
+            <h2 id="rejected-payloads-h" className="text-xl lg:text-2xl leading-[1.2] font-semibold tracking-tight mb-4">
               Rejected payloads
             </h2>
-            <p className="text-sm text-muted-foreground mt-0.5 mb-4">Logged with source identity and reason</p>
             <DataTable
               caption="Rejected cost payloads"
               rows={rejected}
@@ -652,7 +651,7 @@ function Page() {
       >
         <details className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-2">
           <summary className="cursor-pointer text-sm font-semibold py-1">Example payloads</summary>
-          <p className="text-xs text-muted-foreground mt-1 mb-2">Fill the form with a scenario that exercises a validation rule.</p>
+          <p className="text-base text-muted-foreground mt-1 mb-2">Fill the form with a scenario that exercises a validation rule.</p>
           <div className="flex flex-wrap gap-2 pb-2">
             <Btn size="sm" variant="subtle" onClick={() => preset({ sku: "A-100", plant: "UK01", costType: "STANDARD", amount: "76", effectiveFrom: "2027-01-01" })}>
               Supersede (standard 76 from 2027-01-01)
