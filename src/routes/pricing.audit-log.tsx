@@ -237,9 +237,7 @@ function Page() {
       cell: (a) => (
         <div>
           <AuditRecord entry={a} />
-          <div className="mt-1">
-            <Tag>{humanize(a.entity)}</Tag>
-          </div>
+          <div className="text-xs text-muted-foreground">{humanize(a.entity)}</div>
         </div>
       ),
     },
@@ -249,9 +247,7 @@ function Page() {
       cell: (a) => (
         <div className="whitespace-nowrap">
           {humanize(a.action)}
-          <div className="mt-1">
-            <Tag tone="info">{humanize(eventTypeOf(a))}</Tag>
-          </div>
+          <div className="text-xs text-muted-foreground">{humanize(eventTypeOf(a))}</div>
         </div>
       ),
     },
@@ -260,7 +256,7 @@ function Page() {
       header: "Before → after",
       align: "right",
       cell: (a) => (
-        <span className="tabular-nums whitespace-nowrap">
+        <span className="tabular-nums inline-block max-w-64">
           <span className="text-muted-foreground">{a.before ?? "—"}</span> → <span className="font-semibold">{a.after ?? "—"}</span>
         </span>
       ),
@@ -268,13 +264,11 @@ function Page() {
     {
       key: "reason",
       header: "Reason",
-      className: "min-w-48",
+      className: "min-w-40",
       cell: (a) =>
         a.reasonCode ? (
           <div>
-            <span className="whitespace-nowrap">
-              <Tag tone="brand">{humanize(a.reasonCode)}</Tag>
-            </span>
+            <span className="font-medium">{humanize(a.reasonCode)}</span>
             {a.reasonText && (
               <div className="text-sm text-muted-foreground mt-1">“{a.reasonText}”</div>
             )}
@@ -283,7 +277,6 @@ function Page() {
           "—"
         ),
     },
-    { key: "v", header: "Version", className: "whitespace-nowrap", cell: (a) => a.version ?? "—" },
   ];
 
   const exportRows = () =>
@@ -326,6 +319,7 @@ function Page() {
   };
 
   const active = [
+    entities.length > 0 && { label: `Record type: ${entities.map(humanize).join(", ")}`, clear: () => setEntities([]) },
     actorType !== "all" && { label: `Actor type: ${humanize(actorType)}`, clear: () => setActorType("all") },
     actor !== "all" && { label: `Actor: ${actor}`, clear: () => setActor("all") },
     reason !== "all" && { label: `Reason: ${humanize(reason)}`, clear: () => setReason("all") },
@@ -351,7 +345,7 @@ function Page() {
     setFrom("");
     setTo("");
   };
-  const anyFilter = active.length > 0 || entities.length > 0 || events.length > 0 || q !== "";
+  const anyFilter = active.length > 0 || events.length > 0 || q !== "";
 
   return (
     <PricingLayout
@@ -362,11 +356,12 @@ function Page() {
       ]}
     >
       <ListHeader
+        eyebrow="Administration"
         title="Audit log"
         count={rows.length}
         noun="entry"
         nounPlural="entries"
-        subtitle="Price changes, quote calculations, approvals, overrides, exports, logins and publications — newest first. Search by record, actor or correlation ID."
+        subtitle="Every price change, approval, override, export, login and publication — newest first."
         search={q}
         onSearch={setQ}
         filterCount={active.length}
@@ -374,12 +369,6 @@ function Page() {
         filtersOpen={showFilters}
         actions={
           <>
-            <Btn variant="subtle" icon={Archive} onClick={() => setRetentionOpen(true)} disabled={!isItAdmin} title={isItAdmin ? undefined : "Only IT administrators change retention"}>
-              Retention: {retention} years
-            </Btn>
-            <Btn variant="outline" icon={ShieldCheck} loading={verifying} onClick={verify}>
-              Verify integrity
-            </Btn>
             <Btn variant="outline" icon={FileJson} onClick={() => exportFile("JSON")} disabled={rows.length === 0} title={rows.length === 0 ? "No entries to export — clear filters first" : undefined}>
               Export JSON
             </Btn>
@@ -393,15 +382,22 @@ function Page() {
         <InfoBanner
           title="Immutable, tamper-evident record"
           action={
-            isItAdmin && (
-              <Btn variant="ghost" size="sm" onClick={() => setTampered(true)}>
-                Simulate tampering (demo)
+            <span className="flex flex-wrap gap-2">
+              <Btn variant="outline" size="sm" icon={ShieldCheck} loading={verifying} onClick={verify}>
+                Verify integrity
               </Btn>
-            )
+              <Btn variant="subtle" size="sm" icon={Archive} onClick={() => setRetentionOpen(true)} disabled={!isItAdmin} title={isItAdmin ? undefined : "Only IT administrators change retention"}>
+                Retention: {retention} years
+              </Btn>
+              {isItAdmin && (
+                <Btn variant="ghost" size="sm" onClick={() => setTampered(true)}>
+                  Simulate tampering (demo)
+                </Btn>
+              )}
+            </span>
           }
         >
-          Entries are append-only: there is no edit or delete in the UI or API. Each entry is hash-chained to the one before it.
-          Last verified {integrity.at}
+          Nothing can be edited or deleted, and each entry is hash-chained to the one before. Last verified {integrity.at}
           {integrity.checked ? ` · ${integrity.checked} entries intact` : ""}.
         </InfoBanner>
       ) : (
@@ -437,16 +433,6 @@ function Page() {
         onChange={setEvents}
         options={AUDIT_EVENT_TYPES.map((e) => ({ key: e, label: humanize(e), count: stored.filter((a) => eventTypeOf(a) === e).length }))}
       />
-      <FilterPills
-        label="Entity"
-        selected={entities}
-        onChange={setEntities}
-        options={entityOptions.map((e) => ({
-          key: e,
-          label: humanize(e),
-          count: stored.filter((a) => a.entity === e).length,
-        }))}
-      />
 
       {(showFilters || active.length > 0) && (
         <div
@@ -454,6 +440,16 @@ function Page() {
           role="group"
           aria-label="Filters"
         >
+          <Field label="Record type">
+            <select className={inputCls} value={entities[0] ?? ""} onChange={(e) => setEntities(e.target.value ? [e.target.value] : [])}>
+              <option value="">All record types</option>
+              {entityOptions.map((e) => (
+                <option key={e} value={e}>
+                  {humanize(e)} ({stored.filter((a) => a.entity === e).length})
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Actor type">
             <select className={inputCls} value={actorType} onChange={(e) => setActorType(e.target.value as "all" | ActorType)}>
               <option value="all">All actor types</option>

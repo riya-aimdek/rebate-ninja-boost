@@ -73,6 +73,8 @@ export function ChartLegend({ items }: { items: Array<{ label: string; color: st
 
 /** In-page drill trail (Region › Customer › Product). Each crumb is a button that steps back. */
 export function DrillTrail({ steps, onJump }: { steps: Array<{ label: string }>; onJump: (index: number) => void }) {
+  // A single step is just the current view, which the card title already names: nothing to go back to.
+  if (steps.length < 2) return null;
   return (
     <nav aria-label="Drill path" className="mb-4">
       <ol className="flex flex-wrap items-center gap-1 text-sm">

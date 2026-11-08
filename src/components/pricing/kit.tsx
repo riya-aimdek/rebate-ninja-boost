@@ -1480,8 +1480,21 @@ const ACRONYMS = new Set([
   "ai",
   "sftp",
   "hmac",
-  "mtls",
+  "sla",
+  "jwt",
+  "sso",
+  "mfa",
+  "oidc",
+  "saml",
+  "scim",
+  "jit",
+  "bi",
+  "pdf",
+  "url",
+  "ip",
 ]);
+/** Acronyms with their own mixed casing. */
+const MIXED_CASE: Record<string, string> = { oauth: "OAuth", mtls: "mTLS", idp: "IdP" };
 
 /** "END_OF_LIFE" -> "End of life" (sentence case, en-GB style guide). */
 export function humanize(s: string) {
@@ -1489,7 +1502,7 @@ export function humanize(s: string) {
     .toLowerCase()
     .split(/[_\s]+/)
     .map((w, i) =>
-      ACRONYMS.has(w) ? w.toUpperCase() : i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w,
+      MIXED_CASE[w] ?? (ACRONYMS.has(w) ? w.toUpperCase() : i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w),
     )
     .join(" ");
 }
@@ -2384,7 +2397,8 @@ export function Toggle({
 export function money(n: number | null | undefined, currency = "GBP", digits = 2) {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   const sym: Record<string, string> = { GBP: "£", USD: "$", EUR: "€", INR: "₹" };
-  return `${sym[currency] ?? currency + " "}${n.toLocaleString("en-GB", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  // Sign before the symbol (−£5,208, not £-5,208), with a true minus sign.
+  return `${n < 0 ? "−" : ""}${sym[currency] ?? currency + " "}${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
 
 export function Price({

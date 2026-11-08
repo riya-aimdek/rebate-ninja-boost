@@ -81,7 +81,7 @@ function Page() {
           You can monitor integrations, events and errors. Running, replaying or switching integrations needs System Admin full access.
         </InfoBanner>
       )}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4 mb-6">
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(10rem,13rem))] mb-6">
         {INTEGRATION_STATUSES.map((s) => (
           <KpiTile key={s} label={humanize(s)} value={rows.filter((r) => r.status === s).length} tone={STATUS_TONE[s] === "neutral" ? "default" : STATUS_TONE[s]} />
         ))}
@@ -284,14 +284,10 @@ function EventsTab({ events, setEvents, editable }: { events: BusEvent[]; setEve
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-2 mb-6">
-        <InfoBanner title="Two event styles" className="">
-          <b>Change notification</b> carries only entity type, change type and key — the platform then fetches the record. <b>Data message</b> carries the full serialised object.
-        </InfoBanner>
-        <InfoBanner title="Delivery guarantees" className="">
-          At-least-once delivery with idempotent consumers. Webhooks are HMAC-signed. An event that fails {MAX_EVENT_ATTEMPTS} times moves to the dead-letter queue for replay.
-        </InfoBanner>
-      </div>
+      <InfoBanner title="How events are delivered">
+        A <b>change notification</b> carries only the key, so the record is fetched; a <b>data message</b> carries the whole record. Every event is
+        delivered at least once, and one that fails {MAX_EVENT_ATTEMPTS} times moves to the dead-letter queue for replay.
+      </InfoBanner>
 
       <Card
         title="Dead-letter queue"
@@ -316,9 +312,7 @@ function EventsTab({ events, setEvents, editable }: { events: BusEvent[]; setEve
                   <Btn variant="outline" size="sm" icon={RotateCcw} loading={replaying === e.id} onClick={() => replay(e)}>
                     Replay
                   </Btn>
-                ) : (
-                  <span className="text-sm text-muted-foreground max-w-56">{VIEW_ONLY}</span>
-                )}
+                ) : null}
               </li>
             ))}
           </ul>
@@ -390,7 +384,7 @@ function ErrorsTab() {
           rowKey={(r) => r.cls}
           numbered={false}
           columns={[
-            { key: "c", header: "Class", cell: (r) => <span className="font-mono text-xs">{r.cls}</span> },
+            { key: "c", header: "Class", className: "whitespace-nowrap", cell: (r) => <span><span className="font-medium">{humanize(r.cls)}</span><span className="block font-mono text-xs text-muted-foreground">{r.cls}</span></span> },
             { key: "r", header: "Retry?", cell: (r) => <Flag tone={r.retryable === true ? "success" : r.retryable === "depends" ? "info" : "neutral"}>{r.retry}</Flag> },
             { key: "e", header: "Example", cell: (r) => <span className="font-mono text-xs">{r.example}</span> },
           ]}

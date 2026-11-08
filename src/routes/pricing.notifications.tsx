@@ -88,7 +88,7 @@ function Page() {
   const { unread, items } = useMyNotifications();
   return (
     <>
-      <ListHeader title="Notifications" subtitle="Approvals, SLA breaches, expiries and failures — by email, Teams/Slack and in the app." />
+      <ListHeader eyebrow="Administration" title="Notifications" subtitle="Approvals, SLA breaches, expiries and failures — by email, Teams/Slack and in the app." />
       <PillTabs<Tab>
         idPrefix="nt"
         active={tab}
@@ -212,13 +212,16 @@ function Preferences() {
   return (
     <Card
       title={`Preferences for ${user.name}`}
-      subtitle={dirty ? "Unsaved changes" : "Mute non-critical events or get them as a daily digest. Critical events can't be turned off."}
+      subtitle="Mute non-critical events or get them as a daily digest. Critical events can't be turned off."
       padded={false}
       actions={
         <>
-          <Btn variant="subtle" disabled={!dirty || saving} onClick={() => setP(structuredClone(saved))}>
-            Cancel
-          </Btn>
+          {dirty && <Tag tone="warning">Unsaved changes</Tag>}
+          {dirty && (
+            <Btn variant="subtle" disabled={saving} onClick={() => setP(structuredClone(saved))}>
+              Cancel
+            </Btn>
+          )}
           <Btn loading={saving} disabled={!dirty} onClick={save}>
             Save preferences
           </Btn>
@@ -488,14 +491,28 @@ function DeliveryLog() {
         empty={<EmptyState title="No deliveries match" action={<Btn variant="subtle" onClick={() => setStatuses([])}>Clear filters</Btn>} />}
         columns={[
           { key: "at", header: "Sent", cell: (r) => <span className="tabular-nums whitespace-nowrap">{r.n.at}</span> },
-          { key: "id", header: "Notification", className: "min-w-56", cell: (r) => <span><span className="font-mono text-sm">{r.n.id}</span> · {r.n.title}</span> },
-          { key: "ev", header: "Event", cell: (r) => humanize(r.n.event) },
-          { key: "to", header: "Recipient", cell: (r) => userName(r.n.recipientId) },
-          { key: "ch", header: "Channel", cell: (r) => <span className="inline-flex items-center gap-1.5">{r.d.channel === "EMAIL" ? <Mail className="size-4" aria-hidden /> : r.d.channel === "TEAMS_SLACK" ? <MessageSquare className="size-4" aria-hidden /> : <Bell className="size-4" aria-hidden />}{CHANNEL_LABEL[r.d.channel]}</span> },
-          { key: "st", header: "Status", cell: (r) => <StatusPill status={tone(r.d.status)} label={humanize(r.d.status)} /> },
+          { key: "id", header: "Notification", className: "min-w-48", cell: (r) => <span><span className="font-mono text-sm">{r.n.id}</span> · {r.n.title}</span> },
+          { key: "ev", header: "Event", className: "whitespace-nowrap", cell: (r) => humanize(r.n.event) },
+          { key: "to", header: "Recipient", className: "whitespace-nowrap", cell: (r) => userName(r.n.recipientId) },
+          { key: "ch", header: "Channel", className: "whitespace-nowrap", cell: (r) => <span className="inline-flex items-center gap-1.5">{r.d.channel === "EMAIL" ? <Mail className="size-4" aria-hidden /> : r.d.channel === "TEAMS_SLACK" ? <MessageSquare className="size-4" aria-hidden /> : <Bell className="size-4" aria-hidden />}{CHANNEL_LABEL[r.d.channel]}</span> },
+          { key: "st", header: "Status", className: "whitespace-nowrap", cell: (r) => <StatusPill status={tone(r.d.status)} label={humanize(r.d.status)} /> },
           { key: "att", header: "Attempts", align: "right", cell: (r) => <span className="tabular-nums">{r.d.attempts}</span> },
-          { key: "det", header: "Detail", className: "min-w-56", cell: (r) => r.d.detail ?? <span className="text-muted-foreground">—</span> },
-          { key: "act", header: <span className="sr-only">Actions</span>, align: "right", cell: (r) => (r.d.status === "FAILED" ? <Btn size="sm" variant="outline" icon={RotateCcw} loading={busy === r.key} onClick={() => retry(r)}>Retry</Btn> : null) },
+          {
+            key: "det",
+            header: "Detail",
+            className: "min-w-48",
+            // Retry sits with the failure it fixes, so the table needs no extra actions column.
+            cell: (r) => (
+              <div className="space-y-2">
+                <div>{r.d.detail ?? <span className="text-muted-foreground">—</span>}</div>
+                {r.d.status === "FAILED" && (
+                  <Btn size="sm" variant="outline" icon={RotateCcw} loading={busy === r.key} onClick={() => retry(r)}>
+                    Retry
+                  </Btn>
+                )}
+              </div>
+            ),
+          },
         ]}
       />
     </>
@@ -550,10 +567,11 @@ function Settings() {
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
       <Card
         title="Contract expiry alerts"
-        subtitle={dirty ? "Unsaved changes" : "Sent to the account owner before a contract or exception price ends."}
+        subtitle="Sent to the account owner before a contract or exception price ends."
         actions={
           <>
-            <Btn variant="subtle" disabled={!dirty || saving} onClick={() => { setLead([...CONTRACT_EXPIRY_LEAD_DAYS]); setLeadErr(undefined); }}>Cancel</Btn>
+            {dirty && <Tag tone="warning">Unsaved changes</Tag>}
+            {dirty && <Btn variant="subtle" disabled={saving} onClick={() => { setLead([...CONTRACT_EXPIRY_LEAD_DAYS]); setLeadErr(undefined); }}>Cancel</Btn>}
             <MissingHint id={leadHintId} missing={leadMissing} />
             <Btn loading={saving} disabled={!dirty || leadMissing.length > 0} onClick={saveLead} aria-describedby={leadMissing.length ? leadHintId : undefined}>
               Save

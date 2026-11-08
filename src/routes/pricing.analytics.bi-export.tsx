@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
-import { Copy, Download, FileSpreadsheet, PlugZap } from "lucide-react";
+import { Copy, Download, PlugZap } from "lucide-react";
 import { toast } from "sonner";
-import { Btn, Card, DataTable, DetailTitle, ErrorBanner, Field, Flag, InfoBanner, PricingLayout, Tag, humanize, inputCls, notifySuccess, type ApiError, TableSection } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, DetailTitle, ErrorBanner, Field, Flag, InfoBanner, PricingLayout, StatusPill, Tag, humanize, inputCls, notifySuccess, type ApiError, TableSection } from "@/components/pricing/kit";
 import { RequireAccess } from "@/components/pricing/access";
 import { Freshness } from "@/components/pricing/analytics-ui";
 import { EXCEPTIONS, NOW, QUOTES, priceQuote, shortHash, type Transaction } from "@/lib/pricing/deals";
@@ -23,6 +23,21 @@ const DATASETS = ["MARGIN_FACT", "WATERFALL_FACT", "PRICE_LIST_DIM", "QUOTE_FACT
 type Dataset = (typeof DATASETS)[number];
 type Format = "CSV" | "JSON" | "PARQUET";
 type Row = Record<string, string | number | boolean | null>;
+
+/** People pick datasets by name; the API name stays in the request URL and the log for BI developers. */
+const DATASET_LABEL: Record<Dataset, string> = {
+  MARGIN_FACT: "Margin (invoice lines)",
+  WATERFALL_FACT: "Price waterfall",
+  PRICE_LIST_DIM: "Price lists",
+  QUOTE_FACT: "Quotes",
+  EXCEPTION_FACT: "Pricing exceptions",
+};
+const FORMAT_LABEL: Record<Format, string> = { CSV: "CSV", JSON: "JSON", PARQUET: "Parquet" };
+const TOOL_LABEL: Record<string, string> = { POWER_BI: "Power BI", TABLEAU: "Tableau" };
+const METHOD_LABEL: Record<string, string> = { REST_API: "REST API", WAREHOUSE: "Snowflake connector" };
+const SERVICE_ACCOUNT = "svc-bi-export";
+/** "grossMargin" → "Gross margin". */
+const colLabel = (c: string) => humanize(c.replace(/([a-z])([A-Z])/g, "$1_$2"));
 
 const DATASET_INFO: Record<Dataset, string> = {
   MARGIN_FACT: "One row per invoice line: revenue, volume, cost and margin.",
@@ -63,9 +78,9 @@ function datasetRows(d: Dataset, user: User): Array<{ modifiedAt: string; row: R
 
 type ExportEntry = { id: string; at: string; userId: string; dataset: Dataset; filters: string; format: Format; rows: number; channel: "UI" | "API" };
 const SEED_LOG: ExportEntry[] = [
-  { id: "EX-311", at: "2026-10-29 06:00", userId: "svc-powerbi", dataset: "MARGIN_FACT", filters: "modifiedSince=2026-10-28T06:00:00Z", format: "PARQUET", rows: 1_204, channel: "API" },
+  { id: "EX-311", at: "2026-10-29 06:00", userId: SERVICE_ACCOUNT, dataset: "MARGIN_FACT", filters: "modifiedSince=2026-10-28T06:00:00Z", format: "PARQUET", rows: 0, channel: "API" },
   { id: "EX-310", at: "2026-10-28 16:12", userId: "U-10", dataset: "QUOTE_FACT", filters: "—", format: "CSV", rows: 11, channel: "UI" },
-  { id: "EX-309", at: "2026-10-28 06:00", userId: "svc-powerbi", dataset: "WATERFALL_FACT", filters: "modifiedSince=2026-10-27T06:00:00Z", format: "PARQUET", rows: 980, channel: "API" },
+  { id: "EX-309", at: "2026-10-28 06:00", userId: SERVICE_ACCOUNT, dataset: "WATERFALL_FACT", filters: "modifiedSince=2026-10-27T06:00:00Z", format: "PARQUET", rows: 0, channel: "API" },
 ];
 
 function download(name: string, text: string, type: string) {
@@ -85,11 +100,15 @@ const toCsv = (rows: Row[]) => {
 
 function Page() {
   const { user, sees, can } = useSession();
-  const [tool, setTool] = useState("POWER_BI");
-  const [method, setMethod] = useState("REST_API");
+  // What's saved drives the status line; the selects are a draft until "Save changes".
+  const [saved, setSaved] = useState({ tool: "POWER_BI", method: "REST_API" });
+  const [tool, setTool] = useState(saved.tool);
+  const [method, setMethod] = useState(saved.method);
   const [connected, setConnected] = useState(true);
+  const dirty = tool !== saved.tool || method !== saved.method;
   const [dataset, setDataset] = useState<Dataset>("MARGIN_FACT");
-  const [since, setSince] = useState("2026-10-01T00:00");
+  // Blank = full export, so the page opens with something to export.
+  const [since, setSince] = useState("");
   const [format, setFormat] = useState<Format>("CSV");
   const [log, setLog] = useState<ExportEntry[]>(SEED_LOG);
   const [busy, setBusy] = useState(false);
@@ -99,6 +118,7 @@ function Page() {
   const sinceIso = since ? `${since}:00Z` : undefined;
   // Incremental pull: only rows changed after "Modified since" (US-AN-05 AC#3).
   const changed = sinceIso ? all.filter((r) => iso(r.modifiedAt) > sinceIso) : all;
+  const latestChange = all.reduce((m, r) => (r.modifiedAt > m ? r.modifiedAt : m), "");
   const allCols = all[0] ? Object.keys(all[0].row) : [];
   const dropped = allCols.filter((c) => SECURED_COLUMNS[c] && !sees(SECURED_COLUMNS[c]));
   const visible = (r: Row): Row => Object.fromEntries(Object.entries(r).filter(([k]) => !dropped.includes(k)));
@@ -124,7 +144,7 @@ function Page() {
       // Every export is an audit event (US-AN-05 AC#2, US-AD-04).
       AUDIT_LOG.unshift({ id: `AU-${78000 + log.length}`, at: NOW, actor: user.name, entity: "Data Export", record: dataset, action: "DATA_EXPORT", after: `${rows.length} rows · ${format}`, reasonText: entry.filters, correlationId: `c-${shortHash(entry.id + NOW)}` });
       setBusy(false);
-      if (format === "PARQUET") toast.success(`${dataset} Parquet file is being built`, { description: `${rows.length} rows. Parquet is produced server-side — your BI tool picks it up from the API link. Export recorded in the audit log.` });
+      if (format === "PARQUET") toast.success(`${DATASET_LABEL[dataset]} Parquet file is being built`, { description: `${rows.length} rows. Parquet is produced server-side — your BI tool picks it up from the API link. Export recorded in the audit log.` });
       else notifySuccess(`${rows.length.toLocaleString("en-GB")} rows exported`, "Export recorded in the audit log.");
     }, 500);
   };
@@ -146,8 +166,12 @@ function Page() {
       <DetailTitle title="BI export" subtitle="Governed pricing datasets for Power BI, Tableau and the data warehouse — incremental, secured and logged." actions={<Freshness />} />
       {note && <InfoBanner title="Row-level security">{note} Exports contain the same rows you can see.</InfoBanner>}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] mb-6">
-        <Card title="BI connection" subtitle={connected ? "Connected · scheduled pull daily 06:00 UTC" : "Not connected"}>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] mb-6">
+        <Card
+          title="BI connection"
+          subtitle={connected ? `${TOOL_LABEL[saved.tool]} via ${METHOD_LABEL[saved.method]} · ${saved.method === "REST_API" ? "pulled daily 06:00 UTC" : "pushed nightly"}` : "Scheduled pulls are stopped until you resume."}
+          actions={<StatusPill status={connected ? "ACTIVE" : "PAUSED"} tone={connected ? undefined : "warning"} label={connected ? "Connected" : "Paused"} />}
+        >
           <div className="space-y-4">
             <Field label="BI tool">
               <select className={inputCls} value={tool} onChange={(e) => setTool(e.target.value)} disabled={!canConfigure}>
@@ -163,22 +187,34 @@ function Page() {
             </Field>
             <dl className="grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
               <dt className="text-muted-foreground">Service account</dt>
-              <dd className="font-mono text-sm">svc-bi-export</dd>
-              <dt className="text-muted-foreground">Scopes</dt>
-              <dd className="flex flex-wrap gap-1">{DATASETS.map((d) => <Tag key={d}>{d}</Tag>)}</dd>
-              <dt className="text-muted-foreground">Rate limit</dt>
-              <dd>600 requests / minute, returned in response headers</dd>
+              <dd className="font-mono text-sm">{SERVICE_ACCOUNT}</dd>
+              <dt className="text-muted-foreground">Datasets</dt>
+              <dd className="flex flex-wrap gap-1">{DATASETS.map((d) => <Tag key={d}>{DATASET_LABEL[d]}</Tag>)}</dd>
+              {method === "REST_API" && (
+                <>
+                  <dt className="text-muted-foreground">Rate limit</dt>
+                  <dd>600 requests / minute, returned in response headers</dd>
+                </>
+              )}
             </dl>
             {canConfigure ? (
               <div className="flex flex-wrap justify-end gap-2">
-                {connected && (
-                  <Btn variant="subtle" onClick={() => { setConnected(false); toast("BI connection paused", { description: "Scheduled pulls stop until you reconnect.", action: { label: "Undo", onClick: () => setConnected(true) } }); }}>
+                {dirty && (
+                  <Btn variant="subtle" onClick={() => (setTool(saved.tool), setMethod(saved.method))}>
+                    Discard
+                  </Btn>
+                )}
+                {connected && !dirty && (
+                  <Btn variant="subtle" onClick={() => { setConnected(false); toast("BI connection paused", { description: "Scheduled pulls stop until you resume.", action: { label: "Undo", onClick: () => setConnected(true) } }); }}>
                     Pause connection
                   </Btn>
                 )}
-                <Btn icon={PlugZap} onClick={() => { setConnected(true); notifySuccess("BI connection saved", `${tool === "POWER_BI" ? "Power BI" : "Tableau"} via ${method === "REST_API" ? "REST API" : "Snowflake connector"}.`); }}>
-                  Save connection
-                </Btn>
+                {/* One primary action for the state you're in: save edits, or resume a paused connection. */}
+                {(dirty || !connected) && (
+                  <Btn icon={PlugZap} onClick={() => { setSaved({ tool, method }); setConnected(true); notifySuccess(dirty ? "BI connection saved" : "BI connection resumed", `${TOOL_LABEL[tool]} via ${METHOD_LABEL[method]}.`); }}>
+                    {dirty ? "Save changes" : "Resume connection"}
+                  </Btn>
+                )}
               </div>
             ) : (
               <p className="text-base text-muted-foreground">Only pricing and IT administrators can change the connection.</p>
@@ -194,7 +230,7 @@ function Page() {
                 <select className={inputCls} value={dataset} onChange={(e) => setDataset(e.target.value as Dataset)}>
                   {DATASETS.map((d) => (
                     <option key={d} value={d}>
-                      {d}
+                      {DATASET_LABEL[d]}
                     </option>
                   ))}
                 </select>
@@ -212,10 +248,11 @@ function Page() {
             </div>
             <p className="mt-4 text-base" role="status">
               <strong className="tabular-nums">{changed.length.toLocaleString("en-GB")}</strong> of {all.length.toLocaleString("en-GB")} rows {sinceIso ? "changed since then" : "in the dataset"}.
+              {sinceIso && changed.length === 0 && latestChange && <span className="text-muted-foreground"> Latest change was {latestChange} UTC — pick an earlier time or clear the field.</span>}
             </p>
             {dropped.length > 0 && (
               <p className="mt-2 text-base">
-                <Flag tone="info">Field-level security</Flag> <span className="text-muted-foreground">Removed for your role: {dropped.map(humanize).join(", ")}.</span>
+                <Flag tone="info">Field-level security</Flag> <span className="text-muted-foreground">Removed for your role: {dropped.map(colLabel).join(", ")}.</span>
               </p>
             )}
             <div className="mt-4">
@@ -244,13 +281,13 @@ function Page() {
           rows={log}
           rowKey={(e) => e.id}
           pageSize={10}
-          empty={<span className="inline-flex items-center gap-2"><FileSpreadsheet className="size-4" aria-hidden /> No exports yet.</span>}
+          empty="No exports yet"
           columns={[
             { key: "at", header: "When", cell: (e) => <span className="tabular-nums whitespace-nowrap">{e.at}</span> },
             { key: "u", header: "User or service", cell: (e) => (e.userId.startsWith("svc-") ? <span className="font-mono text-sm">{e.userId}</span> : userName(e.userId)) },
-            { key: "d", header: "Dataset", cell: (e) => <span className="font-mono text-sm">{e.dataset}</span> },
+            { key: "d", header: "Dataset", className: "whitespace-nowrap", cell: (e) => <div>{DATASET_LABEL[e.dataset]}<div className="text-xs text-muted-foreground font-mono">{e.dataset.toLowerCase()}</div></div> },
             { key: "f", header: "Filters", cell: (e) => <span className="text-sm break-all">{e.filters}</span> },
-            { key: "fmt", header: "Format", className: "whitespace-nowrap", cell: (e) => e.format },
+            { key: "fmt", header: "Format", className: "whitespace-nowrap", cell: (e) => FORMAT_LABEL[e.format] },
             { key: "r", header: "Rows", align: "right", cell: (e) => <span className="tabular-nums">{e.rows.toLocaleString("en-GB")}</span> },
             { key: "c", header: "Channel", className: "whitespace-nowrap", cell: (e) => e.channel },
           ]}

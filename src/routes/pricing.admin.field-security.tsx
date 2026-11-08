@@ -131,8 +131,9 @@ function Page() {
           </Btn>
         }
       />
-      <InfoBanner title="Applied on the server, on every channel">
-        A rep who sees cost can negotiate against the company. Restricted values are removed before they leave the server — in screens, API responses, exports, notifications, reports and audit views. Derived fields (margin from cost) inherit the strictest source rule unless explicitly opened. Restricted fields are encrypted at rest.
+      <InfoBanner title="Applied everywhere the data goes">
+        Restricted values are removed before they reach a screen, export, report, notification or API response. Fields worked out from them
+        (like margin from cost) follow the same rule unless opened up.
       </InfoBanner>
 
       <DataTable<Policy>
@@ -325,7 +326,7 @@ function Preview({ role, setRole, policies }: { role: Role; setRole: (r: Role) =
           {omitted.length > 0 && (
             <p className="mt-2 text-sm" role="status">
               <Flag tone="info">
-                <Lock className="size-3" aria-hidden /> Omitted for {ROLE_LABEL[role]}: {omitted.join(", ")}
+                Omitted for {ROLE_LABEL[role]}: {omitted.join(", ")}
               </Flag>
             </p>
           )}

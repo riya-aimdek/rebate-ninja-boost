@@ -229,9 +229,11 @@ function IdpForm({ config, onSave }: { config: IdpConfig; onSave: (c: IdpConfig)
         </div>
         <div className="flex flex-wrap justify-end gap-2 mt-6">
           <MissingHint id={hintId} missing={missing} />
-          <Btn variant="subtle" disabled={!dirty || saving} onClick={() => (setF({ ...config, newSecret: "" }), setSubmitted(false), setError(null))}>
-            Cancel
-          </Btn>
+          {dirty && (
+            <Btn variant="subtle" disabled={saving} onClick={() => (setF({ ...config, newSecret: "" }), setSubmitted(false), setError(null))}>
+              Cancel
+            </Btn>
+          )}
           <Btn type="submit" loading={saving} disabled={!dirty || missing.length > 0} aria-describedby={missing.length ? hintId : undefined}>
             Save identity provider
           </Btn>
@@ -320,7 +322,7 @@ function GroupMapping({
             <li key={m.group} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
               <span className="font-mono">{m.group}</span>
               <span className="flex items-center gap-2">
-                <Tag tone="info">{ROLE_LABEL[m.role]}</Tag>
+                <span className="text-sm font-medium">{ROLE_LABEL[m.role]}</span>
                 <button type="button" onClick={() => remove(m.group)} aria-label={`Remove mapping for ${m.group}`} className="size-10 grid place-items-center rounded-md text-muted-foreground hover:text-destructive hover:bg-muted">
                   <Trash2 className="size-4" aria-hidden />
                 </button>

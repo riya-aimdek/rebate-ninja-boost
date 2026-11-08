@@ -606,15 +606,13 @@ function RolesTab({
     <>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-8 [&>p]:min-w-0 [&>p]:flex-1 [&>:not(p)]:shrink-0 mb-4">
         <p className="text-base text-muted-foreground">
-          Levels: N none · V view · E edit · A approve · F full. <span aria-hidden>*</span> means own records only. Every API call is authorised against these grants — hiding a button is never the only control.
+          Levels: N none · V view · E edit · A approve · F full. <span aria-hidden>*</span> means own records only.
         </p>
         {editable ? (
           <Btn icon={Plus} onClick={startNew}>
             Create role
           </Btn>
-        ) : (
-          <span className="text-base text-muted-foreground">{VIEW_ONLY}</span>
-        )}
+        ) : null}
       </div>
       <DataTable<RoleRow>
         caption="Role-based access matrix"
@@ -795,8 +793,8 @@ function AuthTester({ roles, users }: { roles: RoleRow[]; users: User[] }) {
   };
   const p = PERMISSION_CODES.find((x) => x.code === code)!;
   return (
-    <Card title="API authorisation tester" subtitle="Call an endpoint directly as a user — the server refuses it even though the UI would have hidden the button." className="mt-6">
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] items-end">
+    <Card title="API authorisation tester" subtitle="Call an endpoint as another user to check the server refuses what their role can't do." className="mt-6">
+      <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] items-start">
         <Field label="Call as">
           <select className={inputCls} value={userId} onChange={(e) => setUserId(e.target.value)}>
             {users.map((u) => (
@@ -816,7 +814,7 @@ function AuthTester({ roles, users }: { roles: RoleRow[]; users: User[] }) {
             ))}
           </select>
         </Field>
-        <Btn icon={Send} variant="outline" loading={busy} onClick={send} className="mb-[22px]">
+        <Btn icon={Send} variant="outline" loading={busy} onClick={send} className="md:mt-[26px]">
           Send request
         </Btn>
       </div>
@@ -898,7 +896,7 @@ function PolicyTab({ editable }: { editable: boolean }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr] items-start">
-      <Card title="Policy for local accounts" subtitle={!editable ? VIEW_ONLY : dirty ? "Unsaved changes" : "SSO users follow the identity provider's session and MFA rules."}>
+      <Card title="Policy for local accounts" subtitle={dirty ? "Unsaved changes" : "SSO users follow the identity provider's session and MFA rules."}>
         <form onSubmit={save} noValidate>
         <fieldset disabled={!editable} className="grid gap-4 md:grid-cols-2 disabled:opacity-80">
           <Field label="Idle timeout (minutes)" required error={fe("pol-idle")}>
@@ -983,7 +981,6 @@ function PolicyTab({ editable }: { editable: boolean }) {
           </ul>
         </Card>
         <InfoBanner tone="neutral" title="Why this matters" className="">
-          <ShieldCheck className="inline size-4 mr-1 text-muted-foreground" aria-hidden />
           Idle sessions and leavers' accounts are common ways in. These limits apply per tenant and every change is audited.
         </InfoBanner>
       </div>

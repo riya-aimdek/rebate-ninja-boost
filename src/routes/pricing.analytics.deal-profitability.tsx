@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { BellRing, TrendingDown } from "lucide-react";
-import { Btn, Card, DataTable, DetailTitle, EmptyState, Field, Flag, InfoBanner, KpiTile, PricingLayout, RecordLink, StatusPill, inputCls, notifySuccess, type Column, TableSection } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, DetailTitle, EmptyState,  InfoBanner, KpiTile, PricingLayout, RecordLink, StatusPill, inputCls, notifySuccess, type Column, TableSection } from "@/components/pricing/kit";
 import { RequireAccess, pctBand } from "@/components/pricing/access";
 import { Freshness } from "@/components/pricing/analytics-ui";
 import { NOTIFICATIONS, NOW, QUOTES, priceQuote, pushNotification, quoteById, type Quote } from "@/lib/pricing/deals";
@@ -100,31 +100,34 @@ function Page() {
     );
 
   const cols: Column<Row>[] = [
-    { key: "q", header: "Quote", cell: (r) => <RecordLink to="/pricing/quotes/$id" params={{ id: r.quote.id }}>{r.quote.id}</RecordLink> },
+    { key: "q", header: "Quote", className: "whitespace-nowrap", cell: (r) => <RecordLink to="/pricing/quotes/$id" params={{ id: r.quote.id }}>{r.quote.id}</RecordLink> },
     { key: "c", header: "Customer", cell: (r) => <span className="whitespace-nowrap">{customerName(r.quote.customerId)}</span> },
     { key: "o", header: "Owner", cell: (r) => <span className="whitespace-nowrap">{userName(r.quote.ownerId)}</span> },
     { key: "s", header: "Status", cell: (r) => <StatusPill status={r.quote.status} /> },
-    { key: "e", header: "Expected (at approval)", align: "right", cell: (r) => <span className="tabular-nums">{fmt(r.expected)}</span> },
-    { key: "a", header: "Actual (invoiced)", align: "right", cell: (r) => (r.actual === undefined ? <span className="text-muted-foreground">Awaiting invoices</span> : <span className="tabular-nums">{fmt(r.actual)}</span>) },
+    { key: "e", header: "Expected", align: "right", cell: (r) => <span className="tabular-nums">{fmt(r.expected)}</span> },
+    { key: "a", header: "Actual", align: "right", cell: (r) => (r.actual === undefined ? <span className="text-muted-foreground">Awaiting invoices</span> : <span className="tabular-nums">{fmt(r.actual)}</span>) },
     {
       key: "v",
       header: "Variance",
       align: "right",
-      // Banded viewers see the alert flag, not the exact point difference.
-      cell: (r) => (r.variance === undefined || marginAccess === "ROUND" ? <span className="text-muted-foreground">—</span> : <span className="tabular-nums font-semibold">{r.variance > 0 ? "+" : r.variance < 0 ? "−" : ""}{Math.abs(r.variance).toFixed(1)} pts</span>),
-    },
-    {
-      key: "f",
-      header: "Alert",
+      className: "whitespace-nowrap",
+      // One column: the drift, and under it whether it breached the threshold. Banded viewers see only the flag.
       cell: (r) =>
-        r.breach ? (
-          <span className="inline-flex flex-col gap-1">
-            <Flag tone="danger">Threshold breach</Flag>
-            <span className="text-xs text-muted-foreground">{r.alerted ? "Owner notified" : "Not yet notified"}</span>
+        r.variance === undefined ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <span className="inline-flex flex-col items-end">
+            {marginAccess !== "ROUND" && (
+              <span className={`tabular-nums font-semibold ${r.breach ? "text-destructive" : ""}`}>
+                {r.variance > 0 ? "+" : r.variance < 0 ? "−" : ""}
+                {Math.abs(r.variance).toFixed(1)} pts
+              </span>
+            )}
+            <span className={`text-xs ${r.breach ? "text-destructive" : "text-muted-foreground"}`}>
+              {r.breach ? (r.alerted ? "Breach · owner notified" : "Breach · not notified") : "Within threshold"}
+            </span>
           </span>
-        ) : r.variance !== undefined ? (
-          <Flag tone="success">Within threshold</Flag>
-        ) : null,
+        ),
     },
   ];
 
@@ -143,22 +146,29 @@ function Page() {
         }
       />
       <InfoBanner title="Expected margin is a snapshot">
-        It is captured when the quote is approved. Later cost changes don't rewrite it — the “Margin today” column shows what the same quote would earn at current cost. Actual margin comes from ERP billing plus Rebate Ninja accruals.
+        It is captured when the quote is approved. Later cost changes don't rewrite it — the “Today” column shows what the same quote would earn at current cost. Actual margin comes from ERP billing plus Rebate Ninja accruals.
       </InfoBanner>
 
-      <section aria-label="Profitability summary" className="grid gap-4 grid-cols-1 sm:grid-cols-3 mb-6">
+      <section aria-label="Profitability summary" className="grid gap-2 grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(12rem,16rem))] mb-6">
         <KpiTile label="Approved quotes tracked" value={rows.length} tone="default" />
-        <KpiTile label="Invoiced so far" value={invoiced.length} tone="info" />
-        <KpiTile label="Margin drift above threshold" value={breaches.length} tone={breaches.length ? "danger" : "success"} hint={`More than ${limit} points below expected`} />
+        <KpiTile label="Invoiced so far" value={invoiced.length} tone="default" />
+        <KpiTile label="Margin drift alerts" value={breaches.length} tone={breaches.length ? "danger" : "success"} hint={`More than ${limit} points below expected`} />
       </section>
 
       <TableSection
         title="Expected vs actual margin"
         actions={
-          <div className="flex flex-wrap items-end gap-3">
-            <Field label="Alert threshold (points)" error={thresholdError} className="w-44">
-              <input type="number" min={0.5} max={20} step={0.5} inputMode="decimal" className={inputCls} value={threshold} onChange={(e) => setThreshold(e.target.value)} />
-            </Field>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Alert when more than</span>
+              <input type="number" min={0.5} max={20} step={0.5} inputMode="decimal" className={`${inputCls} w-20`} value={threshold} onChange={(e) => setThreshold(e.target.value)} aria-invalid={!!thresholdError || undefined} aria-describedby={thresholdError ? "dp-threshold-err" : undefined} />
+              <span className="text-muted-foreground">pts below expected</span>
+            </label>
+            {thresholdError && (
+              <p id="dp-threshold-err" className="basis-full text-sm text-destructive">
+                {thresholdError}
+              </p>
+            )}
             <Btn icon={BellRing} onClick={sendAlerts} disabled={pending.length === 0 || !!thresholdError} title={pending.length === 0 ? "Every breach has already been notified" : undefined}>
               {pending.length ? `Notify ${pending.length} owner${pending.length === 1 ? "" : "s"}` : "All owners notified"}
             </Btn>
@@ -173,7 +183,7 @@ function Page() {
           empty={<EmptyState icon={TrendingDown} title="No approved quotes yet">Quotes appear here once they are approved and their expected margin is captured.</EmptyState>}
           columns={[
             ...cols.slice(0, 5),
-            ...(marginAccess === "SHOW" ? [{ key: "now", header: "Margin today", align: "right" as const, cell: (r: Row) => <span className="tabular-nums text-muted-foreground">{fmt(r.current)}</span> }] : []),
+            ...(marginAccess === "SHOW" ? [{ key: "now", header: "Today", align: "right" as const, cell: (r: Row) => <span className="tabular-nums text-muted-foreground">{fmt(r.current)}</span> }] : []),
             ...cols.slice(5),
           ]}
         />

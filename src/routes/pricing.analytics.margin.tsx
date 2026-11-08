@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { BarChart3 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Btn, Card, DataTable, DetailTitle, EmptyState, FilterPills, InfoBanner, KpiTile, LinkBtn, PricingLayout, money, type Column, TableSection } from "@/components/pricing/kit";
+import { Btn, Card, DataTable, DetailTitle, EmptyState, FilterPills, InfoBanner, KpiTile, LinkBtn, inputCls, PricingLayout, money, type Column, TableSection } from "@/components/pricing/kit";
 import { RequireAccess, pctBand } from "@/components/pricing/access";
 import { DrillTrail, Freshness, MetricLabel } from "@/components/pricing/analytics-ui";
 import { type Transaction } from "@/lib/pricing/deals";
@@ -106,13 +106,13 @@ function Page() {
     );
 
   const cols: Column<Metrics>[] = [
-    { key: "g", header: DIMENSION_LABEL[groupDim], cell: (m) => <span className="font-medium text-brand-strong">{m.label}</span> },
+    { key: "g", header: DIMENSION_LABEL[groupDim], className: "whitespace-nowrap", cell: (m) => <span className="font-medium text-brand-strong">{m.label}</span> },
     { key: "r", header: "Revenue", align: "right", cell: (m) => <span className="tabular-nums">{money(m.revenue, "GBP", 0)}</span> },
     { key: "v", header: "Volume", align: "right", cell: (m) => <span className="tabular-nums">{m.volume.toLocaleString("en-GB")}</span> },
     ...(showGM ? [{ key: "gm", header: "Gross margin", align: "right" as const, cell: (m: Metrics) => <span className="tabular-nums">{money(m.grossMargin, "GBP", 0)}</span> }] : []),
-    ...(pctAccess !== "HIDE" ? [{ key: "gmp", header: "GM %", align: "right" as const, cell: (m: Metrics) => <span className="tabular-nums">{gmPct(m)}</span> }] : []),
+    ...(pctAccess !== "HIDE" ? [{ key: "gmp", header: "Gross margin %", align: "right" as const, cell: (m: Metrics) => <span className="tabular-nums">{gmPct(m)}</span> }] : []),
     ...(showGM ? [{ key: "pm", header: "Pocket margin", align: "right" as const, cell: (m: Metrics) => <span className="tabular-nums">{money(m.pocketMargin, "GBP", 0)}</span> }] : []),
-    { key: "pr", header: "Price realization", align: "right", cell: (m) => <span className="tabular-nums">{m.priceRealization.toFixed(1)}%</span> },
+    { key: "pr", header: "Realization %", align: "right", cell: (m) => <span className="tabular-nums">{m.priceRealization.toFixed(1)}%</span> },
     { key: "d", header: "Discount %", align: "right", cell: (m) => <span className="tabular-nums">{m.discountPct.toFixed(1)}%</span> },
   ];
 
@@ -135,9 +135,10 @@ function Page() {
       />
       {note && <InfoBanner title="Row-level security">{note}</InfoBanner>}
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-2 empty:hidden">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-4 empty:hidden">
         <FilterPills<Period>
           label="Period"
+          className=""
           multiple={false}
           clearable={false}
           selected={[period]}
@@ -150,6 +151,8 @@ function Page() {
         />
       </div>
 
+      <DrillTrail steps={trail} onJump={(i) => set(trail[i].apply)} />
+
       <section aria-label="Key figures" className="grid gap-2 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] mb-6">
         <Kpi label="Revenue" def={METRIC_DEFINITIONS.revenue} value={compactMoney(total.revenue)} />
         <Kpi label="Volume" def={METRIC_DEFINITIONS.volume} value={total.volume.toLocaleString("en-GB")} hint="units" />
@@ -161,8 +164,6 @@ function Page() {
       </section>
       {!showGM && <p className="text-xs text-muted-foreground -mt-3 mb-6">Margin amounts are hidden for your role (field-level security).</p>}
 
-      <DrillTrail steps={trail} onJump={(i) => set(trail[i].apply)} />
-
       {rows.length === 0 ? (
         <Card>
           <EmptyState icon={BarChart3} title="No transactions in this view" action={<Btn variant="subtle" onClick={() => set({ ...CLEAR, period: undefined })}>Reset view</Btn>}>
@@ -172,7 +173,7 @@ function Page() {
       ) : level === "TX" ? (
         <TxTable rows={rows} showCost={showGM} />
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="space-y-6">
           <Card
             title={`Revenue by ${DIMENSION_LABEL[groupDim].toLowerCase()}`}
             subtitle={groups.length > 10 ? "Top 10 shown — full list in the table" : undefined}
@@ -180,7 +181,7 @@ function Page() {
               level === "GROUP" ? (
                 <label className="flex items-center gap-2 text-sm">
                   <span className="text-muted-foreground">View by</span>
-                  <select className="h-10 px-3 rounded-lg border border-input bg-card text-base" value={dim} onChange={(e) => set({ dim: e.target.value as Dimension, ...CLEAR })}>
+                  <select className={`${inputCls} w-44`} value={dim} onChange={(e) => set({ dim: e.target.value as Dimension, ...CLEAR })}>
                     {DIMENSIONS.map((d) => (
                       <option key={d} value={d}>
                         {DIMENSION_LABEL[d]}

@@ -358,8 +358,8 @@ function Page() {
       className: "min-w-[180px] max-w-[280px]",
       cell: (d) => (
         <div>
-          <div className="font-mono text-sm font-semibold break-words">{d.code}</div>
-          <div className="line-clamp-2 mt-0.5 text-muted-foreground">{d.message}</div>
+          <div className="line-clamp-2">{d.message}</div>
+          <div className="font-mono text-xs text-muted-foreground mt-0.5 break-words">{d.code}</div>
         </div>
       ),
     },
@@ -453,7 +453,7 @@ function Page() {
                       <h3 id={`job-${j.id}`} className="text-lg lg:text-xl leading-[1.2] font-semibold">
                         {j.entity} sync
                       </h3>
-                      <p className="text-sm text-muted-foreground truncate" title={j.source}>{j.source}</p>
+                      <p className="text-sm text-muted-foreground">{j.source}</p>
                     </div>
                     <StatusPill status={j.status} />
                   </div>

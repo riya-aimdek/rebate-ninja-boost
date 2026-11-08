@@ -130,7 +130,7 @@ function Page() {
           { key: "owner", header: "Owner", className: "whitespace-nowrap", cell: (r) => ownerName(r.ownerId) },
           { key: "creds", header: "Active credentials", align: "right", cell: (r) => <span className="tabular-nums">{r.credentials.filter((c) => c.status === "ACTIVE").length}</span> },
           { key: "exp", header: "Account expires", cell: (r) => <span className="tabular-nums whitespace-nowrap">{r.expiresAt}</span> },
-          { key: "st", header: "Status", cell: (r) => <span className="flex flex-wrap gap-1"><StatusPill status={r.status} tone={STATUS_TONE[r.status]} />{r.nodeSync && <Tag tone="info">Node sync</Tag>}</span> },
+          { key: "st", header: "Status", className: "whitespace-nowrap", cell: (r) => <StatusPill status={r.status} tone={STATUS_TONE[r.status]} /> },
         ]}
       />
 

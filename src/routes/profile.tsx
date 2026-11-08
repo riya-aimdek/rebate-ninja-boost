@@ -14,6 +14,7 @@ import {
   ConfirmDialog,
   DataTable,
   DetailGrid,
+  TableSection,
   Field,
   MissingHint,
   PillTabs,
@@ -252,7 +253,7 @@ function ProfilePage() {
             <div className="lg:col-span-2 space-y-6">
               <Card
                 title="Basic information"
-                subtitle={editing ? "* Required" : "How your name and contact details appear across Rebate Ninja."}
+                subtitle="How your name and contact details appear across Rebate Ninja."
               >
                 <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
                   <Field label="User name" required={editing} error={showError("username")}>
@@ -389,10 +390,7 @@ function AccountTab() {
         />
       </Card>
 
-      <Card
-        title="Roles & permissions"
-        subtitle="Access per module comes from your role and is managed by your administrator."
-      >
+      <TableSection title="Roles & permissions" subtitle="Access per module comes from your role and is managed by your administrator.">
         <DataTable
           caption={`Access by module for ${ROLE}`}
           numbered={false}
@@ -408,7 +406,7 @@ function AccountTab() {
             { key: "what", header: "What you can do", cell: (r) => <span className="text-muted-foreground">{ACCESS_HINT[r.level]}</span> },
           ]}
         />
-      </Card>
+      </TableSection>
 
       <Card title="Linked accounts" subtitle="Customer accounts you can view and price.">
         <ul className="flex flex-wrap gap-2">
@@ -472,11 +470,11 @@ function SecurityTab() {
     <div className="grid gap-6 lg:grid-cols-2">
       <Card title="Sign-in" subtitle="You sign in with your company account through single sign-on.">
         <DetailGrid
-          columns={2}
+          columns={1}
           items={[
             { label: "Method", value: "Corporate SSO · Azure AD (OIDC)" },
-            { label: "Multi-factor authentication", value: <StatusPill status="ACTIVE" tone="success" label="Required — enforced by your identity provider" />, full: true },
-            { label: "Password", value: "Managed by your identity provider — change it in your company account, not here.", full: true },
+            { label: "Multi-factor authentication", value: <StatusPill status="ACTIVE" tone="success" label="Required — enforced by your identity provider" /> },
+            { label: "Password", value: "Managed by your identity provider — change it in your company account, not here." },
           ]}
         />
       </Card>

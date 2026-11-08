@@ -52,12 +52,13 @@ function adherenceBy(rows: ComplianceRow[], d: Dimension, rowsPL: ComplianceRow[
     .sort((a, b) => a.overall - b.overall);
 }
 
-const pctCell = (v: number) => (
-  <span className="inline-flex items-center gap-2 justify-end min-w-28">
-    <span className="w-14 hidden sm:block">
+// `bar={false}` for the half-width adherence tables, where the mini bars made names wrap.
+const pctCell = (v: number, bar = true) => (
+  <span className={`inline-flex items-center gap-2 justify-end ${bar ? "min-w-28" : ""}`}>
+    <span className={`w-14 ${bar ? "hidden sm:block" : "hidden"}`}>
       <ProgressBar value={v} tone={v >= 90 ? "success" : v >= 75 ? "warning" : "danger"} label={`${v.toFixed(0)}%`} />
     </span>
-    <span className="tabular-nums w-12 text-right">{v.toFixed(0)}%</span>
+    <span className={`tabular-nums w-12 text-right ${bar ? "" : v >= 90 ? "text-success" : v >= 75 ? "text-warning-foreground" : "text-destructive font-semibold"}`}>{v.toFixed(0)}%</span>
   </span>
 );
 
@@ -107,11 +108,11 @@ function Page() {
     );
 
   const adhCols = (d: Dimension): Column<Adherence>[] => [
-    { key: "g", header: DIMENSION_LABEL[d], cell: (a) => <span className="font-medium">{a.label}</span> },
+    { key: "g", header: DIMENSION_LABEL[d], className: "whitespace-nowrap", cell: (a) => <span className="font-medium">{a.label}</span> },
     { key: "n", header: "Lines", align: "right", cell: (a) => <span className="tabular-nums">{a.lines}</span> },
-    { key: "pl", header: "Price list", align: "right", cell: (a) => pctCell(a.priceList) },
-    { key: "dp", header: "Discount policy", align: "right", cell: (a) => pctCell(a.discountPolicy) },
-    { key: "ap", header: "Approval workflow", align: "right", cell: (a) => pctCell(a.approval) },
+    { key: "pl", header: "Price list", align: "right", cell: (a) => pctCell(a.priceList, false) },
+    { key: "dp", header: "Discount policy", align: "right", cell: (a) => pctCell(a.discountPolicy, false) },
+    { key: "ap", header: "Approval workflow", align: "right", cell: (a) => pctCell(a.approval, false) },
   ];
 
   const note = rlsNote(user);
@@ -131,22 +132,8 @@ function Page() {
       />
       {note && <InfoBanner title="Row-level security">{note}</InfoBanner>}
 
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-3 mb-6">
-        <div>
-          <p className="text-sm font-medium mb-1.5" id="band-label">
-            Band source
-          </p>
-          <div role="group" aria-labelledby="band-label">
-            <Segmented<BandSource>
-              value={band}
-              onChange={(b) => set({ band: b === "PRICE_LIST" ? undefined : b })}
-              options={[
-                { key: "PRICE_LIST", label: "Approved price list" },
-                { key: "GUARDRAIL", label: "Guardrail band" },
-              ]}
-            />
-          </div>
-        </div>
+      {/* Same scope row as the other analytics pages: labelled pill groups on one line. */}
+      <div className="flex flex-wrap items-center gap-x-8 gap-y-3 mb-4">
         <FilterPills<"2026-Q3" | "2026-Q2">
           label="Period"
           className=""
@@ -159,13 +146,25 @@ function Page() {
             { key: "2026-Q2", label: "Q2 2026" },
           ]}
         />
+        <FilterPills<BandSource>
+          label="Compare against"
+          className=""
+          multiple={false}
+          clearable={false}
+          selected={[band]}
+          onChange={(v) => set({ band: v[0] === "PRICE_LIST" ? undefined : v[0] })}
+          options={[
+            { key: "PRICE_LIST", label: "Approved price list" },
+            { key: "GUARDRAIL", label: "Guardrail band" },
+          ]}
+        />
       </div>
 
-      <section aria-label="Compliance summary" className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <KpiTile label="Compliance rate" value={`${rate.toFixed(1)}%`} tone={rate >= 90 ? "success" : rate >= 75 ? "warning" : "danger"} hint="Compliant lines ÷ all lines. In band, or outside under an approved exception." />
-        <KpiTile label="Lines outside band" value={outside.length.toLocaleString("en-GB")} tone="warning" hint={`of ${rows.length.toLocaleString("en-GB")} invoice lines`} />
-        <KpiTile label="Covered by exception" value={covered.length.toLocaleString("en-GB")} tone="info" hint="Counted as compliant" to="/pricing/exceptions" linkLabel="View exceptions" />
-        <KpiTile label="Net variance" value={money(varianceTotal, "GBP", 0)} tone="default" hint="Invoice minus reference, × quantity, lines outside band" />
+      <section aria-label="Compliance summary" className="grid gap-2 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] mb-6">
+        <KpiTile label="Compliance rate" value={`${rate.toFixed(1)}%`} tone={rate >= 90 ? "success" : rate >= 75 ? "warning" : "danger"} hint="In band or covered by an exception" />
+        <KpiTile label="Lines outside band" value={outside.length.toLocaleString("en-GB")} tone="default" hint={`of ${rows.length.toLocaleString("en-GB")} invoice lines`} />
+        <KpiTile label="Covered by exception" value={covered.length.toLocaleString("en-GB")} tone="default" hint="Counted as compliant" to="/pricing/exceptions" linkLabel="View" />
+        <KpiTile label="Net variance" value={money(varianceTotal, "GBP", 0)} tone="default" hint="On lines outside band" />
       </section>
 
       <InfoBanner title="How variance is calculated">
@@ -225,14 +224,12 @@ function Page() {
             {
               key: "s",
               header: "Status",
+              className: "whitespace-nowrap",
               cell: (r) =>
                 !r.outside ? (
                   <Flag tone="success">In band</Flag>
                 ) : r.coveredByException ? (
-                  <span className="inline-flex flex-col gap-1">
-                    <Flag tone="info">Covered by exception</Flag>
-                    <span className="text-xs font-mono">{r.exceptionId}</span>
-                  </span>
+                  <Flag tone="info">Exception {r.exceptionId}</Flag>
                 ) : (
                   <Flag tone="danger">Outside band</Flag>
                 ),

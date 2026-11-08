@@ -214,6 +214,12 @@
     outline: none;
   }
 
+  /* Native checkboxes and radios in brand orange, not the browser's blue. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-brand);
+  }
+
   ::selection {
     background: var(--color-brand-soft);
     color: var(--color-foreground);
@@ -240,7 +246,9 @@
 
 /* Touch targets (WCAG 2.5.5 / HIG 44pt). `.hit` widens the tappable area of small
    text-sized controls without changing layout; column-header sort buttons get it too. */
-.hit,
+/* Skip elements already positioned (e.g. a search box's clear button): this rule is unlayered, so it would
+   override their `absolute` and push them out of place. */
+.hit:not(.absolute):not(.fixed):not(.sticky),
 thead button {
   position: relative;
 }

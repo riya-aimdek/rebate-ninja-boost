@@ -10,8 +10,10 @@ import {
   EmptyState,
   ErrorBanner,
   Field,
+  FilterPills,
   Flag,
   InfoBanner,
+  KpiTile,
   Modal,
   PricingLayout,
   RecordLink,
@@ -71,15 +73,22 @@ const SOURCE_LABEL: Record<(typeof WATERFALL_SOURCES)[number], string> = {
   COST_MASTER: "Cost master",
 };
 const isTotal = (k: WaterfallLevel["kind"]) => k === "LIST_PRICE" || k.startsWith("SUBTOTAL");
-const COLORS = { total: "var(--navy)", down: "var(--brand)", up: "var(--success)" };
+// Cost isn't leakage, so it gets its own colour rather than the deduction orange.
+const COLORS = { total: "var(--navy)", down: "var(--brand)", up: "var(--success)", cost: "var(--muted-foreground)" };
+const round2 = (n: number) => Math.round(n * 100) / 100;
+/** Levels are shown as they move the price: totals plain, deductions "−£0.27", additions "+£0.08". */
+const signed = (s: Pick<Step, "dir" | "amount">) => (s.dir === "total" ? money(s.amount) : `${(s.amount ?? 0) >= 0 ? "+" : "−"}${money(Math.abs(s.amount ?? 0))}`);
 
-type Step = { key: string; label: string; kind: WaterfallLevel["kind"]; source: string; amount: number | null; running: number; base: number; size: number; dir: "total" | "down" | "up"; available: boolean; reason?: string };
+type Step = { key: string; label: string; kind: WaterfallLevel["kind"]; source: string; amount: number | null; running: number; base: number; size: number; dir: "total" | "down" | "up" | "cost"; available: boolean; derived?: boolean; reason?: string };
 
 /** Turns a definition + waterfall values into floating-bar steps. Missing components are disclosed, never hidden. */
 function buildSteps(def: WaterfallLevel[], wf: ReturnType<typeof waterfallOf>, rows: Transaction[]): Step[] {
   const values = wf as unknown as Record<string, number>;
   let running = 0;
-  return def.map((l) => {
+  // Each average is rounded to the penny, so a subtotal may differ from its parts by up to half a penny per part.
+  let parts = 0;
+  const steps: Step[] = [];
+  for (const l of def) {
     const raw = values[l.key];
     const hasFeed = typeof raw === "number";
     let reason: string | undefined;
@@ -92,14 +101,42 @@ function buildSteps(def: WaterfallLevel[], wf: ReturnType<typeof waterfallOf>, r
     const v = hasFeed ? raw : 0;
     if (isTotal(l.kind)) {
       if (l.kind === "LIST_PRICE") running = v;
-      return { key: l.key, label: l.label, kind: l.kind, source: SOURCE_LABEL[l.source], amount: running, running, base: 0, size: running, dir: "total", available, reason };
+      else if (hasFeed) {
+        // Subtotals show the reported figure, so they match the summary. When the levels above don't add up to it
+        // (e.g. lines priced below list minus the recorded discounts), the gap is shown as its own step.
+        const gap = round2(v - running);
+        if (Math.abs(gap) > 0.005 * (parts + 1) + 1e-9) {
+          const before = running;
+          running = v;
+          steps.push({
+            key: `${l.key}-gap`,
+            label: gap < 0 ? "Unrecorded deductions" : "Unrecorded additions",
+            kind: l.kind === "SUBTOTAL_INVOICE" ? "ON_INVOICE" : "OFF_INVOICE",
+            source: "Derived",
+            amount: gap,
+            running,
+            base: Math.min(before, running),
+            size: Math.abs(gap),
+            dir: gap < 0 ? "down" : "up",
+            available: true,
+            derived: true,
+            reason: `${l.label} is ${money(Math.abs(gap))} ${gap < 0 ? "lower" : "higher"} than the levels above add up to — some lines were priced outside the recorded discounts.`,
+          });
+        }
+        running = v;
+      }
+      parts = 0;
+      steps.push({ key: l.key, label: l.label, kind: l.kind, source: SOURCE_LABEL[l.source], amount: running, running, base: 0, size: running, dir: "total", available, reason });
+      continue;
     }
     // Freight is signed as in the SRS example (+ recovered); every other component is an amount taken off.
     const delta = l.key === "freight" ? v : -v;
+    parts += 1;
     const before = running;
     running = before + delta;
-    return { key: l.key, label: l.label, kind: l.kind, source: SOURCE_LABEL[l.source], amount: delta, running, base: Math.min(before, running), size: Math.abs(delta), dir: delta >= 0 ? "up" : "down", available, reason };
-  });
+    steps.push({ key: l.key, label: l.label, kind: l.kind, source: SOURCE_LABEL[l.source], amount: delta, running, base: Math.min(before, running), size: Math.abs(delta), dir: l.kind === "COST" ? "cost" : delta >= 0 ? "up" : "down", available, reason });
+  }
+  return steps;
 }
 
 function Page() {
@@ -128,7 +165,7 @@ function Page() {
   const wf = waterfallOf(rows);
   const steps = buildSteps(visibleDef, wf, rows);
   const prior = filtered(period === "2026-Q3" ? "2026-Q2" : "2026-Q3");
-  const prev = waterfallOf(prior);
+  const prevSteps = buildSteps(visibleDef, waterfallOf(prior), prior);
 
   const scopeLabel = single
     ? `${single.id} · ${customerName(single.customerId)} · ${productName(single.sku)}`
@@ -165,7 +202,7 @@ function Page() {
   const exportCsv = () =>
     downloadCsv(
       "price-waterfall.csv",
-      steps.map((s) => ({ level: s.label, kind: s.kind, source: s.source, amount: s.amount?.toFixed(2), running: s.running.toFixed(2), availability: s.available ? "AVAILABLE" : "UNAVAILABLE", reason: s.reason ?? "" })),
+      steps.map((s) => ({ level: s.label, kind: s.kind, source: s.source, amount: s.amount?.toFixed(2), running: s.running.toFixed(2), availability: s.derived ? "UNEXPLAINED" : s.available ? "AVAILABLE" : "UNAVAILABLE", reason: s.reason ?? "" })),
     );
 
   const note = rlsNote(user);
@@ -179,9 +216,12 @@ function Page() {
         actions={
           <>
             <Freshness />
-            <Btn variant="subtle" icon={Settings2} onClick={() => setEditing(true)} disabled={user.role !== "PRICING_ADMIN"} title={user.role !== "PRICING_ADMIN" ? "Only pricing administrators can change the definition" : undefined}>
-              Edit definition
-            </Btn>
+            {/* Only pricing administrators change the definition; others don't get a dead button. */}
+            {user.role === "PRICING_ADMIN" && (
+              <Btn variant="subtle" icon={Settings2} onClick={() => setEditing(true)}>
+                Edit definition
+              </Btn>
+            )}
             <Btn variant="outline" onClick={exportCsv}>
               Export CSV
             </Btn>
@@ -195,12 +235,32 @@ function Page() {
         </InfoBanner>
       )}
 
-      <DrillTrail steps={trail} onJump={(i) => setSearch(trail[i].apply)} />
-
-      <div className="flex flex-wrap items-end gap-4 mb-6">
-        <Field label="Transaction" className="w-full sm:w-80">
-          <select className={inputCls} value={search.tx ?? ""} onChange={(e) => setSearch({ tx: e.target.value || undefined })}>
-            <option value="">Group view — all matching transactions</option>
+      {/* Same scope row as the margin dashboard: period pills, then the narrower picker inline. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mb-4">
+        <FilterPills<Search["period"] & string>
+          label="Period"
+          multiple={false}
+          clearable={false}
+          className=""
+          selected={[single?.period ?? period]}
+          onChange={(v) => setSearch({ period: v[0], tx: undefined })}
+          options={[
+            { key: "2026-Q3", label: "Q3 2026" },
+            { key: "2026-Q2", label: "Q2 2026" },
+          ]}
+        />
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Transaction</span>
+          <select
+            className={`${inputCls} w-80`}
+            value={search.tx ?? ""}
+            // Picking a transaction moves the period to its quarter, so the two never disagree.
+            onChange={(e) => {
+              const t = all.find((x) => x.id === e.target.value);
+              setSearch({ tx: t?.id, ...(t ? { period: t.period as Search["period"] } : {}) });
+            }}
+          >
+            <option value="">All transactions</option>
             {filtered(period)
               .slice(0, 200)
               .concat(single && single.period !== period ? [single] : [])
@@ -210,14 +270,10 @@ function Page() {
                 </option>
               ))}
           </select>
-        </Field>
-        <Field label="Period" className="w-full sm:w-48">
-          <select className={inputCls} value={period} onChange={(e) => setSearch({ period: e.target.value as Search["period"], tx: undefined })} disabled={!!single}>
-            <option value="2026-Q3">Q3 2026 (Jul–Sep)</option>
-            <option value="2026-Q2">Q2 2026 (Apr–Jun)</option>
-          </select>
-        </Field>
+        </label>
       </div>
+
+      <DrillTrail steps={trail} onJump={(i) => setSearch(trail[i].apply)} />
 
       {rows.length === 0 ? (
         <Card>
@@ -227,23 +283,31 @@ function Page() {
         </Card>
       ) : (
         <>
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] mb-6">
+          {/* Headline numbers first; the chart below shows how they connect. */}
+          <section aria-label="Key figures" className="grid gap-2 grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] mb-6">
+            <KpiTile tone="default" label="List price" value={money(wf.list)} hint="per unit" />
+            <KpiTile tone="default" label="Invoice price" value={money(wf.invoice)} hint="per unit" />
+            <KpiTile tone="default" label="Pocket price" value={money(wf.pocket)} hint="per unit" />
+            <KpiTile tone="default" label="Leakage" value={`${wf.leakagePct.toFixed(1)}%`} hint={`${money(wf.leakage)} of list lost`} />
+            {sees("marginAmount") && <KpiTile tone="default" label="Pocket margin" value={`${wf.pocket ? ((wf.pocketMargin / wf.pocket) * 100).toFixed(1) : "0.0"}%`} hint={`${money(wf.pocketMargin)} per unit`} />}
+          </section>
+
+          <div className={`grid grid-cols-1 gap-6 mb-6 items-start ${single ? "" : "xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"}`}>
             <Card
               title="List to pocket"
-              subtitle={`${scopeLabel} · ${single ? single.invoiceDate : period.replace("2026-", "") + " 2026"} · per unit, units-weighted across ${rows.length.toLocaleString("en-GB")} line${rows.length === 1 ? "" : "s"}`}
+              subtitle={single ? `${scopeLabel} · ${single.invoiceDate} · per unit` : `${scopeLabel} · ${period.replace("2026-", "")} 2026 · per unit, units-weighted across ${rows.length.toLocaleString("en-GB")} line${rows.length === 1 ? "" : "s"}`}
             >
               {hiddenRows > 0 && (
                 <InfoBanner tone="neutral" title="Cost and pocket margin hidden">
                   Your role can't see cost data, so the cost and pocket-margin levels are not shown. Pocket price is shown.
                 </InfoBanner>
               )}
-              <>
-                  <figure aria-label={`Waterfall: ${steps.map((s) => `${s.label} ${money(s.amount)}`).join(", ")}`} style={{ height: steps.length * 40 + 48 }} className="w-full">
+              <figure aria-label={`Waterfall: ${steps.map((s) => `${s.label} ${signed(s)}`).join(", ")}`} style={{ height: steps.length * 40 + 48 }} className="w-full">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 72, bottom: 4, left: 4 }} barCategoryGap={6}>
                         <CartesianGrid horizontal={false} stroke="var(--border)" />
-                        <XAxis type="number" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickFormatter={(v: number) => `£${v}`} stroke="var(--border)" />
-                        <YAxis type="category" dataKey="label" width={118} tick={{ fontSize: 12, fill: "var(--foreground)" }} stroke="var(--border)" />
+                        <XAxis type="number" tick={{ fontSize: 12, fill: "var(--muted-foreground)" }} tickFormatter={(v: number) => money(v, "GBP", 0)} stroke="var(--border)" />
+                        <YAxis type="category" dataKey="label" width={140} tick={{ fontSize: 12, fill: "var(--foreground)" }} stroke="var(--border)" />
                         <Tooltip
                           cursor={{ fill: "var(--muted)" }}
                           content={({ active, payload }) => {
@@ -253,10 +317,10 @@ function Page() {
                               <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-md">
                                 <div className="font-semibold">{s.label}</div>
                                 <div className="tabular-nums">
-                                  {s.dir === "total" ? money(s.amount) : `${s.amount! >= 0 ? "+" : "−"}${money(Math.abs(s.amount ?? 0))}`} · running {money(s.running)}
+                                  {signed(s)} · running {money(s.running)}
                                 </div>
                                 <div className="text-muted-foreground">Source: {s.source}</div>
-                                {!s.available && <div className="text-warning-foreground">{s.reason}</div>}
+                                {(!s.available || s.derived) && <div className="text-warning-foreground">{s.reason}</div>}
                               </div>
                             );
                           }}
@@ -270,70 +334,47 @@ function Page() {
                             dataKey="amount"
                             position="right"
                             className="tabular-nums"
-                            style={{ fontSize: 12, fill: "var(--foreground)" }}
-                            formatter={(v: number) => (v === null || v === undefined ? "" : `${v < 0 ? "−" : ""}£${Math.abs(v).toFixed(2)}`)}
+                            // The bar's white outline is inherited; paint it under the glyphs or it erases 12px text.
+                            style={{ fontSize: 12, fill: "var(--foreground)", paintOrder: "stroke" }}
+                            formatter={(v: number) => (v === null || v === undefined ? "" : `${v < 0 ? "−" : ""}${money(Math.abs(v))}`)}
                           />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                  </figure>
-                  <div className="mt-3">
-                    <ChartLegend items={[{ label: "Price level / subtotal", color: COLORS.total }, { label: "Deduction (leakage)", color: COLORS.down }, { label: "Addition", color: COLORS.up }]} />
-                  </div>
-              </>
-              <div className="mt-5">
-                  <DataTable<Step>
-                    caption="Waterfall components"
-                    rows={steps}
-                    rowKey={(s) => s.key}
-                    numbered={false}
-                    rowClassName={(s) => (s.dir === "total" ? "font-semibold" : "")}
-                    columns={[
-                      { key: "l", header: "Level", cell: (s) => s.label },
-                      { key: "a", header: "Amount", align: "right", cell: (s) => <span className="tabular-nums">{s.dir === "total" ? money(s.amount) : `${(s.amount ?? 0) >= 0 ? "+" : "−"}${money(Math.abs(s.amount ?? 0))}`}</span> },
-                      { key: "src", header: "Source", cell: (s) => <span className="whitespace-nowrap text-muted-foreground">{s.source}</span> },
-                      {
-                        key: "av",
-                        header: "Data",
-                        cell: (s) =>
-                          s.available ? (
-                            <Flag tone="success">Available</Flag>
-                          ) : (
-                            <span className="inline-flex flex-col gap-1">
-                              <Flag tone="warning">Unavailable</Flag>
-                              <span className="text-xs text-muted-foreground max-w-56">{s.reason}</span>
-                            </span>
-                          ),
-                      },
-                    ]}
-                  />
+              </figure>
+              <div className="mt-3">
+                <ChartLegend
+                  items={[
+                    { label: "Price level / subtotal", color: COLORS.total },
+                    { label: "Deduction (leakage)", color: COLORS.down },
+                    ...(steps.some((s) => s.dir === "up") ? [{ label: "Addition", color: COLORS.up }] : []),
+                    ...(steps.some((s) => s.dir === "cost") ? [{ label: "Cost", color: COLORS.cost }] : []),
+                  ]}
+                />
               </div>
+              {steps.some((st) => !st.available || st.derived) && (
+                <div className="mt-5 space-y-2">
+                  {steps
+                    .filter((st) => !st.available || st.derived)
+                    .map((st) => (
+                      <InfoBanner key={st.key} tone="warning" title={`${st.label}: ${st.derived ? "not explained" : "partly missing"}`}>
+                        {st.reason}
+                      </InfoBanner>
+                    ))}
+                </div>
+              )}
             </Card>
 
-            <div className="space-y-6">
-              <Card title="Summary">
-                <dl className="grid grid-cols-2 gap-4 text-sm">
-                  {[
-                    ["Invoice price", money(wf.invoice)],
-                    ["Pocket price", money(wf.pocket)],
-                    ["Leakage (list − pocket)", `${money(wf.leakage)} · ${wf.leakagePct.toFixed(1)}%`],
-                    ...(sees("marginAmount") ? [["Pocket margin", money(wf.pocketMargin)]] : []),
-                  ].map(([k, v]) => (
-                    <div key={k}>
-                      <dt className="text-muted-foreground">{k}</dt>
-                      <dd className="mt-1 text-xl font-semibold tabular-nums">{v}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </Card>
-              <Card title="Price bridge" subtitle={single ? undefined : `${period === "2026-Q3" ? "Q3 vs Q2" : "Q2 vs Q3"} 2026, same filters`}>
+              {/* A single transaction has nothing to compare against, so the bridge only shows for a group. */}
+              {!single && (
+              <Card title="Price bridge" subtitle={single ? undefined : `Each step as % of list price, ${period === "2026-Q3" ? "Q2 vs Q3" : "Q3 vs Q2"} 2026 — not skewed by product mix`}>
                 {single || prior.length === 0 ? (
                   <p className="text-base text-muted-foreground">{single ? "Clear the transaction to compare this group with the prior period." : "No transactions in the comparison period."}</p>
                 ) : (
-                  <BridgeTable def={visibleDef} cur={wf} prev={prev} period={period} />
+                  <BridgeTable cur={steps} prev={prevSteps} period={period} />
                 )}
               </Card>
-            </div>
+              )}
           </div>
 
           {!single && (
@@ -373,46 +414,68 @@ function Page() {
   );
 }
 
-function BridgeTable({ def, cur, prev, period }: { def: WaterfallLevel[]; cur: ReturnType<typeof waterfallOf>; prev: ReturnType<typeof waterfallOf>; period: string }) {
-  const c = cur as unknown as Record<string, number>;
-  const p = prev as unknown as Record<string, number>;
-  const rows = def.filter((l) => typeof c[l.key] === "number").map((l) => ({ key: l.key, label: l.label, now: c[l.key], before: p[l.key], change: c[l.key] - p[l.key], total: isTotal(l.kind) }));
+/**
+ * Each step as a share of that period's list price, so a different product mix (cheaper or dearer items)
+ * doesn't look like a pricing change. List price itself stays in £ for context.
+ */
+function BridgeTable({ cur, prev, period }: { cur: Step[]; prev: Step[]; period: string }) {
+  const listOf = (st: Step[]) => Math.abs(st[0]?.amount ?? 0) || 1;
+  const curList = listOf(cur);
+  const prevList = listOf(prev);
+  const keys = [...cur.map((s) => s.key), ...prev.map((s) => s.key).filter((k) => !cur.some((s) => s.key === k))];
+  const rows = keys.map((k, i) => {
+    const c = cur.find((s) => s.key === k);
+    const p = prev.find((s) => s.key === k);
+    const ref = (c ?? p)!;
+    // A level missing in one period (e.g. no unrecorded deductions) counts as zero there.
+    const now = ((c?.amount ?? 0) / curList) * 100;
+    const before = ((p?.amount ?? 0) / prevList) * 100;
+    return { key: k, label: ref.label, isList: i === 0, now, before, change: now - before, total: ref.dir === "total" };
+  });
   const [a, b] = period === "2026-Q3" ? ["Q2", "Q3"] : ["Q3", "Q2"];
+  const fmt = (v: number) => `${v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}%`;
   return (
     <div className="overflow-x-auto overflow-y-hidden -mx-2" role="region" aria-label="Price bridge" tabIndex={0}>
       <table className="w-full text-sm min-w-[320px]">
-        <caption className="sr-only">Per-unit change in each waterfall component, {a} to {b}</caption>
+        <caption className="sr-only">Each waterfall step as a share of list price, {a} compared with {b}</caption>
         <thead>
           <tr className="text-muted-foreground">
-            <th scope="col" className="text-left font-medium px-2 py-2">Component</th>
+            <th scope="col" className="text-left font-medium px-2 py-2">Step</th>
             <th scope="col" className="text-right font-medium px-2 py-2">{a}</th>
             <th scope="col" className="text-right font-medium px-2 py-2">{b}</th>
             <th scope="col" className="text-right font-medium px-2 py-2">Change</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
-          {rows.map((r) => {
-            const Icon = r.change > 0 ? ArrowUp : ArrowDown;
-            return (
+          {rows.map((r) =>
+            r.isList ? (
+              <tr key={r.key} className="font-semibold">
+                <th scope="row" className="text-left font-semibold px-2 py-2">{r.label}</th>
+                <td className="text-right tabular-nums px-2 py-2 whitespace-nowrap">{money(prevList)}</td>
+                <td className="text-right tabular-nums px-2 py-2 whitespace-nowrap">{money(curList)}</td>
+                <td className="text-right tabular-nums px-2 py-2 whitespace-nowrap text-xs font-normal text-muted-foreground">= 100%</td>
+              </tr>
+            ) : (
               <tr key={r.key} className={r.total ? "font-semibold" : ""}>
-                <th scope="row" className="text-left font-normal px-2 py-2">{r.label}</th>
-                <td className="text-right tabular-nums px-2 py-2">{money(r.before)}</td>
-                <td className="text-right tabular-nums px-2 py-2">{money(r.now)}</td>
+                <th scope="row" className={`text-left px-2 py-2 ${r.total ? "font-semibold" : "font-normal"}`}>{r.label}</th>
+                <td className="text-right tabular-nums px-2 py-2 whitespace-nowrap">{fmt(r.before)}</td>
+                <td className="text-right tabular-nums px-2 py-2 whitespace-nowrap">{fmt(r.now)}</td>
                 <td className="text-right tabular-nums px-2 py-2 whitespace-nowrap">
-                  {Math.abs(r.change) < 0.005 ? (
-                    <span className="text-muted-foreground">No change</span>
+                  {Math.abs(r.change) < 0.05 ? (
+                    <span className="text-muted-foreground font-normal">No change</span>
                   ) : (
-                    <span className="inline-flex items-center gap-1">
-                      <Icon className="size-3.5 text-muted-foreground" aria-hidden />
+                    // Higher is better for every row: a smaller deduction or a bigger subtotal both move up.
+                    <span className={`inline-flex items-center gap-1 ${r.change > 0 ? "text-success" : "text-destructive"}`}>
+                      {r.change > 0 ? <ArrowUp className="size-3.5" aria-hidden /> : <ArrowDown className="size-3.5" aria-hidden />}
                       {r.change > 0 ? "+" : "−"}
-                      {money(Math.abs(r.change))}
-                      <span className="text-xs text-muted-foreground">({pct(r.before ? (r.change / r.before) * 100 : 0)})</span>
+                      {Math.abs(r.change).toFixed(1)} pts
+                      <span className="sr-only">{r.change > 0 ? "(better)" : "(worse)"}</span>
                     </span>
                   )}
                 </td>
               </tr>
-            );
-          })}
+            ),
+          )}
         </tbody>
       </table>
     </div>
